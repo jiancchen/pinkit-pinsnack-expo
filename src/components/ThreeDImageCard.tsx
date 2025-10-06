@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,12 @@ import {
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { PromptHistory, AppColors } from '../types/PromptHistory';
 import { Ionicons } from '@expo/vector-icons';
+import { ScreenshotService } from '../services/ScreenshotService';
+import { WebViewScreenshotService } from '../services/WebViewScreenshotService';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -35,13 +38,63 @@ export default function ThreeDImageCard({
   onNavigateToApp,
   onShowSnackbar,
 }: ThreeDImageCardProps) {
-  const displayTitle = historyItem.title?.trim() || 
-    (historyItem.prompt.substring(0, 50) + '...');
+  const [screenshotUri, setScreenshotUri] = useState<string | null>(null);
+  const [isLoadingScreenshot, setIsLoadingScreenshot] = useState(false);
 
-  // Check different states
+  // Check different states (moved up to avoid scope issues)
   const isGenerating = historyItem.html === 'GENERATING...';
   const isNewItem = (historyItem.accessCount || 0) < 1 && !isGenerating;
   const isFavorite = historyItem.favorite === true;
+
+  // Load screenshot when component mounts or when app is accessed
+  useEffect(() => {
+    loadScreenshot();
+  }, [historyItem.id, historyItem.accessCount]); // Re-load when access count changes
+
+  // Only reload screenshot periodically if the app has been accessed before
+  useEffect(() => {
+    // Only poll for screenshots if this app has been accessed at least once
+    if ((historyItem.accessCount || 0) > 0 && !isGenerating && !screenshotUri) {
+      const interval = setInterval(() => {
+        console.log('🔄 [Card] Periodic screenshot check for accessed app:', historyItem.id);
+        loadScreenshot();
+      }, 5000); // Check every 5 seconds instead of 3
+      
+      return () => clearInterval(interval);
+    }
+  }, [isGenerating, screenshotUri, historyItem.accessCount]);
+
+  const loadScreenshot = async () => {
+    if (isGenerating) return; // Don't try to load screenshot for generating apps
+    
+    try {
+      setIsLoadingScreenshot(true);
+      console.log('🔍 [Card] Loading screenshot for app:', historyItem.id);
+      
+      // Try WebView screenshot first, then fallback to external screenshot
+      let uri = await WebViewScreenshotService.getWebViewScreenshot(historyItem.id);
+      
+      if (!uri) {
+        // Fallback to external screenshot method
+        uri = await ScreenshotService.getScreenshot(historyItem.id);
+      }
+      
+      if (uri) {
+        const source = uri.includes('webview_screenshot_') ? 'WebView' : 'External';
+        console.log(`✅ [Card] Screenshot loaded for app: ${historyItem.id} (${source})`);
+        setScreenshotUri(uri);
+      } else {
+        console.log('⚠️ [Card] No screenshot found for app:', historyItem.id);
+      }
+    } catch (error) {
+      console.warn('💥 [Card] Failed to load screenshot for app:', historyItem.id, error);
+    } finally {
+      setIsLoadingScreenshot(false);
+    }
+  };
+
+  const displayTitle = historyItem.title?.trim() || 
+    (historyItem.prompt.substring(0, 50) + '...');
 
   const handlePress = () => {
     if (isGenerating) {
@@ -96,8 +149,25 @@ export default function ThreeDImageCard({
       >
         {/* Card background with gradient overlay */}
         <View style={styles.cardBackground}>
-          {/* Simulated screenshot area */}
+          {/* Screenshot area with semi-transparent overlay */}
           <View style={styles.screenshotArea}>
+            {screenshotUri && (
+              <>
+                <Image 
+                  source={{ uri: screenshotUri }}
+                  style={styles.screenshotImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.screenshotOverlay} />
+              </>
+            )}
+            
+            {isLoadingScreenshot && (
+              <View style={styles.screenshotLoadingOverlay}>
+                <ActivityIndicator size="small" color={AppColors.White} />
+              </View>
+            )}
+            
             {isGenerating && (
               <View style={styles.generatingOverlay}>
                 <ActivityIndicator size="large" color={AppColors.White} />
@@ -172,9 +242,40 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   screenshotArea: {
-    flex: 1,
-    backgroundColor: '#1a1a1a',
-    position: 'relative',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  screenshotImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+  screenshotOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)', // Semi-transparent overlay for text readability
+  },
+  screenshotLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
   },
   generatingOverlay: {
     position: 'absolute',
@@ -192,7 +293,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: '60%',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
   },
   badgeContainer: {
     position: 'absolute',

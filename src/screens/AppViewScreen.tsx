@@ -19,6 +19,8 @@ import { RootStackParamList } from './MyAppScreen';
 import { AppColors } from '../types/PromptHistory';
 import { AppStorageService, StoredApp } from '../services/AppStorageService';
 import { AsyncStorageService } from '../services/AsyncStorageService';
+import { ScreenshotService } from '../services/ScreenshotService';
+import { WebViewScreenshotService } from '../services/WebViewScreenshotService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AppView'>;
 
@@ -148,14 +150,25 @@ export default function AppViewScreen({ navigation, route }: Props) {
     // Insert immediately after <head> tag
     const headRegex = /(<head[^>]*>)/i;
     if (headRegex.test(html)) {
-      const injectedHtml = html.replace(headRegex, `$1${storageOverride}`);
+      // Add WebView screenshot script if using webview method
+      const screenshotScript = screenshotMethod === 'webview' 
+        ? `<script>${WebViewScreenshotService.generateScreenshotScript(appId)}</script>`
+        : '';
+      
+      const injectedHtml = html.replace(headRegex, `$1${storageOverride}${screenshotScript}`);
       console.log('✅ [AppView] Storage isolation script injected after <head>');
+      if (screenshotMethod === 'webview') {
+        console.log('📸 [AppView] WebView screenshot script also injected');
+      }
       return injectedHtml;
     }
     
     // Fallback: insert at the beginning
     console.log('⚠️ [AppView] No <head> found, injecting at beginning');
-    return storageOverride + html;
+    const screenshotScript = screenshotMethod === 'webview' 
+      ? `<script>${WebViewScreenshotService.generateScreenshotScript(appId)}</script>`
+      : '';
+    return storageOverride + screenshotScript + html;
   };
   const { appId } = route.params;
   const [app, setApp] = useState<StoredApp | null>(null);
@@ -164,7 +177,11 @@ export default function AppViewScreen({ navigation, route }: Props) {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [dimensions, setDimensions] = useState(Dimensions.get('window'));
   const [webViewError, setWebViewError] = useState(false);
+  const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
+  const [screenshotMethod, setScreenshotMethod] = useState<'external' | 'webview'>('webview');
+  
   const webViewRef = useRef<WebView>(null);
+  const webViewContainerRef = useRef<View>(null);
 
   useEffect(() => {
     loadApp();
@@ -183,6 +200,29 @@ export default function AppViewScreen({ navigation, route }: Props) {
 
     return () => subscription?.remove();
   }, []);
+
+  // Enhanced screenshot capture with early and cleanup handling
+  useEffect(() => {
+    if (app) {
+      // Try to capture screenshot when component mounts (if WebView is ready)
+      const timer = setTimeout(() => {
+        if (webViewContainerRef.current && !isCapturingScreenshot) {
+          console.log('🔄 [AppView] Attempting early screenshot capture for:', app.id);
+          captureScreenshot();
+        }
+      }, 2500); // Fallback capture after 2.5 seconds
+
+      return () => {
+        clearTimeout(timer);
+        // If we're navigating away and haven't captured yet, try to capture quickly
+        if (!isCapturingScreenshot && webViewContainerRef.current) {
+          console.log('🏃 [AppView] Quick screenshot capture before navigation for:', app.id);
+          // Don't await this to avoid blocking navigation
+          captureScreenshot().catch(console.warn);
+        }
+      };
+    }
+  }, [app?.id]);
 
   const setupOrientationListener = async () => {
     const currentOrientation = await ScreenOrientation.getOrientationAsync();
@@ -234,6 +274,104 @@ export default function AppViewScreen({ navigation, route }: Props) {
       await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE_LEFT);
     } else {
       await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    }
+  };
+
+  // Handle WebView-based screenshot capture
+  const handleWebViewScreenshot = async (appId: string, dataURL: string, method: string) => {
+    try {
+      console.log(`📸 [AppView] Processing WebView screenshot for app: ${appId}, method: ${method}`);
+      setIsCapturingScreenshot(true);
+      
+      const processedUri = await WebViewScreenshotService.processWebViewScreenshot(appId, dataURL, method);
+      
+      if (processedUri) {
+        console.log('✅ [AppView] WebView screenshot processed and stored:', processedUri);
+      } else {
+        console.warn('⚠️ [AppView] WebView screenshot processing failed');
+        // Fallback to external method
+        setScreenshotMethod('external');
+        setTimeout(() => captureScreenshot(), 1000);
+      }
+    } catch (error) {
+      console.error('💥 [AppView] WebView screenshot handling error:', error);
+      setScreenshotMethod('external');
+      setTimeout(() => captureScreenshot(), 1000);
+    } finally {
+      setIsCapturingScreenshot(false);
+    }
+  };
+
+  const captureScreenshot = async () => {
+    if (!app || isCapturingScreenshot) return;
+    
+    try {
+      console.log('📸 [AppView] Starting screenshot capture for app:', app.id);
+      console.log('📸 [AppView] WebView ref available:', !!webViewRef.current);
+      console.log('📸 [AppView] Container ref available:', !!webViewContainerRef.current);
+      setIsCapturingScreenshot(true);
+      
+            // Wait just a bit for any animations to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Platform-specific capture strategies
+      let screenshotUri: string | null = null;
+      
+      if (Platform.OS === 'android') {
+        // Android: WebView screenshots work well - try WebView directly first
+        console.log('🤖 [AppView] Android - trying WebView direct capture...');
+        if (webViewRef.current) {
+          screenshotUri = await ScreenshotService.captureAndStoreScreenshot(
+            webViewRef,
+            app.id
+          );
+        }
+        
+        // Fallback to container on Android if needed
+        if (!screenshotUri && webViewContainerRef.current) {
+          console.log('🤖 [AppView] Android - WebView failed, trying container...');
+          screenshotUri = await ScreenshotService.captureAndStoreScreenshot(
+            webViewContainerRef,
+            app.id
+          );
+        }
+      } else {
+        // iOS: WebView direct capture often fails - try container first
+        console.log('🍎 [AppView] iOS - trying container capture...');
+        if (webViewContainerRef.current) {
+          screenshotUri = await ScreenshotService.captureAndStoreScreenshot(
+            webViewContainerRef,
+            app.id
+          );
+        }
+        
+        // iOS fallback: try WebView direct if container failed
+        if (!screenshotUri && webViewRef.current) {
+          console.log('🍎 [AppView] iOS - container failed, trying WebView direct...');
+          screenshotUri = await ScreenshotService.captureAndStoreScreenshot(
+            webViewRef,
+            app.id
+          );
+        }
+      }
+      
+      if (screenshotUri) {
+        console.log('✅ [AppView] Screenshot captured and stored:', screenshotUri);
+      } else {
+        console.warn('⚠️ [AppView] Screenshot capture failed, creating fallback');
+        // Create a fallback screenshot with app info
+        await ScreenshotService.createFallbackScreenshot(app.id, app.title, app.style);
+      }
+    } catch (error) {
+      console.error('💥 [AppView] Screenshot capture error:', error);
+      // Create a fallback screenshot with app info
+      try {
+        await ScreenshotService.createFallbackScreenshot(app.id, app.title, app.style);
+      } catch (fallbackError) {
+        console.error('💥 [AppView] Fallback screenshot creation failed:', fallbackError);
+      }
+    } finally {
+      setIsCapturingScreenshot(false);
     }
   };
 
@@ -334,7 +472,7 @@ export default function AppViewScreen({ navigation, route }: Props) {
       )}
 
       {/* WebView Container */}
-      <View style={styles.webViewContainer}>
+      <View style={styles.webViewContainer} ref={webViewContainerRef}>
         {webViewError ? (
           <View style={styles.errorContainer}>
             <Ionicons name="alert-circle" size={48} color="#EF4444" />
@@ -360,7 +498,14 @@ export default function AppViewScreen({ navigation, route }: Props) {
             allowsInlineMediaPlayback={true}
             mediaPlaybackRequiresUserAction={false}
             onError={() => setWebViewError(true)}
-            onLoadEnd={() => setWebViewError(false)}
+            onLoadEnd={() => {
+              setWebViewError(false);
+              // Platform-specific capture timing
+              const delay = Platform.OS === 'ios' ? 1500 : 1000; // iOS needs more time
+              setTimeout(() => {
+                captureScreenshot();
+              }, delay);
+            }}
             renderLoading={() => (
               <View style={styles.webViewLoading}>
                 <ActivityIndicator size="large" color={AppColors.FABMain} />
@@ -398,6 +543,21 @@ export default function AppViewScreen({ navigation, route }: Props) {
                     AsyncStorageService.clearAppData(message.appId);
                     break;
                     
+                  case 'screenshot_captured':
+                    // Handle WebView-based screenshot capture
+                    handleWebViewScreenshot(message.appId, message.dataURL, message.method);
+                    break;
+                    
+                  case 'screenshot_error':
+                    console.error('💥 [WebView] Screenshot error:', message.error);
+                    // Fallback to external screenshot method
+                    if (screenshotMethod === 'webview') {
+                      console.log('🔄 [AppView] Falling back to external screenshot method');
+                      setScreenshotMethod('external');
+                      setTimeout(() => captureScreenshot(), 1000);
+                    }
+                    break;
+                    
                   default:
                     console.log('📝 Other WebView message:', message);
                 }
@@ -406,6 +566,13 @@ export default function AppViewScreen({ navigation, route }: Props) {
               }
             }}
           />
+        )}
+        
+        {/* Invisible overlay to help with screenshot identification - only visible in WebView mode */}
+        {!webViewError && (
+          <View style={styles.screenshotOverlay} pointerEvents="none">
+            <Text style={styles.appTitleOverlay}>{app.title}</Text>
+          </View>
         )}
       </View>
 
@@ -440,7 +607,13 @@ export default function AppViewScreen({ navigation, route }: Props) {
 
         <TouchableOpacity 
           style={[styles.controlButton, styles.refreshButton]} 
-          onPress={refreshWebView}
+          onPress={() => {
+            refreshWebView();
+            // Also retake screenshot
+            setTimeout(() => {
+              captureScreenshot();
+            }, 2000);
+          }}
         >
           <Ionicons name="refresh" size={20} color="white" />
         </TouchableOpacity>
@@ -576,5 +749,21 @@ const styles = StyleSheet.create({
   },
   refreshButton: {
     backgroundColor: '#10B981',
+  },
+  screenshotOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: -1, // Behind the WebView
+  },
+  appTitleOverlay: {
+    color: 'transparent',
+    fontSize: 0,
+    opacity: 0,
   },
 });
