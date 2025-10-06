@@ -43,15 +43,15 @@ export interface ApiError {
 }
 
 export const CLAUDE_MODELS = {
-  SONNET_3_5: 'claude-3-5-sonnet-20241022',
-  HAIKU_3_5: 'claude-3-5-haiku-20241022',
+  SONNET_3_5: 'claude-3-5-sonnet-20240620',
+  HAIKU_3: 'claude-3-haiku-20240307',
   OPUS_3: 'claude-3-opus-20240229'
 } as const;
 
 export type ClaudeModel = typeof CLAUDE_MODELS[keyof typeof CLAUDE_MODELS];
 
 export const DEFAULT_CONFIG: Omit<ClaudeApiConfig, 'apiKey'> = {
-  model: CLAUDE_MODELS.SONNET_3_5,
+  model: CLAUDE_MODELS.HAIKU_3,
   maxTokens: 4000,
   temperature: 0.7
 };

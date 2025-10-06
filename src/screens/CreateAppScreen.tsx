@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, StatusBar } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from './MyAppScreen';
 import { AppColors } from '../types/PromptHistory';
 import { PromptGenerator, AppStyle, AppCategory, AppGenerationRequest } from '../services/PromptGenerator';
 import { ClaudeApiService } from '../services/ClaudeApiService';
 import { AppStorageService } from '../services/AppStorageService';
+import { SecureStorageService } from '../services/SecureStorageService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateApp'>;
 
@@ -79,10 +81,42 @@ export default function CreateAppScreen({ navigation }: Props) {
   const [prompt, setPrompt] = useState('');
   const [selectedStyle, setSelectedStyle] = useState<AppStyle>('modern');
   const [isLoading, setIsLoading] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
+  const [isCheckingApiKey, setIsCheckingApiKey] = useState(true);
+
+  const checkApiKeyStatus = async () => {
+    try {
+      const hasKey = await SecureStorageService.hasApiKey();
+      setHasApiKey(hasKey);
+    } catch (error) {
+      console.error('Error checking API key status:', error);
+      setHasApiKey(false);
+    } finally {
+      setIsCheckingApiKey(false);
+    }
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      checkApiKeyStatus();
+    }, [])
+  );
 
   const handleSubmit = async () => {
     if (!prompt.trim()) {
       Alert.alert('Error', 'Please enter an app description');
+      return;
+    }
+
+    if (!hasApiKey) {
+      Alert.alert(
+        'API Key Required',
+        'You need to set up your Claude API key to generate apps. Would you like to add one now?',
+        [
+          { text: 'Add API Key', onPress: () => navigation.navigate('Settings') },
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      );
       return;
     }
 
@@ -109,24 +143,10 @@ export default function CreateAppScreen({ navigation }: Props) {
       const claudeService = ClaudeApiService.getInstance();
       
       if (!claudeService.isConfigured()) {
-        // For non-API users, show success with placeholder
         Alert.alert(
-          'App Created!',
-          `"${savedApp.title}" has been created! To generate fully functional apps with AI, you can set up your Claude API key in Settings.`,
-          [
-            {
-              text: 'View Apps',
-              onPress: () => navigation.navigate('MyApp'),
-            },
-            {
-              text: 'Create Another',
-              onPress: () => {
-                setPrompt('');
-                setSelectedStyle('modern');
-              },
-              style: 'cancel'
-            }
-          ]
+          'Configuration Error',
+          'There was an issue with your API configuration. Please check your settings.',
+          [{ text: 'Check Settings', onPress: () => navigation.navigate('Settings') }]
         );
         return;
       }
@@ -247,13 +267,28 @@ export default function CreateAppScreen({ navigation }: Props) {
 
         {/* Generate Button Section */}
         <View style={styleSheet.section}>
+          {!hasApiKey && !isCheckingApiKey && (
+            <View style={styleSheet.warningCard}>
+              <Ionicons name="warning" size={20} color="#F59E0B" />
+              <Text style={styleSheet.warningText}>
+                You need to set up your Claude API key to generate apps
+              </Text>
+              <TouchableOpacity 
+                style={styleSheet.settingsButton}
+                onPress={() => navigation.navigate('Settings')}
+              >
+                <Text style={styleSheet.settingsButtonText}>Go to Settings</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          
           <TouchableOpacity
             style={[
               styleSheet.generateButton,
-              { opacity: (!prompt.trim() || isLoading) ? 0.6 : 1 }
+              { opacity: (!prompt.trim() || isLoading || !hasApiKey) ? 0.6 : 1 }
             ]}
             onPress={handleSubmit}
-            disabled={!prompt.trim() || isLoading}
+            disabled={!prompt.trim() || isLoading || !hasApiKey}
           >
             {isLoading ? (
               <View style={styleSheet.loadingContainer}>
@@ -262,7 +297,9 @@ export default function CreateAppScreen({ navigation }: Props) {
             ) : (
               <View style={styleSheet.buttonContent}>
                 <Ionicons name="sparkles" size={20} color="white" />
-                <Text style={styleSheet.generateButtonText}>Generate App with AI</Text>
+                <Text style={styleSheet.generateButtonText}>
+                  {hasApiKey ? 'Generate App with AI' : 'API Key Required'}
+                </Text>
               </View>
             )}
           </TouchableOpacity>
@@ -474,6 +511,34 @@ const styleSheet = StyleSheet.create({
   generateButtonText: {
     color: 'white',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  warningCard: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  warningText: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#92400E',
+  },
+  settingsButton: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  settingsButtonText: {
+    color: 'white',
+    fontSize: 12,
     fontWeight: '600',
   },
   templateCard: {

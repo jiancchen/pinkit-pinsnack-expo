@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from './MyAppScreen';
 import { AppColors, samplePromptHistory } from '../types/PromptHistory';
@@ -11,10 +12,16 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export default function SettingsScreen({ navigation }: Props) {
   const [temperature, setTemperature] = useState(0.3);
-  const [selectedModel, setSelectedModel] = useState('Claude 3.5 Sonnet');
+  const [selectedModel, setSelectedModel] = useState('Claude 3 Haiku');
   const [selectedLanguage, setSelectedLanguage] = useState('English');
   const [hasApiKey, setHasApiKey] = useState(false);
   const [isLoadingApiKey, setIsLoadingApiKey] = useState(true);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      checkApiKeyStatus();
+    }, [])
+  );
 
   useEffect(() => {
     checkApiKeyStatus();
@@ -32,9 +39,9 @@ export default function SettingsScreen({ navigation }: Props) {
   };
 
   const models = [
+    'Claude 3 Haiku',
     'Claude 3.5 Sonnet',
     'Claude 3 Opus',
-    'Claude 3 Haiku',
   ];
 
   const languages = [
@@ -149,7 +156,7 @@ export default function SettingsScreen({ navigation }: Props) {
                 <Ionicons name="chevron-down" size={20} color="#666" />
               </TouchableOpacity>
               <Text style={styles.helperText}>
-                Current model: {selectedModel} - $3/$15 per million tokens
+                Current model: {selectedModel} - {selectedModel === 'Claude 3 Haiku' ? '$0.25/$1.25 per million tokens' : selectedModel === 'Claude 3.5 Sonnet' ? '$3/$15 per million tokens' : '$15/$75 per million tokens'}
               </Text>
             </View>
 

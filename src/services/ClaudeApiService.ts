@@ -28,7 +28,14 @@ export class ClaudeApiService {
     this.axiosInstance.interceptors.response.use(
       (response) => response,
       (error) => {
-        console.error('Claude API Error:', error.response?.data || error.message);
+        console.error('Claude API Error Details:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data,
+          url: error.config?.url,
+          method: error.config?.method,
+          message: error.message
+        });
         return Promise.reject(error);
       }
     );
@@ -213,9 +220,21 @@ export class ClaudeApiService {
         };
       }
     } catch (error: any) {
+      const errorMessage = error.response?.data?.error?.message || 
+                          error.response?.statusText || 
+                          error.message || 
+                          'Connection failed';
+      
+      console.error('Test connection failed:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+
       return {
         success: false,
-        message: error.message || 'Connection failed'
+        message: `Connection failed: ${errorMessage}`
       };
     }
   }
