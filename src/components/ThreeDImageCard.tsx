@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { PromptHistory, AppColors } from '../types/PromptHistory';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenshotService } from '../services/ScreenshotService';
 import { WebViewScreenshotService } from '../services/WebViewScreenshotService';
+import { useScreenshotState, useScreenshotActions, useScreenshotStore } from '../stores/ScreenshotStore';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -38,60 +39,38 @@ export default function ThreeDImageCard({
   onNavigateToApp,
   onShowSnackbar,
 }: ThreeDImageCardProps) {
-  const [screenshotUri, setScreenshotUri] = useState<string | null>(null);
-  const [isLoadingScreenshot, setIsLoadingScreenshot] = useState(false);
+  // Use Zustand store for reactive screenshot state - like Android LiveData
+  const screenshotState = useScreenshotState(historyItem.id);
+  const screenshotStore = useScreenshotStore();
 
   // Check different states (moved up to avoid scope issues)
   const isGenerating = historyItem.html === 'GENERATING...';
   const isNewItem = (historyItem.accessCount || 0) < 1 && !isGenerating;
   const isFavorite = historyItem.favorite === true;
 
-  // Load screenshot when component mounts or when app is accessed
+  // Load screenshot only when app is first accessed - ONE TIME EFFECT
   useEffect(() => {
-    loadScreenshot();
-  }, [historyItem.id, historyItem.accessCount]); // Re-load when access count changes
-
-  // Only reload screenshot periodically if the app has been accessed before
-  useEffect(() => {
-    // Only poll for screenshots if this app has been accessed at least once
-    if ((historyItem.accessCount || 0) > 0 && !isGenerating && !screenshotUri) {
-      const interval = setInterval(() => {
-        console.log('🔄 [Card] Periodic screenshot check for accessed app:', historyItem.id);
-        loadScreenshot();
-      }, 5000); // Check every 5 seconds instead of 3
-      
-      return () => clearInterval(interval);
+    // Only load screenshot if:
+    // 1. The app has been accessed at least once
+    // 2. We're not generating 
+    // 3. We don't already have a screenshot or loading state
+    const shouldLoad = (historyItem.accessCount || 0) > 0 && 
+                      !isGenerating &&
+                      !screenshotState?.uri &&
+                      !screenshotState?.isLoading;
+                      
+    if (shouldLoad) {
+      console.log('🔄 [Card] Loading screenshot for accessed app:', historyItem.id);
+      // Call the store method directly to avoid function reference issues
+      screenshotStore.loadScreenshot(historyItem.id);
     }
-  }, [isGenerating, screenshotUri, historyItem.accessCount]);
-
-  const loadScreenshot = async () => {
-    if (isGenerating) return; // Don't try to load screenshot for generating apps
-    
-    try {
-      setIsLoadingScreenshot(true);
-      console.log('🔍 [Card] Loading screenshot for app:', historyItem.id);
-      
-      // Try WebView screenshot first, then fallback to external screenshot
-      let uri = await WebViewScreenshotService.getWebViewScreenshot(historyItem.id);
-      
-      if (!uri) {
-        // Fallback to external screenshot method
-        uri = await ScreenshotService.getScreenshot(historyItem.id);
-      }
-      
-      if (uri) {
-        const source = uri.includes('webview_screenshot_') ? 'WebView' : 'External';
-        console.log(`✅ [Card] Screenshot loaded for app: ${historyItem.id} (${source})`);
-        setScreenshotUri(uri);
-      } else {
-        console.log('⚠️ [Card] No screenshot found for app:', historyItem.id);
-      }
-    } catch (error) {
-      console.warn('💥 [Card] Failed to load screenshot for app:', historyItem.id, error);
-    } finally {
-      setIsLoadingScreenshot(false);
-    }
-  };
+  }, [
+    historyItem.id, 
+    historyItem.accessCount, 
+    isGenerating
+    // NOTE: We intentionally don't include screenshotState or store functions
+    // to prevent infinite loops. The store will update reactively via Zustand.
+  ]);
 
   const displayTitle = historyItem.title?.trim() || 
     (historyItem.prompt.substring(0, 50) + '...');
@@ -151,10 +130,10 @@ export default function ThreeDImageCard({
         <View style={styles.cardBackground}>
           {/* Screenshot area with semi-transparent overlay */}
           <View style={styles.screenshotArea}>
-            {screenshotUri && (
+            {screenshotState?.uri && (
               <>
                 <Image 
-                  source={{ uri: screenshotUri }}
+                  source={{ uri: screenshotState.uri }}
                   style={styles.screenshotImage}
                   resizeMode="cover"
                 />
@@ -162,7 +141,7 @@ export default function ThreeDImageCard({
               </>
             )}
             
-            {isLoadingScreenshot && (
+            {screenshotState?.isLoading && (
               <View style={styles.screenshotLoadingOverlay}>
                 <ActivityIndicator size="small" color={AppColors.White} />
               </View>

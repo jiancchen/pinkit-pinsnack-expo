@@ -21,6 +21,7 @@ import { AppStorageService, StoredApp } from '../services/AppStorageService';
 import { AsyncStorageService } from '../services/AsyncStorageService';
 import { ScreenshotService } from '../services/ScreenshotService';
 import { WebViewScreenshotService } from '../services/WebViewScreenshotService';
+import { emitScreenshotCaptured, emitScreenshotError, emitScreenshotLoading } from '../stores/ScreenshotStore';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AppView'>;
 
@@ -281,24 +282,29 @@ export default function AppViewScreen({ navigation, route }: Props) {
   const handleWebViewScreenshot = async (appId: string, dataURL: string, method: string) => {
     try {
       console.log(`📸 [AppView] Processing WebView screenshot for app: ${appId}, method: ${method}`);
+      emitScreenshotLoading(appId, true);
       setIsCapturingScreenshot(true);
       
       const processedUri = await WebViewScreenshotService.processWebViewScreenshot(appId, dataURL, method);
       
       if (processedUri) {
         console.log('✅ [AppView] WebView screenshot processed and stored:', processedUri);
+        emitScreenshotCaptured(appId, processedUri, 'webview');
       } else {
         console.warn('⚠️ [AppView] WebView screenshot processing failed');
+        emitScreenshotError(appId, 'WebView screenshot processing failed');
         // Fallback to external method
         setScreenshotMethod('external');
         setTimeout(() => captureScreenshot(), 1000);
       }
     } catch (error) {
       console.error('💥 [AppView] WebView screenshot handling error:', error);
+      emitScreenshotError(appId, error instanceof Error ? error.message : 'WebView screenshot failed');
       setScreenshotMethod('external');
       setTimeout(() => captureScreenshot(), 1000);
     } finally {
       setIsCapturingScreenshot(false);
+      emitScreenshotLoading(appId, false);
     }
   };
 
@@ -309,9 +315,11 @@ export default function AppViewScreen({ navigation, route }: Props) {
       console.log('📸 [AppView] Starting screenshot capture for app:', app.id);
       console.log('📸 [AppView] WebView ref available:', !!webViewRef.current);
       console.log('📸 [AppView] Container ref available:', !!webViewContainerRef.current);
+      
+      emitScreenshotLoading(app.id, true);
       setIsCapturingScreenshot(true);
       
-            // Wait just a bit for any animations to complete
+      // Wait just a bit for any animations to complete
       await new Promise(resolve => setTimeout(resolve, 500));
       
       // Platform-specific capture strategies
@@ -357,13 +365,16 @@ export default function AppViewScreen({ navigation, route }: Props) {
       
       if (screenshotUri) {
         console.log('✅ [AppView] Screenshot captured and stored:', screenshotUri);
+        emitScreenshotCaptured(app.id, screenshotUri, 'external');
       } else {
         console.warn('⚠️ [AppView] Screenshot capture failed, creating fallback');
+        emitScreenshotError(app.id, 'External screenshot capture failed');
         // Create a fallback screenshot with app info
         await ScreenshotService.createFallbackScreenshot(app.id, app.title, app.style);
       }
     } catch (error) {
       console.error('💥 [AppView] Screenshot capture error:', error);
+      emitScreenshotError(app.id, error instanceof Error ? error.message : 'Screenshot capture failed');
       // Create a fallback screenshot with app info
       try {
         await ScreenshotService.createFallbackScreenshot(app.id, app.title, app.style);
@@ -372,10 +383,9 @@ export default function AppViewScreen({ navigation, route }: Props) {
       }
     } finally {
       setIsCapturingScreenshot(false);
+      emitScreenshotLoading(app.id, false);
     }
-  };
-
-  const refreshWebView = () => {
+  };  const refreshWebView = () => {
     setWebViewError(false);
     webViewRef.current?.reload();
   };
