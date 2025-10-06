@@ -1,233 +1,400 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, StatusBar } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from './MyAppScreen';
+import { AppColors } from '../types/PromptHistory';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateApp'>;
 
+const styles = {
+  DEFAULT: { name: 'Default', emoji: '🎨' },
+  FUN: { name: 'Fun', emoji: '🎯' },
+  SIMPLE: { name: 'Simple', emoji: '✨' },
+};
+
+const templates = [
+  {
+    emoji: '✅',
+    name: 'Todo List',
+    description: 'Simple task management',
+    prompt: 'Create a todo list app with add, delete, and mark complete functionality'
+  },
+  {
+    emoji: '🎯',
+    name: 'Habit Tracker',
+    description: 'Track daily habits',
+    prompt: 'Create a habit tracker that lets me check off daily habits and shows streaks'
+  },
+  {
+    emoji: '📝',
+    name: 'Note Taking',
+    description: 'Quick notes and memos',
+    prompt: 'Create a simple note-taking app where I can add, edit, and delete notes'
+  },
+  {
+    emoji: '🧮',
+    name: 'Calculator',
+    description: 'Basic calculator',
+    prompt: 'Create a calculator app with basic arithmetic operations'
+  },
+  {
+    emoji: '⏰',
+    name: 'Timer',
+    description: 'Countdown timer',
+    prompt: 'Create a countdown timer app with start, pause, and reset functionality'
+  }
+];
+
 export default function CreateAppScreen({ navigation }: Props) {
-  const [appName, setAppName] = useState('');
-  const [appDescription, setAppDescription] = useState('');
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [prompt, setPrompt] = useState('');
+  const [selectedStyle, setSelectedStyle] = useState('DEFAULT');
+  const [customStyle, setCustomStyle] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const templates = [
-    { id: 'blank', name: 'Blank App', description: 'Start with a minimal setup' },
-    { id: 'navigation', name: 'Navigation App', description: 'Pre-configured with navigation' },
-    { id: 'tabs', name: 'Tab Navigation', description: 'Bottom tab navigation setup' },
-    { id: 'drawer', name: 'Drawer Navigation', description: 'Side drawer navigation' },
-  ];
-
-  const handleCreateApp = () => {
-    if (!appName.trim()) {
-      Alert.alert('Error', 'Please enter an app name');
+  const handleSubmit = () => {
+    if (!prompt.trim()) {
+      Alert.alert('Error', 'Please enter an app description');
       return;
     }
+
+    setIsLoading(true);
     
-    if (!selectedTemplate) {
-      Alert.alert('Error', 'Please select a template');
-      return;
-    }
+    // Simulate app generation
+    setTimeout(() => {
+      setIsLoading(false);
+      Alert.alert(
+        'App Generated!',
+        `Your app has been created successfully!`,
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.navigate('MyApp'),
+          },
+        ]
+      );
+    }, 2000);
+  };
 
-    Alert.alert(
-      'App Created!',
-      `Your app "${appName}" has been created with the ${templates.find(t => t.id === selectedTemplate)?.name} template.`,
-      [
-        {
-          text: 'OK',
-          onPress: () => navigation.navigate('MyApp'),
-        },
-      ]
-    );
+  const handleTemplateSelect = (templatePrompt: string) => {
+    setPrompt(templatePrompt);
   };
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>Create New App</Text>
+    <View style={styleSheet.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={AppColors.Primary} />
       
-      <View style={styles.form}>
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>App Name</Text>
-          <TextInput
-            style={styles.input}
-            value={appName}
-            onChangeText={setAppName}
-            placeholder="Enter your app name"
-            placeholderTextColor="#999"
-          />
+      {/* Header */}
+      <View style={styleSheet.header}>
+        <Text style={styleSheet.headerTitle}>Create New App</Text>
+      </View>
+
+      <ScrollView 
+        style={styleSheet.scrollView}
+        contentContainerStyle={styleSheet.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Style Selection Section */}
+        <View style={styleSheet.section}>
+          <Text style={styleSheet.sectionTitle}>Pick a Style</Text>
+          
+          <View style={styleSheet.card}>
+            <View style={styleSheet.stylesContainer}>
+              {Object.entries(styles).map(([key, style]) => (
+                <StyleCard
+                  key={key}
+                  style={key}
+                  emoji={style.emoji}
+                  name={style.name}
+                  isSelected={selectedStyle === key}
+                  onSelect={() => setSelectedStyle(key)}
+                />
+              ))}
+              <StyleCard
+                style="CUSTOM"
+                emoji="✨"
+                name="Custom"
+                isSelected={selectedStyle === 'CUSTOM'}
+                onSelect={() => setSelectedStyle('CUSTOM')}
+              />
+            </View>
+          </View>
         </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Description (Optional)</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            value={appDescription}
-            onChangeText={setAppDescription}
-            placeholder="Describe your app"
-            placeholderTextColor="#999"
-            multiline
-            numberOfLines={3}
-          />
-        </View>
+        {/* Main Input Section */}
+        <View style={styleSheet.section}>
+          <View style={styleSheet.card}>
+            <View style={styleSheet.inputHeader}>
+              <Text style={styleSheet.sectionTitle}>Describe Your App</Text>
+              {prompt.length > 0 && (
+                <TouchableOpacity onPress={() => setPrompt('')}>
+                  <Ionicons name="close" size={20} color="#666" />
+                </TouchableOpacity>
+              )}
+            </View>
+            
+            <TextInput
+              style={styleSheet.textInput}
+              value={prompt}
+              onChangeText={setPrompt}
+              placeholder="Describe what kind of app you want to create..."
+              placeholderTextColor="#999"
+              multiline
+              numberOfLines={5}
+              textAlignVertical="top"
+              editable={!isLoading}
+            />
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Choose Template</Text>
-          {templates.map((template) => (
             <TouchableOpacity
-              key={template.id}
               style={[
-                styles.templateCard,
-                selectedTemplate === template.id && styles.selectedTemplate,
+                styleSheet.generateButton,
+                { opacity: (!prompt.trim() || isLoading) ? 0.6 : 1 }
               ]}
-              onPress={() => setSelectedTemplate(template.id)}
+              onPress={handleSubmit}
+              disabled={!prompt.trim() || isLoading}
             >
-              <View style={styles.templateInfo}>
-                <Text style={[
-                  styles.templateName,
-                  selectedTemplate === template.id && styles.selectedText,
-                ]}>
-                  {template.name}
-                </Text>
-                <Text style={[
-                  styles.templateDescription,
-                  selectedTemplate === template.id && styles.selectedText,
-                ]}>
-                  {template.description}
-                </Text>
-              </View>
-              <View style={[
-                styles.radio,
-                selectedTemplate === template.id && styles.radioSelected,
-              ]} />
+              {isLoading ? (
+                <View style={styleSheet.loadingContainer}>
+                  <Text style={styleSheet.generateButtonText}>Generating...</Text>
+                </View>
+              ) : (
+                <View style={styleSheet.buttonContent}>
+                  <Ionicons name="send" size={20} color="white" />
+                  <Text style={styleSheet.generateButtonText}>Generate App</Text>
+                </View>
+              )}
             </TouchableOpacity>
-          ))}
+          </View>
         </View>
-      </View>
 
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={styles.createButton}
-          onPress={handleCreateApp}
-        >
-          <Text style={styles.createButtonText}>Create App</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.cancelButtonText}>Cancel</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+        {/* Templates Section */}
+        {!isLoading && (
+          <View style={styleSheet.section}>
+            <Text style={styleSheet.sectionTitle}>Quick Templates</Text>
+            
+            {templates.map((template, index) => (
+              <TemplateCard
+                key={index}
+                emoji={template.emoji}
+                name={template.name}
+                description={template.description}
+                onSelect={() => handleTemplateSelect(template.prompt)}
+              />
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
+interface StyleCardProps {
+  style: string;
+  emoji: string;
+  name: string;
+  isSelected: boolean;
+  onSelect: () => void;
+}
+
+function StyleCard({ emoji, name, isSelected, onSelect }: StyleCardProps) {
+  return (
+    <TouchableOpacity
+      style={[
+        styleSheet.styleCard,
+        isSelected && styleSheet.styleCardSelected
+      ]}
+      onPress={onSelect}
+    >
+      <Text style={styleSheet.styleEmoji}>{emoji}</Text>
+      <Text style={[
+        styleSheet.styleName,
+        isSelected && styleSheet.styleNameSelected
+      ]}>
+        {name}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+interface TemplateCardProps {
+  emoji: string;
+  name: string;
+  description: string;
+  onSelect: () => void;
+}
+
+function TemplateCard({ emoji, name, description, onSelect }: TemplateCardProps) {
+  return (
+    <TouchableOpacity style={styleSheet.templateCard} onPress={onSelect}>
+      <Text style={styleSheet.templateEmoji}>{emoji}</Text>
+      <View style={styleSheet.templateContent}>
+        <Text style={styleSheet.templateName}>{name}</Text>
+        <Text style={styleSheet.templateDescription}>{description}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+const styleSheet = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-    padding: 20,
+    backgroundColor: AppColors.Primary,
   },
-  title: {
-    fontSize: 32,
+  header: {
+    paddingTop: 60,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
+  headerTitle: {
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 30,
-    marginTop: 20,
+    color: 'rgba(0, 0, 0, 0.8)',
   },
-  form: {
+  scrollView: {
     flex: 1,
   },
-  inputGroup: {
-    marginBottom: 25,
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 32,
   },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
+  section: {
+    marginBottom: 20,
   },
-  input: {
-    backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 15,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
-  },
-  templateCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#ddd',
-  },
-  selectedTemplate: {
-    borderColor: '#007AFF',
-    backgroundColor: '#f0f8ff',
-  },
-  templateInfo: {
-    flex: 1,
-  },
-  templateName: {
+  sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
+    fontWeight: 'bold',
+    color: 'rgba(0, 0, 0, 0.8)',
+    marginBottom: 12,
+  },
+  card: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 20,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  stylesContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  styleCard: {
+    width: 80,
+    height: 80,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(128, 128, 128, 0.3)',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  styleCardSelected: {
+    backgroundColor: '#FFF3C4',
+    borderColor: AppColors.FABMain,
+    borderWidth: 2,
+    elevation: 6,
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+  },
+  styleEmoji: {
+    fontSize: 24,
     marginBottom: 4,
   },
-  templateDescription: {
-    fontSize: 14,
-    color: '#666',
+  styleName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(0, 0, 0, 0.8)',
+    textAlign: 'center',
   },
-  selectedText: {
-    color: '#007AFF',
+  styleNameSelected: {
+    color: 'rgba(0, 0, 0, 0.8)',
+    fontWeight: 'bold',
   },
-  radio: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#ddd',
+  inputHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  radioSelected: {
-    borderColor: '#007AFF',
-    backgroundColor: '#007AFF',
+  textInput: {
+    borderWidth: 1,
+    borderColor: 'rgba(128, 128, 128, 0.5)',
+    borderRadius: 12,
+    padding: 15,
+    fontSize: 16,
+    color: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: '#fff',
+    minHeight: 120,
+    marginBottom: 16,
   },
-  buttonContainer: {
-    marginTop: 30,
-    gap: 15,
-  },
-  createButton: {
-    backgroundColor: '#007AFF',
+  generateButton: {
+    backgroundColor: AppColors.FABMain,
+    borderRadius: 12,
     paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 10,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  createButtonText: {
+  generateButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
   },
-  cancelButton: {
-    backgroundColor: 'transparent',
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 10,
+  templateCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#007AFF',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
-  cancelButtonText: {
-    color: '#007AFF',
-    fontSize: 16,
+  templateEmoji: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  templateContent: {
+    flex: 1,
+  },
+  templateName: {
+    fontSize: 14,
     fontWeight: '600',
+    color: 'rgba(0, 0, 0, 0.8)',
+    marginBottom: 2,
+  },
+  templateDescription: {
+    fontSize: 12,
+    color: 'rgba(0, 0, 0, 0.6)',
   },
 });

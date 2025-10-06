@@ -15,29 +15,20 @@ export default function App() {
       <Stack.Navigator
         initialRouteName="MyApp"
         screenOptions={{
-          headerStyle: {
-            backgroundColor: '#007AFF',
-          },
-          headerTintColor: '#fff',
-          headerTitleStyle: {
-            fontWeight: 'bold',
-          },
+          headerShown: false, // Remove the top app bar
         }}
       >
         <Stack.Screen 
           name="MyApp" 
           component={MyAppScreen}
-          options={{ title: 'My App' }}
         />
         <Stack.Screen 
           name="Settings" 
           component={SettingsScreen}
-          options={{ title: 'Settings' }}
         />
         <Stack.Screen 
           name="CreateApp" 
           component={CreateAppScreen}
-          options={{ title: 'Create App' }}
         />
       </Stack.Navigator>
       <StatusBar style="light" />
