@@ -6,6 +6,7 @@ import { RootStackParamList } from './MyAppScreen';
 import { AppColors } from '../types/PromptHistory';
 import { PromptGenerator, AppStyle, AppCategory, AppGenerationRequest } from '../services/PromptGenerator';
 import { ClaudeApiService } from '../services/ClaudeApiService';
+import { AppStorageService } from '../services/AppStorageService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateApp'>;
 
@@ -77,7 +78,6 @@ const templates = [
 export default function CreateAppScreen({ navigation }: Props) {
   const [prompt, setPrompt] = useState('');
   const [selectedStyle, setSelectedStyle] = useState<AppStyle>('modern');
-  const [selectedCategory, setSelectedCategory] = useState<AppCategory>('productivity');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async () => {
@@ -89,7 +89,7 @@ export default function CreateAppScreen({ navigation }: Props) {
     const request: AppGenerationRequest = {
       description: prompt.trim(),
       style: selectedStyle,
-      category: selectedCategory,
+      category: 'productivity' as AppCategory,
       platform: 'mobile'
     };
 
@@ -103,15 +103,29 @@ export default function CreateAppScreen({ navigation }: Props) {
     setIsLoading(true);
     
     try {
+      // First, save the app with placeholder content
+      const savedApp = await AppStorageService.saveApp(request);
+      
       const claudeService = ClaudeApiService.getInstance();
       
       if (!claudeService.isConfigured()) {
+        // For non-API users, show success with placeholder
         Alert.alert(
-          'API Key Required',
-          'To generate apps with AI, you need to configure your Claude API key. You can set this up in Settings.',
+          'App Created!',
+          `"${savedApp.title}" has been created! To generate fully functional apps with AI, you can set up your Claude API key in Settings.`,
           [
-            { text: 'Go to Settings', onPress: () => navigation.navigate('Settings') },
-            { text: 'Cancel', style: 'cancel' }
+            {
+              text: 'View Apps',
+              onPress: () => navigation.navigate('MyApp'),
+            },
+            {
+              text: 'Create Another',
+              onPress: () => {
+                setPrompt('');
+                setSelectedStyle('modern');
+              },
+              style: 'cancel'
+            }
           ]
         );
         return;
@@ -123,8 +137,13 @@ export default function CreateAppScreen({ navigation }: Props) {
       // Call Claude API
       const generatedConcept = await claudeService.generateAppConcept(generatedPrompt);
       
-      // TODO: Save the generated concept to app history
-      // For now, just show success
+      // Update the app with the generated content
+      await AppStorageService.updateAppHTML(
+        savedApp.id,
+        savedApp.html, // Keep the placeholder HTML for now, could generate actual HTML here
+        generatedConcept
+      );
+      
       Alert.alert(
         'App Generated Successfully!',
         `"${generatedConcept.title}" has been created with ${generatedConcept.features.length} features and detailed specifications.`,
@@ -138,7 +157,6 @@ export default function CreateAppScreen({ navigation }: Props) {
             onPress: () => {
               setPrompt('');
               setSelectedStyle('modern');
-              setSelectedCategory('productivity');
             },
             style: 'cancel'
           }
@@ -159,7 +177,6 @@ export default function CreateAppScreen({ navigation }: Props) {
   const handleTemplateSelect = (template: typeof templates[0]) => {
     setPrompt(template.prompt);
     setSelectedStyle(template.style);
-    setSelectedCategory(template.category);
   };
 
   return (
@@ -182,46 +199,6 @@ export default function CreateAppScreen({ navigation }: Props) {
         contentContainerStyle={styleSheet.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Style Selection Section */}
-        <View style={styleSheet.section}>
-          <Text style={styleSheet.sectionTitle}>Pick a Style</Text>
-          
-          <View style={styleSheet.card}>
-            <View style={styleSheet.optionsContainer}>
-              {Object.entries(styles).map(([key, style]) => (
-                <OptionCard
-                  key={key}
-                  id={key as AppStyle}
-                  emoji={style.emoji}
-                  name={style.name}
-                  isSelected={selectedStyle === key}
-                  onSelect={() => setSelectedStyle(key as AppStyle)}
-                />
-              ))}
-            </View>
-          </View>
-        </View>
-
-        {/* Category Selection Section */}
-        <View style={styleSheet.section}>
-          <Text style={styleSheet.sectionTitle}>Select Category</Text>
-          
-          <View style={styleSheet.card}>
-            <View style={styleSheet.optionsContainer}>
-              {Object.entries(categories).map(([key, category]) => (
-                <OptionCard
-                  key={key}
-                  id={key as AppCategory}
-                  emoji={category.emoji}
-                  name={category.name}
-                  isSelected={selectedCategory === key}
-                  onSelect={() => setSelectedCategory(key as AppCategory)}
-                />
-              ))}
-            </View>
-          </View>
-        </View>
-
         {/* Main Input Section */}
         <View style={styleSheet.section}>
           <View style={styleSheet.card}>
@@ -245,27 +222,50 @@ export default function CreateAppScreen({ navigation }: Props) {
               textAlignVertical="top"
               editable={!isLoading}
             />
-
-            <TouchableOpacity
-              style={[
-                styleSheet.generateButton,
-                { opacity: (!prompt.trim() || isLoading) ? 0.6 : 1 }
-              ]}
-              onPress={handleSubmit}
-              disabled={!prompt.trim() || isLoading}
-            >
-              {isLoading ? (
-                <View style={styleSheet.loadingContainer}>
-                  <Text style={styleSheet.generateButtonText}>Generating with Claude AI...</Text>
-                </View>
-              ) : (
-                <View style={styleSheet.buttonContent}>
-                  <Ionicons name="sparkles" size={20} color="white" />
-                  <Text style={styleSheet.generateButtonText}>Generate App with AI</Text>
-                </View>
-              )}
-            </TouchableOpacity>
           </View>
+        </View>
+
+        {/* Style Selection Section */}
+        <View style={styleSheet.section}>
+          <Text style={styleSheet.sectionTitle}>Pick a Design Style</Text>
+          
+          <View style={styleSheet.card}>
+            <View style={styleSheet.optionsContainer}>
+              {Object.entries(styles).map(([key, style]) => (
+                <OptionCard
+                  key={key}
+                  id={key as AppStyle}
+                  emoji={style.emoji}
+                  name={style.name}
+                  isSelected={selectedStyle === key}
+                  onSelect={() => setSelectedStyle(key as AppStyle)}
+                />
+              ))}
+            </View>
+          </View>
+        </View>
+
+        {/* Generate Button Section */}
+        <View style={styleSheet.section}>
+          <TouchableOpacity
+            style={[
+              styleSheet.generateButton,
+              { opacity: (!prompt.trim() || isLoading) ? 0.6 : 1 }
+            ]}
+            onPress={handleSubmit}
+            disabled={!prompt.trim() || isLoading}
+          >
+            {isLoading ? (
+              <View style={styleSheet.loadingContainer}>
+                <Text style={styleSheet.generateButtonText}>Generating with Claude AI...</Text>
+              </View>
+            ) : (
+              <View style={styleSheet.buttonContent}>
+                <Ionicons name="sparkles" size={20} color="white" />
+                <Text style={styleSheet.generateButtonText}>Generate App with AI</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
 
         {/* Templates Section */}

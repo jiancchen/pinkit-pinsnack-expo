@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Alert, StatusBar } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import Scrollable3DStack from '../components/Scrollable3DStack';
 import FloatingToolbar from '../components/FloatingToolbar';
-import { samplePromptHistory, AppColors } from '../types/PromptHistory';
+import { AppColors, PromptHistory } from '../types/PromptHistory';
+import { AppStorageService, StoredApp } from '../services/AppStorageService';
 
 export type RootStackParamList = {
   Welcome: undefined;
@@ -15,16 +17,72 @@ export type RootStackParamList = {
 type Props = NativeStackScreenProps<RootStackParamList, 'MyApp'>;
 
 export default function MyAppScreen({ navigation }: Props) {
-  const [promptHistory] = useState(samplePromptHistory);
+  const [promptHistory, setPromptHistory] = useState<PromptHistory[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleNavigateToApp = (appId: string) => {
-    const app = promptHistory.find(item => item.id === appId);
+  const loadApps = async () => {
+    try {
+      setIsLoading(true);
+      const storedApps = await AppStorageService.getAllApps();
+      
+      // Convert StoredApp to PromptHistory format for the 3D stack
+      const converted: PromptHistory[] = storedApps.map((app: StoredApp) => ({
+        id: app.id,
+        prompt: app.prompt,
+        html: app.html,
+        title: app.title,
+        favorite: app.favorite,
+        accessCount: app.accessCount,
+        timestamp: app.timestamp,
+        style: app.style,
+        category: app.category,
+        status: app.status,
+        generatedConcept: app.generatedConcept
+      }));
+      
+      setPromptHistory(converted);
+    } catch (error) {
+      console.error('Failed to load apps:', error);
+      Alert.alert('Error', 'Failed to load your apps. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load apps when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadApps();
+    }, [])
+  );
+
+  useEffect(() => {
+    loadApps();
+  }, []);
+
+  const handleNavigateToApp = async (appId: string) => {
+    const app = promptHistory.find((item: PromptHistory) => item.id === appId);
     if (app) {
-      Alert.alert(
-        'Open App',
-        `Opening ${app.title || 'Untitled App'}`,
-        [{ text: 'OK' }]
-      );
+      try {
+        // Update access count
+        await AppStorageService.incrementAccessCount(appId);
+        
+        Alert.alert(
+          'Open App',
+          `Opening ${app.title || 'Untitled App'}`,
+          [{ text: 'OK' }]
+        );
+        
+        // Reload apps to update access count
+        loadApps();
+      } catch (error) {
+        console.error('Error updating access count:', error);
+        Alert.alert(
+          'Open App',
+          `Opening ${app.title || 'Untitled App'}`,
+          [{ text: 'OK' }]
+        );
+      }
     }
   };
 
