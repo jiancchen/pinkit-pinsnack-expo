@@ -6,185 +6,243 @@ export type AppCategory = 'productivity' | 'social' | 'utility' | 'entertainment
 export interface AppGenerationRequest {
   description: string;
   style: AppStyle;
-  category: AppCategory;
   features?: string[];
-  targetAudience?: string;
   platform?: 'mobile' | 'web' | 'both';
 }
 
 export class PromptGenerator {
-  private static readonly STYLE_TEMPLATES = {
-    minimalist: {
-      design_principles: ['Clean lines', 'White space utilization', 'Simple navigation', 'Monochromatic color schemes'],
-      ui_elements: ['Flat design', 'Minimal typography', 'Subtle animations', 'Grid-based layouts'],
-      color_guidance: 'Use neutral colors with one accent color for important actions'
-    },
-    creative: {
-      design_principles: ['Bold colors', 'Artistic elements', 'Unique layouts', 'Experimental navigation'],
-      ui_elements: ['Custom illustrations', 'Gradient backgrounds', 'Organic shapes', 'Dynamic typography'],
-      color_guidance: 'Use vibrant color palettes with artistic gradients and creative combinations'
-    },
-    corporate: {
-      design_principles: ['Professional appearance', 'Consistent branding', 'Clear hierarchy', 'Trustworthy design'],
-      ui_elements: ['Clean typography', 'Professional imagery', 'Structured layouts', 'Subtle animations'],
-      color_guidance: 'Use professional color schemes like navy, gray, and white with branded accent colors'
-    },
-    playful: {
-      design_principles: ['Fun interactions', 'Bright colors', 'Engaging animations', 'Friendly interfaces'],
-      ui_elements: ['Rounded corners', 'Colorful icons', 'Bouncy animations', 'Casual typography'],
-      color_guidance: 'Use bright, cheerful colors with high contrast and playful combinations'
-    },
-    elegant: {
-      design_principles: ['Sophisticated aesthetics', 'Premium feel', 'Refined details', 'Graceful interactions'],
-      ui_elements: ['Elegant typography', 'Subtle shadows', 'Smooth transitions', 'Luxurious spacing'],
-      color_guidance: 'Use sophisticated color palettes with gold, deep blues, or muted tones'
-    },
-    modern: {
-      design_principles: ['Contemporary design', 'Latest trends', 'Cutting-edge UX', 'Tech-forward approach'],
-      ui_elements: ['Glassmorphism', 'Neumorphism', 'Dark mode support', 'Micro-interactions'],
-      color_guidance: 'Use contemporary color schemes with dark themes and neon accents'
-    }
-  };
+  
+  // Core prompt template based on your Android implementation (PROP_FORMAT3)
+  private static readonly CORE_PROMPT_TEMPLATE = `Generate single-file HTML app for React Native WebView. Vanilla JS, NO frameworks (React/Vue/etc).
 
-  private static readonly CATEGORY_TEMPLATES = {
-    productivity: {
-      core_features: ['Task management', 'Calendar integration', 'File organization', 'Collaboration tools'],
-      target_users: 'Professionals, students, teams looking to optimize their workflow',
-      key_metrics: 'Task completion rate, time saved, user engagement',
-      monetization: 'Freemium model with premium features for power users'
-    },
-    social: {
-      core_features: ['User profiles', 'Social feeds', 'Messaging', 'Content sharing'],
-      target_users: 'Social media users, communities, content creators',
-      key_metrics: 'Daily active users, engagement rate, content creation',
-      monetization: 'Ad-supported with premium subscriptions for enhanced features'
-    },
-    utility: {
-      core_features: ['Problem-solving tools', 'System optimization', 'Quick actions', 'Efficiency improvements'],
-      target_users: 'General users seeking practical solutions for daily tasks',
-      key_metrics: 'Usage frequency, problem resolution rate, user satisfaction',
-      monetization: 'One-time purchase or subscription for advanced features'
-    },
-    entertainment: {
-      core_features: ['Content consumption', 'Interactive experiences', 'Media playback', 'Gaming elements'],
-      target_users: 'Entertainment seekers, gamers, media consumers',
-      key_metrics: 'Session duration, content engagement, user retention',
-      monetization: 'Freemium with in-app purchases and premium content'
-    },
-    education: {
-      core_features: ['Learning modules', 'Progress tracking', 'Interactive lessons', 'Assessment tools'],
-      target_users: 'Students, educators, lifelong learners',
-      key_metrics: 'Learning outcomes, completion rates, knowledge retention',
-      monetization: 'Subscription-based or institutional licensing'
-    },
-    health: {
-      core_features: ['Health tracking', 'Wellness monitoring', 'Goal setting', 'Data visualization'],
-      target_users: 'Health-conscious individuals, patients, fitness enthusiasts',
-      key_metrics: 'Health improvements, user adherence, goal achievement',
-      monetization: 'Freemium with premium health insights and professional features'
-    },
-    finance: {
-      core_features: ['Budget tracking', 'Investment monitoring', 'Financial planning', 'Transaction management'],
-      target_users: 'Financial planners, investors, budget-conscious individuals',
-      key_metrics: 'Financial goal achievement, user engagement, portfolio performance',
-      monetization: 'Subscription-based with tiered pricing for different user levels'
-    },
-    travel: {
-      core_features: ['Trip planning', 'Booking integration', 'Travel guides', 'Expense tracking'],
-      target_users: 'Travelers, vacation planners, business travelers',
-      key_metrics: 'Trip completion, booking conversions, user satisfaction',
-      monetization: 'Commission-based bookings with premium planning features'
-    },
-    shopping: {
-      core_features: ['Product discovery', 'Price comparison', 'Wishlist management', 'Purchase tracking'],
-      target_users: 'Online shoppers, deal hunters, brand loyalists',
-      key_metrics: 'Purchase conversion, user engagement, savings achieved',
-      monetization: 'Affiliate commissions and premium shopping features'
-    },
-    other: {
-      core_features: ['Custom functionality', 'Unique value proposition', 'Specialized tools', 'Niche solutions'],
-      target_users: 'Varied based on specific use case and market needs',
-      key_metrics: 'User satisfaction, problem resolution, market adoption',
-      monetization: 'Flexible model based on value proposition and market fit'
-    }
-  };
+OUTPUT FORMAT:
+Respond with ONLY the complete HTML code. No explanations, no markdown code blocks, no commentary.
+Start with <!DOCTYPE html> and end with </html>. Nothing before or after.
+
+TITLE REQUIREMENT:
+Add a custom attribute to the <html> tag with the app name:
+<html data-app-title="Your Generated App Name">
+
+IMPORTANT: Do NOT show the app title/name anywhere visible in the HTML content itself. Only include it in the data-app-title attribute.
+
+REQUIRED META TAG:
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+MOBILE DESIGN:
+- Center content for portrait phones (360-400px width typical)
+- Body background: transparent (background: transparent;)
+- Container positioning: margin-top: 40px for top spacing
+- Container height strategy:
+  * For static apps (calculators, forms): Center vertically with auto height
+  * For dynamic list apps (todos, notes, logs): min-height: calc(100vh - 80px) to fill screen
+- Use min-height: 100vh (NOT height: 100vh) to prevent viewport cutoff
+- For body/container: flex with min-height allows proper scrolling
+- Container width: 100% (padding handled by native container)
+- Use flexbox/grid for layout
+- Font size ≥16px (prevents zoom on input)
+- Touch targets ≥44px
+- Responsive padding: padding:20px
+- Maintain consistent spacing/margins between elements  
+- ALL elements must use box-sizing: border-box to include padding in width calculations
+- Input fields, buttons must not exceed container width
+- Use word-wrap: break-word for text content to prevent horizontal overflow
+- Add to global CSS: * { box-sizing: border-box; }
+
+CONTAINER HEIGHT RULES:
+- If app has dynamic/expandable content (lists that grow: todos, notes, feeds, logs, chats, trackers):
+  Container must be full-height from start: min-height: calc(100vh - 80px);
+  Add overflow-y: auto; so content scrolls inside the fixed container
+- If app has static/fixed content (calculators, converters, single forms):
+  Container uses auto height and centers vertically (no forced full-height)
+- Key principle: Don't let container grow with content - either full-height or auto, never dynamic
+
+ALLOWED CDN LIBRARIES (via <script src> or <link href>):
+✓ Three.js: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
+✓ Chart.js: https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js
+✓ D3.js: https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js
+✓ Tone.js (audio): https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js
+✓ Math.js: https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js
+✓ Bootstrap CSS: https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css
+✓ Google Fonts: https://fonts.googleapis.com
+
+AVAILABLE REACT NATIVE FEATURES (ONLY THESE):
+✓ Storage:
+  window.ReactNativeWebView.postMessage(JSON.stringify({type:'saveData',key,value})) - save data
+  window.ReactNativeWebView.postMessage(JSON.stringify({type:'loadData',key})) - load data
+  window.ReactNativeWebView.postMessage(JSON.stringify({type:'getAllData'})) - get all data
+  window.ReactNativeWebView.postMessage(JSON.stringify({type:'deleteData',key})) - delete key
+  
+✓ Notifications:
+  window.ReactNativeWebView.postMessage(JSON.stringify({type:'setReminder',id,milliseconds,title,message})) - schedule notification
+  window.ReactNativeWebView.postMessage(JSON.stringify({type:'cancelReminder',id})) - cancel reminder
+  window.ReactNativeWebView.postMessage(JSON.stringify({type:'getReminders'})) - list reminders
+
+CRITICAL JAVASCRIPT PATTERNS:
+✓ Always check React Native WebView availability: if(window.ReactNativeWebView){...}
+✓ Use postMessage for communication with React Native
+✓ Listen for messages from React Native:
+  window.addEventListener('message', (event) => {
+    const data = JSON.parse(event.data);
+    // Handle response based on data.type
+  });
+✓ For storage, track the KEY used so you can delete with the SAME key later
+
+UNAVAILABLE FEATURES (MUST REJECT):
+✗ Camera/Photos, Microphone/Audio Input, Geolocation, Device Sensors
+✗ Contacts, Calendar, Phone/SMS, File System, Bluetooth, NFC
+✗ Push notifications (local reminders work), Biometrics, Screen control
+✗ Vibration, Clipboard (reading), Share API, Battery status
+
+Design Language:
+Use a layered 3D card design language. Each UI element should feel like a floating card with soft shadows, rounded corners, and depth.
+Use bold typography (Inter, Poppins, or Manrope).
+Backgrounds are flat and vibrant, e.g. yellow, teal, or coral.
+Foreground cards use black or white surfaces with subtle inner shadows.
+Accent elements use gradient highlights (like pink–orange, purple–blue).
+Keep spacing generous, corners round, and UI components centered.
+The style should feel playful yet technical, like a mix of code cards and album covers.
+
+STYLE KEYWORDS:
+Neo-brutalist, playful, chunky borders, hard shadows, gradient accents, warm peach tones, tactile, energetic, bold typography, high contrast
+
+INTERACTIONS:
+- All transitions: 0.15-0.2s
+- Hover effects: lift elements up with translate
+- Press effects: push down with translate
+- Use transform (NOT margin/position) for animations
+- webkit-tap-highlight-color: transparent; for all elements
+
+STRICTLY FORBIDDEN (MUST REJECT):
+✗ fetch(), XMLHttpRequest, WebSocket - NO network requests
+✗ Live external data: stock prices, crypto, weather, news, social media
+✗ APIs requiring real-time data
+✗ localStorage/sessionStorage (use React Native storage instead)
+✗ Service Workers, Web Workers, IndexedDB, Web SQL
+
+APPS THAT WORK (generate anything like these):
+✓ 3D graphics, games, simulations (use Three.js!)
+✓ Charts with demo data (use Chart.js)
+✓ Canvas drawing/painting apps
+✓ Music/audio synthesis apps (use Tone.js - no recording)
+✓ Calculators, converters, utilities
+✓ Timers, stopwatches, countdowns, alarms (use notifications)
+✓ Notes, todo lists (use React Native storage)
+✓ Offline games: tic-tac-toe, snake, dice, cards, puzzles
+✓ Random generators: names, passwords, jokes, colors
+✓ Simulators with demo data: weather, stocks, social posts
+✓ Text editors, markdown editors
+✓ Animations, particle effects
+✓ Math/science tools, visualizations
+✓ Habit trackers, mood trackers
+✓ Pixel art editors, color pickers
+
+REQUIREMENTS:
+✓ Complete working code (no TODOs/placeholders)
+✓ All CSS inline in <style>
+✓ All JS inline in <script>
+✓ Beautiful, polished mobile UI
+✓ Use realistic demo/simulated data when needed
+✓ App works immediately without setup
+✓ Only use available React Native features
+✓ ALL elements must use box-sizing: border-box
+
+CRITICAL: Output ONLY the HTML. Do not wrap in markdown. Do not explain.
+
+User request: `;
+
 
   /**
    * Generate a comprehensive prompt for Claude API based on user requirements
    */
   static generatePrompt(request: AppGenerationRequest): string {
-    const styleTemplate = this.STYLE_TEMPLATES[request.style];
-    const categoryTemplate = this.CATEGORY_TEMPLATES[request.category];
+    console.log('📝 [PromptGenerator] Starting prompt generation for request:', request);
+    
+    const { description, style, features } = request;
+    
+    console.log('🎨 [PromptGenerator] Building prompt with parameters:', {
+      description: description.substring(0, 50) + '...',
+      style,
+      featuresCount: features?.length || 0,
+      platform: request.platform
+    });
 
-    const prompt = `# Mobile App Concept Generator
+    // Build the style context
+    let styleContext = '';
+    if (style) {
+      const styleMap = {
+        'modern': 'Use modern, sleek, professional design with dark themes',
+        'minimalist': 'Use clean, minimal design with lots of white space',
+        'playful': 'Use fun, colorful, bright design with playful elements',
+        'creative': 'Use artistic, bold, creative design with unique layouts',
+        'corporate': 'Use professional, trustworthy design with structured layouts',
+        'elegant': 'Use sophisticated, premium design with refined details'
+      };
+      styleContext = `\nSTYLE: ${styleMap[style] || 'Modern design'}`;
+    }
 
-Create a comprehensive mobile app concept based on the following requirements:
+    // Build the features context
+    let featuresContext = '';
+    if (features && features.length > 0) {
+      featuresContext = `\nREQUIRED FEATURES: ${features.join(', ')}`;
+    }
 
-## App Requirements
-- **Description**: ${request.description}
-- **Style**: ${request.style}
-- **Category**: ${request.category}
-- **Target Platform**: ${request.platform || 'mobile'}
-${request.features ? `- **Requested Features**: ${request.features.join(', ')}` : ''}
-${request.targetAudience ? `- **Target Audience**: ${request.targetAudience}` : ''}
-
-## Style Guidelines (${request.style})
-- **Design Principles**: ${styleTemplate.design_principles.join(', ')}
-- **UI Elements**: ${styleTemplate.ui_elements.join(', ')}
-- **Color Guidance**: ${styleTemplate.color_guidance}
-
-## Category Context (${request.category})
-- **Core Features**: ${categoryTemplate.core_features.join(', ')}
-- **Target Users**: ${categoryTemplate.target_users}
-- **Key Metrics**: ${categoryTemplate.key_metrics}
-- **Monetization**: ${categoryTemplate.monetization}
-
-## Required Output Format
-Please provide a detailed app concept in the following JSON structure:
-
-\`\`\`json
-{
-  "title": "App Name",
-  "description": "Comprehensive app description (2-3 sentences)",
-  "features": [
-    "Feature 1",
-    "Feature 2",
-    "Feature 3",
-    "Feature 4",
-    "Feature 5"
-  ],
-  "userInterface": {
-    "screens": ["Screen 1", "Screen 2", "Screen 3", "Screen 4"],
-    "navigation": "Navigation pattern description",
-    "colorScheme": "Color scheme description",
-    "typography": "Typography choices"
-  },
-  "technicalSpecs": {
-    "architecture": "Recommended architecture pattern",
-    "dataStorage": "Data storage approach",
-    "integrations": ["Integration 1", "Integration 2"],
-    "platforms": ["Platform 1", "Platform 2"]
-  },
-  "marketingCopy": {
-    "tagline": "Catchy tagline",
-    "elevator_pitch": "30-second elevator pitch",
-    "key_benefits": ["Benefit 1", "Benefit 2", "Benefit 3"]
+    const fullPrompt = this.CORE_PROMPT_TEMPLATE + description + styleContext + featuresContext;
+    
+    console.log('✅ [PromptGenerator] Generated prompt length:', fullPrompt.length);
+    console.log('📄 [PromptGenerator] Prompt preview:', fullPrompt.substring(0, 200) + '...');
+    
+    return fullPrompt;
   }
-}
-\`\`\`
 
-## Additional Guidelines
-1. Ensure the app concept is innovative yet practical
-2. Consider current market trends and user needs
-3. Make the concept technically feasible for modern mobile development
-4. Include specific details that align with the chosen style and category
-5. Provide actionable insights for development and marketing
-6. Consider accessibility and inclusive design principles
-7. Think about scalability and future feature expansion
+  /**
+   * Get suggested features for different app types
+   */
+  static getSuggestedFeatures(appType: string): string[] {
+    const featureMap: Record<string, string[]> = {
+      'calculator': ['Basic operations', 'History', 'Memory functions', 'Scientific mode'],
+      'todo': ['Add tasks', 'Mark complete', 'Delete tasks', 'Categories', 'Due dates'],
+      'notes': ['Create notes', 'Edit notes', 'Delete notes', 'Search', 'Categories'],
+      'timer': ['Set timer', 'Countdown display', 'Alarm sound', 'Multiple timers'],
+      'game': ['Score tracking', 'Levels', 'High scores', 'Sound effects'],
+      'tracker': ['Add entries', 'View history', 'Statistics', 'Export data'],
+      'generator': ['Random generation', 'Copy to clipboard', 'History', 'Favorites'],
+      'converter': ['Multiple units', 'Favorites', 'History', 'Quick access'],
+      'drawing': ['Draw/paint', 'Color picker', 'Save artwork', 'Clear canvas'],
+      'music': ['Play sounds', 'Record sequences', 'Volume control', 'Sound effects']
+    };
 
-Please generate a creative, detailed, and market-ready mobile app concept.`;
+    // Try to match app type from description
+    const description = appType.toLowerCase();
+    for (const [type, features] of Object.entries(featureMap)) {
+      if (description.includes(type)) {
+        return features;
+      }
+    }
 
-    return prompt;
+    return ['User-friendly interface', 'Save data', 'Easy navigation', 'Mobile optimized'];
+  }
+
+  /**
+   * Get style recommendations based on app type
+   */
+  static getRecommendedStyles(appType: string): AppStyle[] {
+    const styleMap: Record<string, AppStyle[]> = {
+      'calculator': ['minimalist', 'modern', 'corporate'],
+      'game': ['playful', 'creative', 'modern'],
+      'business': ['corporate', 'elegant', 'minimalist'],
+      'creative': ['creative', 'playful', 'elegant'],
+      'utility': ['minimalist', 'modern', 'corporate'],
+      'entertainment': ['playful', 'creative', 'modern']
+    };
+
+    const description = appType.toLowerCase();
+    for (const [type, styles] of Object.entries(styleMap)) {
+      if (description.includes(type)) {
+        return styles;
+      }
+    }
+
+    return ['modern', 'minimalist', 'playful'];
   }
 
   /**
@@ -195,12 +253,11 @@ Please generate a creative, detailed, and market-ready mobile app concept.`;
     generatedConcept?: GeneratedAppConcept
   ): Omit<PromptHistory, 'id'> {
     const baseEntry = {
-      title: generatedConcept?.title || `${request.style} ${request.category} App`,
+      title: generatedConcept?.title || `${request.style} App`,
       prompt: request.description,
       html: generatedConcept ? JSON.stringify(generatedConcept, null, 2) : 'GENERATING...',
       timestamp: new Date(),
       style: request.style,
-      category: request.category,
       status: generatedConcept ? 'completed' as const : 'generating' as const,
       favorite: false,
       accessCount: 0,
@@ -208,33 +265,6 @@ Please generate a creative, detailed, and market-ready mobile app concept.`;
     };
 
     return baseEntry;
-  }
-
-  /**
-   * Get style recommendations based on category
-   */
-  static getRecommendedStyles(category: AppCategory): AppStyle[] {
-    const recommendations: Record<AppCategory, AppStyle[]> = {
-      productivity: ['minimalist', 'modern', 'corporate'],
-      social: ['playful', 'modern', 'creative'],
-      utility: ['minimalist', 'modern', 'corporate'],
-      entertainment: ['playful', 'creative', 'modern'],
-      education: ['playful', 'elegant', 'modern'],
-      health: ['minimalist', 'elegant', 'modern'],
-      finance: ['corporate', 'minimalist', 'elegant'],
-      travel: ['creative', 'elegant', 'modern'],
-      shopping: ['playful', 'elegant', 'modern'],
-      other: ['modern', 'minimalist', 'creative']
-    };
-
-    return recommendations[category] || ['modern', 'minimalist'];
-  }
-
-  /**
-   * Get suggested features based on category
-   */
-  static getSuggestedFeatures(category: AppCategory): string[] {
-    return this.CATEGORY_TEMPLATES[category].core_features;
   }
 
   /**
@@ -247,12 +277,9 @@ Please generate a creative, detailed, and market-ready mobile app concept.`;
       errors.push('Description must be at least 10 characters long');
     }
 
-    if (!Object.keys(this.STYLE_TEMPLATES).includes(request.style)) {
+    const validStyles: AppStyle[] = ['minimalist', 'creative', 'corporate', 'playful', 'elegant', 'modern'];
+    if (!validStyles.includes(request.style)) {
       errors.push('Invalid style selected');
-    }
-
-    if (!Object.keys(this.CATEGORY_TEMPLATES).includes(request.category)) {
-      errors.push('Invalid category selected');
     }
 
     if (request.features && request.features.length > 10) {
@@ -263,5 +290,33 @@ Please generate a creative, detailed, and market-ready mobile app concept.`;
       isValid: errors.length === 0,
       errors
     };
+  }
+
+  /**
+   * Check if a request requires unavailable features
+   */
+  static checkForUnavailableFeatures(description: string): { isValid: boolean; reason?: string; suggestion?: string } {
+    const unavailableFeatures = [
+      { keywords: ['camera', 'photo', 'picture', 'image capture'], reason: 'Camera access unavailable', suggestion: 'Drawing app with brush tools and color palette' },
+      { keywords: ['microphone', 'voice', 'record audio', 'speech'], reason: 'Microphone access unavailable', suggestion: 'Music synthesizer with Tone.js for audio creation' },
+      { keywords: ['gps', 'location', 'maps', 'navigation'], reason: 'GPS access unavailable', suggestion: 'Direction game or manual route planner' },
+      { keywords: ['contact', 'phone book', 'address book'], reason: 'Contacts access unavailable', suggestion: 'Personal contact list stored in app' },
+      { keywords: ['file upload', 'file picker', 'choose file'], reason: 'File system access unavailable', suggestion: 'Text-based content creator' },
+      { keywords: ['real-time', 'live data', 'api', 'fetch'], reason: 'Network requests unavailable', suggestion: 'Simulator with demo data' }
+    ];
+
+    const desc = description.toLowerCase();
+    
+    for (const feature of unavailableFeatures) {
+      if (feature.keywords.some(keyword => desc.includes(keyword))) {
+        return {
+          isValid: false,
+          reason: feature.reason,
+          suggestion: feature.suggestion
+        };
+      }
+    }
+
+    return { isValid: true };
   }
 }

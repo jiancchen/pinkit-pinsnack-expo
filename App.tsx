@@ -7,6 +7,7 @@ import MyAppScreen from './src/screens/MyAppScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import CreateAppScreen from './src/screens/CreateAppScreen';
 import WelcomeScreen from './src/screens/WelcomeScreen';
+import AppViewScreen from './src/screens/AppViewScreen';
 import { RootStackParamList } from './src/screens/MyAppScreen';
 import { SecureStorageService } from './src/services/SecureStorageService';
 import { ClaudeApiService } from './src/services/ClaudeApiService';
@@ -77,6 +78,10 @@ export default function App() {
         <Stack.Screen 
           name="CreateApp" 
           component={CreateAppScreen}
+        />
+        <Stack.Screen 
+          name="AppView" 
+          component={AppViewScreen}
         />
         <Stack.Screen 
           name="Welcome" 

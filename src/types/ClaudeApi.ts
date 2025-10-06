@@ -53,5 +53,5 @@ export type ClaudeModel = typeof CLAUDE_MODELS[keyof typeof CLAUDE_MODELS];
 export const DEFAULT_CONFIG: Omit<ClaudeApiConfig, 'apiKey'> = {
   model: CLAUDE_MODELS.HAIKU_3,
   maxTokens: 4000,
-  temperature: 0.7
+  temperature: 0.3
 };

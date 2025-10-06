@@ -12,6 +12,7 @@ export type RootStackParamList = {
   MyApp: undefined;
   Settings: undefined;
   CreateApp: undefined;
+  AppView: { appId: string };
 };
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MyApp'>;
@@ -67,21 +68,15 @@ export default function MyAppScreen({ navigation }: Props) {
         // Update access count
         await AppStorageService.incrementAccessCount(appId);
         
-        Alert.alert(
-          'Open App',
-          `Opening ${app.title || 'Untitled App'}`,
-          [{ text: 'OK' }]
-        );
+        // Navigate to the app view screen
+        navigation.navigate('AppView', { appId });
         
         // Reload apps to update access count
         loadApps();
       } catch (error) {
         console.error('Error updating access count:', error);
-        Alert.alert(
-          'Open App',
-          `Opening ${app.title || 'Untitled App'}`,
-          [{ text: 'OK' }]
-        );
+        // Navigate anyway even if access count update fails
+        navigation.navigate('AppView', { appId });
       }
     }
   };

@@ -98,52 +98,69 @@ export class ClaudeApiService {
   /**
    * Send a message to Claude API
    */
-  async sendMessage(
+  private async sendMessage(
     messages: ClaudeMessage[],
-    options?: {
-      model?: string;
-      maxTokens?: number;
-      temperature?: number;
-      stream?: boolean;
+    options: {
+      maxTokens: number;
+      temperature: number;
     }
-  ): Promise<ClaudeResponse> {
-    if (!this.isConfigured()) {
-      throw new Error('Claude API service is not configured. Please set up your API key.');
+  ): Promise<{ content: string }> {
+    console.log('📨 [ClaudeAPI] Starting sendMessage');
+    console.log('📝 [ClaudeAPI] Messages count:', messages.length);
+    console.log('🎯 [ClaudeAPI] Options:', options);
+    
+    if (!this.config) {
+      console.log('❌ [ClaudeAPI] No config available');
+      throw new Error('API not configured');
     }
+
+    const requestBody: ClaudeRequest = {
+      model: this.config.model,
+      max_tokens: options.maxTokens,
+      temperature: options.temperature,
+      messages
+    };
+    
+    console.log('📦 [ClaudeAPI] Request body prepared:', {
+      model: requestBody.model,
+      max_tokens: requestBody.max_tokens,
+      temperature: requestBody.temperature,
+      messagesCount: requestBody.messages.length
+    });
 
     try {
-      const request: ClaudeRequest = {
-        model: options?.model || this.config!.model,
-        max_tokens: options?.maxTokens || this.config!.maxTokens,
-        temperature: options?.temperature || this.config!.temperature,
-        messages: messages,
-        stream: options?.stream || false
-      };
-
-      const response: AxiosResponse<ClaudeResponse> = await this.axiosInstance.post(
-        '/messages',
-        request
-      );
-
-      return response.data;
-    } catch (error: any) {
-      if (error.response?.status === 401) {
-        throw new Error('Invalid API key. Please check your Claude API key.');
-      } else if (error.response?.status === 429) {
-        throw new Error('Rate limit exceeded. Please try again later.');
-      } else if (error.response?.status === 400) {
-        const apiError: ApiError = error.response.data;
-        throw new Error(apiError.error.message || 'Invalid request to Claude API.');
+      console.log('🌐 [ClaudeAPI] Making HTTP request to Anthropic API...');
+      const response: AxiosResponse<ClaudeResponse> = await this.axiosInstance.post('/messages', requestBody);
+      
+      console.log('✅ [ClaudeAPI] Received HTTP response');
+      console.log('📊 [ClaudeAPI] Response status:', response.status);
+      console.log('📊 [ClaudeAPI] Response data keys:', Object.keys(response.data || {}));
+      
+      if (response.data && response.data.content && response.data.content.length > 0) {
+        const contentText = response.data.content[0].text;
+        console.log('✅ [ClaudeAPI] Successfully extracted content text');
+        console.log('📊 [ClaudeAPI] Content length:', contentText?.length || 0);
+        return { content: contentText };
       } else {
-        throw new Error('Failed to communicate with Claude API. Please check your connection.');
+        console.error('❌ [ClaudeAPI] Invalid response structure:', response.data);
+        throw new Error('Invalid response format from Claude API');
       }
+    } catch (error: any) {
+      console.error('💥 [ClaudeAPI] HTTP request failed:', {
+        message: error?.message,
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        data: error?.response?.data,
+        url: error?.config?.url
+      });
+      throw error;
     }
   }
 
   /**
    * Generate an app concept using Claude API
    */
-  async generateAppConcept(prompt: string): Promise<GeneratedAppConcept> {
+  async generateAppConcept(prompt: string): Promise<any> {
     const messages: ClaudeMessage[] = [
       {
         role: 'user',
@@ -152,34 +169,62 @@ export class ClaudeApiService {
     ];
 
     try {
-      const response = await this.sendMessage(messages);
+      const response = await this.sendMessage(messages, {
+        maxTokens: this.config!.maxTokens,
+        temperature: this.config!.temperature
+      });
       
       if (response.content && response.content.length > 0) {
-        const content = response.content[0].text;
+        const content = response.content;
+        console.log('📄 [ClaudeAPI] Raw response content:', content.substring(0, 500) + '...');
         
-        // Extract JSON from the response
-        const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/);
-        if (jsonMatch) {
-          const jsonString = jsonMatch[1];
-          const generatedConcept: GeneratedAppConcept = JSON.parse(jsonString);
-          return generatedConcept;
-        } else {
-          // Fallback: try to parse the entire content as JSON
-          try {
-            const generatedConcept: GeneratedAppConcept = JSON.parse(content);
-            return generatedConcept;
-          } catch {
-            throw new Error('Claude API returned an invalid response format.');
-          }
+        // Check if this looks like HTML
+        if (content.trim().startsWith('<!DOCTYPE html>') || content.trim().startsWith('<html')) {
+          console.log('✅ [ClaudeAPI] Received HTML response');
+          
+          // Extract app title from data-app-title attribute
+          const titleMatch = content.match(/data-app-title="([^"]*)"/i);
+          const appTitle = titleMatch ? titleMatch[1] : 'Generated App';
+          console.log('🏷️ [ClaudeAPI] Extracted app title:', appTitle);
+          
+          // Extract external libraries used
+          const libMatches = content.match(/<(?:script|link)[^>]*(?:src|href)="([^"]*(?:cdnjs|jsdelivr|fonts\.googleapis)[^"]*)"/gi) || [];
+          const externalLibs = libMatches.map(match => {
+            const urlMatch = match.match(/(?:src|href)="([^"]*)"/i);
+            if (urlMatch) {
+              // Extract library name from URL
+              const url = urlMatch[1];
+              if (url.includes('three.js')) return 'Three.js';
+              if (url.includes('chart.js')) return 'Chart.js';
+              if (url.includes('d3')) return 'D3.js';
+              if (url.includes('tone.js')) return 'Tone.js';
+              if (url.includes('math.js')) return 'Math.js';
+              if (url.includes('bootstrap')) return 'Bootstrap CSS';
+              if (url.includes('fonts.googleapis')) return 'Google Fonts';
+              return url.split('/').pop()?.split('.')[0] || 'Unknown Library';
+            }
+            return 'Unknown Library';
+          });
+          
+          console.log('📚 [ClaudeAPI] Detected external libraries:', externalLibs);
+          
+          return {
+            name: appTitle,
+            html: content,
+            external_libs_used: externalLibs
+          };
         }
+
+        
+        // If we get here, it's not valid HTML
+        console.error('❌ [ClaudeAPI] Response is not valid HTML');
+        console.log('📄 [ClaudeAPI] Full response for debugging:', content);
+        throw new Error('Claude API did not return valid HTML.');
       } else {
         throw new Error('Claude API returned an empty response.');
       }
     } catch (error: any) {
-      console.error('Failed to generate app concept:', error);
-      if (error.message.includes('JSON')) {
-        throw new Error('Failed to parse the app concept from Claude API response.');
-      }
+      console.error('💥 [ClaudeAPI] Failed to generate app concept:', error);
       throw error;
     }
   }

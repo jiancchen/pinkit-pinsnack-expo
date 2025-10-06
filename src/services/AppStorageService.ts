@@ -20,6 +20,7 @@ export interface StoredApp {
   generatedConcept?: GeneratedAppConcept;
   request?: AppGenerationRequest;
   baseUrl: string; // For WebView persistence
+  model?: string; // Claude model used for generation
 }
 
 export class AppStorageService {
@@ -45,41 +46,69 @@ export class AppStorageService {
   static async saveApp(
     request: AppGenerationRequest,
     generatedConcept?: GeneratedAppConcept,
-    html?: string
+    html?: string,
+    model?: string
   ): Promise<StoredApp> {
+    console.log('💾 [AppStorage] Starting saveApp process');
+    console.log('📝 [AppStorage] Request:', request);
+    console.log('🤖 [AppStorage] Model:', model);
+    console.log('🎯 [AppStorage] Has concept:', !!generatedConcept);
+    console.log('📄 [AppStorage] Has custom HTML:', !!html);
+    
     try {
       const appId = await this.generateAppId();
+      console.log('🆔 [AppStorage] Generated app ID:', appId);
+      
       const baseUrl = `https://sandbox/${appId}/`;
+      console.log('🌐 [AppStorage] Generated baseUrl:', baseUrl);
       
       const newApp: StoredApp = {
         id: appId,
-        title: generatedConcept?.title || `${request.style} ${request.category} App`,
+        title: generatedConcept?.title || `App ${appId.split('_')[1]}`,
         description: request.description,
         html: html || this.generatePlaceholderHTML(request, generatedConcept),
         prompt: request.description,
         timestamp: new Date(),
         style: request.style,
         category: request.category,
-        status: generatedConcept ? 'completed' : 'generating',
+        status: generatedConcept ? 'completed' : 'new',
         favorite: false,
         accessCount: 0,
         generatedConcept,
         request,
-        baseUrl
+        baseUrl: `https://sandbox/${appId}/`,
+        model: model || 'unknown'
       };
+      
+      console.log('📦 [AppStorage] Created app object:', {
+        id: newApp.id,
+        title: newApp.title,
+        status: newApp.status,
+        model: newApp.model,
+        htmlLength: newApp.html.length
+      });
 
       // Get existing apps
+      console.log('📚 [AppStorage] Fetching existing apps...');
       const existingApps = await this.getAllApps();
+      console.log('📊 [AppStorage] Found', existingApps.length, 'existing apps');
       
       // Add new app to the beginning
       const updatedApps = [newApp, ...existingApps];
+      console.log('📈 [AppStorage] Total apps after addition:', updatedApps.length);
       
       // Save to storage
+      console.log('💾 [AppStorage] Saving to AsyncStorage...');
       await AsyncStorage.setItem(APPS_STORAGE_KEY, JSON.stringify(updatedApps));
+      console.log('✅ [AppStorage] Successfully saved to storage');
       
       return newApp;
-    } catch (error) {
-      console.error('Error saving app:', error);
+    } catch (error: any) {
+      console.error('💥 [AppStorage] Error saving app:', {
+        error: error?.message || error,
+        stack: error?.stack,
+        request
+      });
       throw new Error('Failed to save generated app');
     }
   }
@@ -204,6 +233,19 @@ export class AppStorageService {
   }
 
   /**
+   * Get a specific app by ID
+   */
+  static async getApp(appId: string): Promise<StoredApp | null> {
+    try {
+      const apps = await this.getAllApps();
+      return apps.find(app => app.id === appId) || null;
+    } catch (error) {
+      console.error('Error getting app:', error);
+      return null;
+    }
+  }
+
+  /**
    * Get all stored apps
    */
   static async getAllApps(): Promise<StoredApp[]> {
@@ -318,15 +360,41 @@ export class AppStorageService {
   /**
    * Update app HTML after generation
    */
-  static async updateAppHTML(appId: string, html: string, concept?: GeneratedAppConcept): Promise<boolean> {
+  static async updateAppHTML(appId: string, html: string, concept?: GeneratedAppConcept, model?: string): Promise<boolean> {
+    console.log('🔄 [AppStorage] Starting updateAppHTML process');
+    console.log('🆔 [AppStorage] App ID:', appId);
+    console.log('📄 [AppStorage] HTML length:', html?.length || 0);
+    console.log('🎯 [AppStorage] Has concept:', !!concept);
+    console.log('🤖 [AppStorage] Model:', model);
+    
     try {
-      return await this.updateApp(appId, {
+      const updateData: Partial<StoredApp> = {
         html,
         generatedConcept: concept,
         status: 'completed'
+      };
+      
+      if (model) {
+        updateData.model = model;
+      }
+      
+      console.log('📦 [AppStorage] Update data prepared:', {
+        hasHtml: !!updateData.html,
+        hasGeneratedConcept: !!updateData.generatedConcept,
+        status: updateData.status,
+        model: updateData.model
       });
-    } catch (error) {
-      console.error('Error updating app HTML:', error);
+      
+      const result = await this.updateApp(appId, updateData);
+      console.log('✅ [AppStorage] Update app result:', result);
+      
+      return result;
+    } catch (error: any) {
+      console.error('💥 [AppStorage] Error updating app HTML:', {
+        error: error?.message || error,
+        appId,
+        htmlLength: html?.length || 0
+      });
       return false;
     }
   }
