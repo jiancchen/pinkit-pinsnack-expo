@@ -12,144 +12,125 @@ export interface AppGenerationRequest {
 
 export class PromptGenerator {
   
-  // Core prompt template based on your Android implementation (PROP_FORMAT3)
-  private static readonly CORE_PROMPT_TEMPLATE = `Generate single-file HTML app for React Native WebView. Vanilla JS, NO frameworks (React/Vue/etc).
+  // Optimized prompt template using Claude's best practices
+  private static readonly CORE_PROMPT_TEMPLATE = `<role>
+You are an expert HTML/CSS/JavaScript developer specializing in mobile web apps for WebView environments. You create polished, fully functional single-page applications that work flawlessly on mobile devices.
+</role>
 
-OUTPUT FORMAT:
-Respond with ONLY the complete HTML code. No explanations, no markdown code blocks, no commentary.
-Start with <!DOCTYPE html> and end with </html>. Nothing before or after.
+<task>
+Generate a complete, working HTML application based on the user's requirements. The app must be production-ready with no placeholders or TODOs.
+</task>
 
-TITLE REQUIREMENT:
-Add a custom attribute to the <html> tag with the app name:
-<html data-app-title="Your Generated App Name">
+<output_format>
+Respond with ONLY the complete HTML code. No explanations, markdown blocks, or commentary.
+- Start with <!DOCTYPE html>
+- End with </html>
+- Include data-app-title attribute: <html data-app-title="Generated App Name">
+- Do NOT display the app name visibly in the HTML content
+</output_format>
 
-IMPORTANT: Do NOT show the app title/name anywhere visible in the HTML content itself. Only include it in the data-app-title attribute.
+<examples>
+<example>
+User request: "Simple calculator"
+Expected output starts with:
+<!DOCTYPE html>
+<html data-app-title="Calculator Pro">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: transparent; margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+    .container { background: #1C1C1E; border-radius: 16px; padding: 20px; width: 100%; max-width: 380px; margin-top: 40px; }
+    /* Complete styles... */
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Complete calculator UI -->
+  </div>
+  <script>
+    // Complete calculator logic
+  </script>
+</body>
+</html>
+</example>
+</examples>
 
-REQUIRED META TAG:
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-
-MOBILE DESIGN:
-- Center content for portrait phones (360-400px width typical)
-- Body background: transparent (background: transparent;)
-- Container positioning: margin-top: 40px for top spacing
-- Container height strategy:
-  * For static apps (calculators, forms): Center vertically with auto height
-  * For dynamic list apps (todos, notes, logs): min-height: calc(100vh - 80px) to fill screen
-- Use min-height: 100vh (NOT height: 100vh) to prevent viewport cutoff
-- For body/container: flex with min-height allows proper scrolling
-- Container width: 100% (padding handled by native container)
-- Use flexbox/grid for layout
-- Font size ≥16px (prevents zoom on input)
+<technical_requirements>
+<mobile_optimization>
+- Viewport meta tag: <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+- Body background: transparent
+- Container positioning: margin-top: 40px for status bar clearance
+- Font size ≥16px (prevents iOS zoom)
 - Touch targets ≥44px
-- Responsive padding: padding:20px
-- Maintain consistent spacing/margins between elements  
-- ALL elements must use box-sizing: border-box to include padding in width calculations
-- Input fields, buttons must not exceed container width
-- Use word-wrap: break-word for text content to prevent horizontal overflow
-- Add to global CSS: * { box-sizing: border-box; }
+- Use box-sizing: border-box on all elements
+- Responsive padding: 20px
+- Container width: 100%, max-width for tablets
+</mobile_optimization>
 
-CONTAINER HEIGHT RULES:
-- If app has dynamic/expandable content (lists that grow: todos, notes, feeds, logs, chats, trackers):
-  Container must be full-height from start: min-height: calc(100vh - 80px);
-  Add overflow-y: auto; so content scrolls inside the fixed container
-- If app has static/fixed content (calculators, converters, single forms):
-  Container uses auto height and centers vertically (no forced full-height)
-- Key principle: Don't let container grow with content - either full-height or auto, never dynamic
+<layout_strategy>
+Static apps (calculators, forms): Center vertically with auto height
+Dynamic apps (todos, notes, trackers): Use min-height: calc(100vh - 80px) with overflow-y: auto
 
-ALLOWED CDN LIBRARIES (via <script src> or <link href>):
-✓ Three.js: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
-✓ Chart.js: https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js
-✓ D3.js: https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js
-✓ Tone.js (audio): https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js
-✓ Math.js: https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js
-✓ Bootstrap CSS: https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css
-✓ Google Fonts: https://fonts.googleapis.com
+Key principle: Either full-height OR auto-height, never dynamic growing containers
+</layout_strategy>
 
-AVAILABLE REACT NATIVE FEATURES (ONLY THESE):
-✓ Storage:
-  window.ReactNativeWebView.postMessage(JSON.stringify({type:'saveData',key,value})) - save data
-  window.ReactNativeWebView.postMessage(JSON.stringify({type:'loadData',key})) - load data
-  window.ReactNativeWebView.postMessage(JSON.stringify({type:'getAllData'})) - get all data
-  window.ReactNativeWebView.postMessage(JSON.stringify({type:'deleteData',key})) - delete key
-  
-✓ Notifications:
-  window.ReactNativeWebView.postMessage(JSON.stringify({type:'setReminder',id,milliseconds,title,message})) - schedule notification
-  window.ReactNativeWebView.postMessage(JSON.stringify({type:'cancelReminder',id})) - cancel reminder
-  window.ReactNativeWebView.postMessage(JSON.stringify({type:'getReminders'})) - list reminders
+<react_native_features>
+Available features (use if relevant):
+- Storage: window.ReactNativeWebView.postMessage(JSON.stringify({type:'saveData',key,value}))
+- Load: window.ReactNativeWebView.postMessage(JSON.stringify({type:'loadData',key}))
+- Reminders: window.ReactNativeWebView.postMessage(JSON.stringify({type:'setReminder',id,milliseconds,title,message}))
 
-CRITICAL JAVASCRIPT PATTERNS:
-✓ Always check React Native WebView availability: if(window.ReactNativeWebView){...}
-✓ Use postMessage for communication with React Native
-✓ Listen for messages from React Native:
-  window.addEventListener('message', (event) => {
-    const data = JSON.parse(event.data);
-    // Handle response based on data.type
-  });
-✓ For storage, track the KEY used so you can delete with the SAME key later
+Pattern: Always check if(window.ReactNativeWebView) before using
+</react_native_features>
 
-UNAVAILABLE FEATURES (MUST REJECT):
-✗ Camera/Photos, Microphone/Audio Input, Geolocation, Device Sensors
-✗ Contacts, Calendar, Phone/SMS, File System, Bluetooth, NFC
-✗ Push notifications (local reminders work), Biometrics, Screen control
-✗ Vibration, Clipboard (reading), Share API, Battery status
+<allowed_libraries>
+- Three.js: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
+- Chart.js: https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js
+- D3.js: https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js
+- Tone.js: https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js
+- Math.js: https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js
+- Bootstrap CSS: https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css
+- Google Fonts: https://fonts.googleapis.com
+</allowed_libraries>
 
-Design Language:
-Use a layered 3D card design language. Each UI element should feel like a floating card with soft shadows, rounded corners, and depth.
-Use bold typography (Inter, Poppins, or Manrope).
-Backgrounds are flat and vibrant, e.g. yellow, teal, or coral.
-Foreground cards use black or white surfaces with subtle inner shadows.
-Accent elements use gradient highlights (like pink–orange, purple–blue).
-Keep spacing generous, corners round, and UI components centered.
-The style should feel playful yet technical, like a mix of code cards and album covers.
+<forbidden_features>
+NEVER use: fetch(), XMLHttpRequest, WebSocket, localStorage, camera, microphone, geolocation, file system access
+</forbidden_features>
+</technical_requirements>
 
-STYLE KEYWORDS:
-Neo-brutalist, playful, chunky borders, hard shadows, gradient accents, warm peach tones, tactile, energetic, bold typography, high contrast
+<design_system>
+<visual_style>
+- 3D layered card design language
+- Floating elements with soft shadows and rounded corners
+- Bold typography: Inter, Poppins, or Manrope
+- Vibrant flat backgrounds: yellow (#f7d441), teal, coral
+- Foreground cards: black (#111) or white with subtle shadows
+- Gradient accents: pink-orange, purple-blue
+- Generous spacing, centered components
+</visual_style>
 
-INTERACTIONS:
-- All transitions: 0.15-0.2s
-- Hover effects: lift elements up with translate
-- Press effects: push down with translate
+<interactions>
+- Transitions: 0.15-0.2s
+- Hover: lift with transform
+- Active: scale(0.96) with reduced shadow
 - Use transform (NOT margin/position) for animations
-- webkit-tap-highlight-color: transparent; for all elements
+- webkit-tap-highlight-color: transparent
+</interactions>
+</design_system>
 
-STRICTLY FORBIDDEN (MUST REJECT):
-✗ fetch(), XMLHttpRequest, WebSocket - NO network requests
-✗ Live external data: stock prices, crypto, weather, news, social media
-✗ APIs requiring real-time data
-✗ localStorage/sessionStorage (use React Native storage instead)
-✗ Service Workers, Web Workers, IndexedDB, Web SQL
+<implementation_standards>
+1. All CSS must be inline in <style> tag
+2. All JavaScript must be inline in <script> tag
+3. Use realistic demo data when needed
+4. App must work immediately without setup
+5. Include complete functionality - no placeholder buttons
+6. For list apps: include add, edit, delete, and persistence
+7. Ensure proper error handling and edge cases
+</implementation_standards>
 
-APPS THAT WORK (generate anything like these):
-✓ 3D graphics, games, simulations (use Three.js!)
-✓ Charts with demo data (use Chart.js)
-✓ Canvas drawing/painting apps
-✓ Music/audio synthesis apps (use Tone.js - no recording)
-✓ Calculators, converters, utilities
-✓ Timers, stopwatches, countdowns, alarms (use notifications)
-✓ Notes, todo lists (use React Native storage)
-✓ Offline games: tic-tac-toe, snake, dice, cards, puzzles
-✓ Random generators: names, passwords, jokes, colors
-✓ Simulators with demo data: weather, stocks, social posts
-✓ Text editors, markdown editors
-✓ Animations, particle effects
-✓ Math/science tools, visualizations
-✓ Habit trackers, mood trackers
-✓ Pixel art editors, color pickers
-
-REQUIREMENTS:
-✓ Complete working code (no TODOs/placeholders)
-✓ All CSS inline in <style>
-✓ All JS inline in <script>
-✓ Beautiful, polished mobile UI
-✓ Use realistic demo/simulated data when needed
-✓ App works immediately without setup
-✓ Only use available React Native features
-✓ ALL elements must use box-sizing: border-box
-
-CRITICAL: Output ONLY the HTML. Do not wrap in markdown. Do not explain.
-
-User request: `;
-
+<user_request>
+`;
 
   /**
    * Generate a comprehensive prompt for Claude API based on user requirements
@@ -166,27 +147,32 @@ User request: `;
       platform: request.platform
     });
 
-    // Build the style context
-    let styleContext = '';
+    // Build style-specific guidance
+    let styleGuidance = '';
     if (style) {
       const styleMap = {
-        'modern': 'Use modern, sleek, professional design with dark themes',
-        'minimalist': 'Use clean, minimal design with lots of white space',
-        'playful': 'Use fun, colorful, bright design with playful elements',
-        'creative': 'Use artistic, bold, creative design with unique layouts',
-        'corporate': 'Use professional, trustworthy design with structured layouts',
-        'elegant': 'Use sophisticated, premium design with refined details'
+        'modern': 'Dark themes, sleek gradients, glassmorphism effects, contemporary color schemes',
+        'minimalist': 'Clean lines, lots of white space, simple navigation, monochromatic with one accent color',
+        'playful': 'Bright colors, fun animations, rounded corners, cheerful UI elements',
+        'creative': 'Bold artistic elements, unique layouts, experimental navigation, vibrant color palettes',
+        'corporate': 'Professional appearance, structured layouts, trustworthy design, navy/gray/white palette',
+        'elegant': 'Sophisticated aesthetics, premium feel, refined details, gold/deep blue/muted tones'
       };
-      styleContext = `\nSTYLE: ${styleMap[style] || 'Modern design'}`;
+      styleGuidance = `\n<style_guidance>\nDesign Style: ${style}\nApply: ${styleMap[style] || 'Modern design principles'}\n</style_guidance>`;
     }
 
-    // Build the features context
+    // Build features context
     let featuresContext = '';
     if (features && features.length > 0) {
-      featuresContext = `\nREQUIRED FEATURES: ${features.join(', ')}`;
+      featuresContext = `\n<required_features>\n${features.map(f => `- ${f}`).join('\n')}\n</required_features>`;
     }
 
-    const fullPrompt = this.CORE_PROMPT_TEMPLATE + description + styleContext + featuresContext;
+    // Build the complete prompt
+    const fullPrompt = this.CORE_PROMPT_TEMPLATE + 
+      description + 
+      styleGuidance + 
+      featuresContext + 
+      '\n</user_request>\n\nGenerate the complete HTML application now:';
     
     console.log('✅ [PromptGenerator] Generated prompt length:', fullPrompt.length);
     console.log('📄 [PromptGenerator] Prompt preview:', fullPrompt.substring(0, 200) + '...');
