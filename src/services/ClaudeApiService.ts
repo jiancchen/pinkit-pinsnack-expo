@@ -182,10 +182,35 @@ export class ClaudeApiService {
         if (content.trim().startsWith('<!DOCTYPE html>') || content.trim().startsWith('<html')) {
           console.log('✅ [ClaudeAPI] Received HTML response');
           
-          // Extract app title from data-app-title attribute
+          // Extract app title and category from data-app-title attribute (format: "Title | Category")
           const titleMatch = content.match(/data-app-title="([^"]*)"/i);
-          const appTitle = titleMatch ? titleMatch[1] : 'Generated App';
+          const fullTitle = titleMatch ? titleMatch[1] : 'Generated App';
+          
+          // Parse title and category
+          let appTitle = fullTitle;
+          let appCategory = 'utility'; // default category
+          
+          if (fullTitle.includes(' | ')) {
+            const parts = fullTitle.split(' | ');
+            if (parts.length >= 2) {
+              appTitle = parts[0].trim();
+              const extractedCategory = parts[1].trim().toLowerCase();
+              
+              // Validate category
+              const validCategories = [
+                'utility', 'fun', 'productivity', 'entertainment', 'education', 
+                'health', 'finance', 'social', 'travel', 'shopping', 'games', 
+                'tools', 'lifestyle', 'business', 'creative', 'other'
+              ];
+              
+              if (validCategories.includes(extractedCategory)) {
+                appCategory = extractedCategory;
+              }
+            }
+          }
+          
           console.log('🏷️ [ClaudeAPI] Extracted app title:', appTitle);
+          console.log('📂 [ClaudeAPI] Extracted app category:', appCategory);
           
           // Extract external libraries used
           const libMatches = content.match(/<(?:script|link)[^>]*(?:src|href)="([^"]*(?:cdnjs|jsdelivr|fonts\.googleapis)[^"]*)"/gi) || [];
@@ -210,6 +235,7 @@ export class ClaudeApiService {
           
           return {
             name: appTitle,
+            category: appCategory,
             html: content,
             external_libs_used: externalLibs
           };

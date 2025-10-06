@@ -6,6 +6,7 @@ export type AppCategory = 'productivity' | 'social' | 'utility' | 'entertainment
 export interface AppGenerationRequest {
   description: string;
   style: AppStyle;
+  category?: AppCategory; // Optional - Claude will determine from description
   features?: string[];
   platform?: 'mobile' | 'web' | 'both';
 }
@@ -25,8 +26,10 @@ Generate a complete, working HTML application based on the user's requirements. 
 Respond with ONLY the complete HTML code. No explanations, markdown blocks, or commentary.
 - Start with <!DOCTYPE html>
 - End with </html>
-- Include data-app-title attribute: <html data-app-title="Generated App Name">
-- Do NOT display the app name visibly in the HTML content
+- Include data-app-title attribute with format: <html data-app-title="App Name | Category">
+- Category must be one of: utility, fun, productivity, entertainment, education, health, finance, social, travel, shopping, games, tools, lifestyle, business, creative, other
+- Do NOT display the app name or category visibly in the HTML content
+- Choose the most appropriate category based on the app's primary function
 </output_format>
 
 <examples>
@@ -34,7 +37,7 @@ Respond with ONLY the complete HTML code. No explanations, markdown blocks, or c
 User request: "Simple calculator"
 Expected output starts with:
 <!DOCTYPE html>
-<html data-app-title="Calculator Pro">
+<html data-app-title="Calculator Pro | Utility">
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <style>
@@ -82,6 +85,32 @@ Available features (use if relevant):
 - Reminders: window.ReactNativeWebView.postMessage(JSON.stringify({type:'setReminder',id,milliseconds,title,message}))
 
 Pattern: Always check if(window.ReactNativeWebView) before using
+
+<local_storage>
+localStorage is AVAILABLE and RECOMMENDED for data persistence:
+- Use localStorage.setItem(key, JSON.stringify(data)) to save
+- Use JSON.parse(localStorage.getItem(key) || '[]') to load
+- Always provide fallback values for missing data
+- Wrap JSON operations in try-catch for error handling
+- NOTE: Each app automatically gets isolated storage - you can use keys like 'todos', 'settings', etc. directly
+
+Example pattern:
+function saveData(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch(e) {
+    console.warn('Storage failed:', e);
+  }
+}
+
+function loadData(key, fallback = []) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
+  } catch(e) {
+    return fallback;
+  }
+}
+</local_storage>
 </react_native_features>
 
 <allowed_libraries>
@@ -95,7 +124,9 @@ Pattern: Always check if(window.ReactNativeWebView) before using
 </allowed_libraries>
 
 <forbidden_features>
-NEVER use: fetch(), XMLHttpRequest, WebSocket, localStorage, camera, microphone, geolocation, file system access
+NEVER use: fetch(), XMLHttpRequest, WebSocket, camera, microphone, geolocation, file system access
+
+Note: localStorage is ALLOWED for data persistence within the app. Use it for saving user data like settings, lists, notes, etc.
 </forbidden_features>
 </technical_requirements>
 

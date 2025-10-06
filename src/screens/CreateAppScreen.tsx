@@ -127,7 +127,6 @@ export default function CreateAppScreen({ navigation }: Props) {
     const request: AppGenerationRequest = {
       description: prompt.trim(),
       style: selectedStyle,
-      category: 'productivity' as AppCategory,
       platform: 'mobile'
     };
     
@@ -183,6 +182,7 @@ export default function CreateAppScreen({ navigation }: Props) {
       console.log('✅ [CreateApp] Received response from Claude API');
       console.log('📊 [CreateApp] Generated response:', {
         name: generatedResponse.name,
+        category: generatedResponse.category,
         htmlLength: generatedResponse.html?.length || 0,
         externalLibs: generatedResponse.external_libs_used || []
       });

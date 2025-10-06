@@ -8,9 +8,9 @@ import {
   Dimensions,
   Alert,
   Platform,
-  ActivityIndicator,
-  SafeAreaView
+  ActivityIndicator
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -18,10 +18,145 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { RootStackParamList } from './MyAppScreen';
 import { AppColors } from '../types/PromptHistory';
 import { AppStorageService, StoredApp } from '../services/AppStorageService';
+import { AsyncStorageService } from '../services/AsyncStorageService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'AppView'>;
 
 export default function AppViewScreen({ navigation, route }: Props) {
+  // Function to inject app ID and React Native storage bridge
+  const injectAppId = (html: string, appId: string): string => {
+    console.log('🔧 [AppView] Injecting storage isolation for app:', appId);
+    
+    // Create a more robust storage solution that completely replaces localStorage
+    const storageOverride = `
+    <script>
+      // COMPLETE localStorage replacement for app isolation
+      (function() {
+        const APP_ID = '${appId}';
+        console.log('� [WebView] Initializing COMPLETE storage isolation for app:', APP_ID);
+        
+        // Create isolated storage object that completely replaces localStorage
+        const isolatedStorage = {
+          _data: {},
+          
+          setItem: function(key, value) {
+            const isolatedKey = APP_ID + '_' + key;
+            console.log('📦 [IsolatedStorage] setItem:', key, '->', isolatedKey, 'value length:', String(value).length);
+            this._data[isolatedKey] = String(value);
+            
+            // Also try to store in real localStorage as backup (but prefixed)
+            try {
+              window.originalLocalStorage.setItem(isolatedKey, String(value));
+            } catch(e) {
+              console.warn('⚠️ [IsolatedStorage] Backup localStorage failed:', e);
+            }
+          },
+          
+          getItem: function(key) {
+            const isolatedKey = APP_ID + '_' + key;
+            
+            // First check our in-memory storage
+            if (this._data.hasOwnProperty(isolatedKey)) {
+              const value = this._data[isolatedKey];
+              console.log('📖 [IsolatedStorage] getItem from memory:', key, '->', isolatedKey, 'found:', !!value);
+              return value;
+            }
+            
+            // Fallback to real localStorage
+            try {
+              const value = window.originalLocalStorage.getItem(isolatedKey);
+              if (value !== null) {
+                this._data[isolatedKey] = value; // Cache it
+                console.log('📖 [IsolatedStorage] getItem from backup:', key, '->', isolatedKey, 'found:', !!value);
+                return value;
+              }
+            } catch(e) {
+              console.warn('⚠️ [IsolatedStorage] Backup localStorage read failed:', e);
+            }
+            
+            console.log('📖 [IsolatedStorage] getItem:', key, '->', isolatedKey, 'not found');
+            return null;
+          },
+          
+          removeItem: function(key) {
+            const isolatedKey = APP_ID + '_' + key;
+            console.log('🗑️ [IsolatedStorage] removeItem:', key, '->', isolatedKey);
+            delete this._data[isolatedKey];
+            
+            try {
+              window.originalLocalStorage.removeItem(isolatedKey);
+            } catch(e) {
+              console.warn('⚠️ [IsolatedStorage] Backup localStorage remove failed:', e);
+            }
+          },
+          
+          clear: function() {
+            console.log('🧹 [IsolatedStorage] clear for app:', APP_ID);
+            
+            // Clear app-specific items from memory
+            Object.keys(this._data).forEach(key => {
+              if (key.startsWith(APP_ID + '_')) {
+                delete this._data[key];
+              }
+            });
+            
+            // Clear from backup localStorage
+            try {
+              const keys = Object.keys(window.originalLocalStorage);
+              keys.forEach(key => {
+                if (key.startsWith(APP_ID + '_')) {
+                  window.originalLocalStorage.removeItem(key);
+                }
+              });
+            } catch(e) {
+              console.warn('⚠️ [IsolatedStorage] Backup localStorage clear failed:', e);
+            }
+          },
+          
+          get length() {
+            return Object.keys(this._data).filter(key => key.startsWith(APP_ID + '_')).length;
+          },
+          
+          key: function(index) {
+            const appKeys = Object.keys(this._data).filter(key => key.startsWith(APP_ID + '_'));
+            const fullKey = appKeys[index];
+            return fullKey ? fullKey.replace(APP_ID + '_', '') : null;
+          }
+        };
+        
+        // Store reference to original localStorage
+        window.originalLocalStorage = window.localStorage;
+        
+        // COMPLETELY REPLACE localStorage with our isolated version
+        Object.defineProperty(window, 'localStorage', {
+          value: isolatedStorage,
+          writable: false,
+          configurable: false
+        });
+        
+        console.log('✅ [WebView] localStorage COMPLETELY REPLACED for app:', APP_ID);
+        console.log('🔍 [WebView] Testing storage isolation...');
+        
+        // Test the isolation
+        localStorage.setItem('test_key', 'test_value_' + APP_ID);
+        const testValue = localStorage.getItem('test_key');
+        console.log('🧪 [WebView] Test result:', testValue === ('test_value_' + APP_ID) ? 'PASSED' : 'FAILED');
+        
+      })();
+    </script>`;
+    
+    // Insert immediately after <head> tag
+    const headRegex = /(<head[^>]*>)/i;
+    if (headRegex.test(html)) {
+      const injectedHtml = html.replace(headRegex, `$1${storageOverride}`);
+      console.log('✅ [AppView] Storage isolation script injected after <head>');
+      return injectedHtml;
+    }
+    
+    // Fallback: insert at the beginning
+    console.log('⚠️ [AppView] No <head> found, injecting at beginning');
+    return storageOverride + html;
+  };
   const { appId } = route.params;
   const [app, setApp] = useState<StoredApp | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -213,13 +348,14 @@ export default function AppViewScreen({ navigation, route }: Props) {
           <WebView
             ref={webViewRef}
             source={{ 
-              html: app.html,
+              html: injectAppId(app.html, app.id),
               baseUrl: app.baseUrl || `https://sandbox/${app.id}/`
             }}
             style={webViewStyle}
             javaScriptEnabled={true}
             domStorageEnabled={true}
             startInLoadingState={true}
+            webviewDebuggingEnabled ={true}
             mixedContentMode="compatibility"
             allowsInlineMediaPlayback={true}
             mediaPlaybackRequiresUserAction={false}
@@ -231,8 +367,43 @@ export default function AppViewScreen({ navigation, route }: Props) {
               </View>
             )}
             onMessage={(event: any) => {
-              // Handle messages from the WebView if needed
-              console.log('WebView message:', event.nativeEvent.data);
+              // Handle storage messages from the WebView
+              try {
+                const message = JSON.parse(event.nativeEvent.data);
+                console.log('📨 WebView message:', message);
+                
+                switch (message.type) {
+                  case 'storage_set':
+                    // Store data using AsyncStorage (unlimited size)
+                    AsyncStorageService.setItem(message.key, message.value);
+                    break;
+                    
+                  case 'storage_get':
+                    // Retrieve data from AsyncStorage
+                    AsyncStorageService.getItem(message.key).then((value: string | null) => {
+                      // Send response back to WebView
+                      webViewRef.current?.postMessage(JSON.stringify({
+                        type: 'storage_response',
+                        key: message.key,
+                        value: value
+                      }));
+                    });
+                    break;
+                    
+                  case 'storage_remove':
+                    AsyncStorageService.removeItem(message.key);
+                    break;
+                    
+                  case 'storage_clear':
+                    AsyncStorageService.clearAppData(message.appId);
+                    break;
+                    
+                  default:
+                    console.log('📝 Other WebView message:', message);
+                }
+              } catch (error) {
+                console.warn('Failed to parse WebView message:', error);
+              }
             }}
           />
         )}

@@ -25,6 +25,40 @@ export interface StoredApp {
 
 export class AppStorageService {
   /**
+   * Parse title and category from Claude's response format: "Title | Category"
+   */
+  private static parseTitleAndCategory(
+    claudeTitle: string,
+    fallbackCategory: string
+  ): { title: string; category: string } {
+    console.log('🔍 [AppStorage] Parsing title and category from:', claudeTitle);
+    
+    // Check if title contains category separator
+    if (claudeTitle.includes(' | ')) {
+      const parts = claudeTitle.split(' | ');
+      if (parts.length >= 2) {
+        const title = parts[0].trim();
+        const category = parts[1].trim().toLowerCase();
+        
+        // Validate category against known categories
+        const validCategories = [
+          'utility', 'fun', 'productivity', 'entertainment', 'education', 
+          'health', 'finance', 'social', 'travel', 'shopping', 'games', 
+          'tools', 'lifestyle', 'business', 'creative', 'other'
+        ];
+        
+        const finalCategory = validCategories.includes(category) ? category : fallbackCategory;
+        
+        console.log('✅ [AppStorage] Parsed - Title:', title, 'Category:', finalCategory);
+        return { title, category: finalCategory };
+      }
+    }
+    
+    console.log('⚠️ [AppStorage] No category found, using fallback:', fallbackCategory);
+    return { title: claudeTitle, category: fallbackCategory };
+  }
+
+  /**
    * Generate a unique app ID
    */
   private static async generateAppId(): Promise<string> {
@@ -62,15 +96,21 @@ export class AppStorageService {
       const baseUrl = `https://sandbox/${appId}/`;
       console.log('🌐 [AppStorage] Generated baseUrl:', baseUrl);
       
+      // Parse title and category from Claude's response (format: "Title | Category")
+      const { title, category } = this.parseTitleAndCategory(
+        generatedConcept?.title || `App ${appId.split('_')[1]}`,
+        'utility' // Default category
+      );
+      
       const newApp: StoredApp = {
         id: appId,
-        title: generatedConcept?.title || `App ${appId.split('_')[1]}`,
+        title,
         description: request.description,
         html: html || this.generatePlaceholderHTML(request, generatedConcept),
         prompt: request.description,
         timestamp: new Date(),
         style: request.style,
-        category: request.category,
+        category,
         status: generatedConcept ? 'completed' : 'new',
         favorite: false,
         accessCount: 0,
@@ -120,7 +160,7 @@ export class AppStorageService {
     request: AppGenerationRequest,
     concept?: GeneratedAppConcept
   ): string {
-    const title = concept?.title || `${request.style} ${request.category} App`;
+    const title = concept?.title || `${request.style} App`;
     const description = concept?.description || request.description;
     
     return `
