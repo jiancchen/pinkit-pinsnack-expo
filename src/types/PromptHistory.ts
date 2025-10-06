@@ -1,3 +1,26 @@
+export interface GeneratedAppConcept {
+  title: string;
+  description: string;
+  features: string[];
+  userInterface: {
+    screens: string[];
+    navigation: string;
+    colorScheme: string;
+    typography: string;
+  };
+  technicalSpecs: {
+    architecture: string;
+    dataStorage: string;
+    integrations: string[];
+    platforms: string[];
+  };
+  marketingCopy: {
+    tagline: string;
+    elevator_pitch: string;
+    key_benefits: string[];
+  };
+}
+
 export interface PromptHistory {
   id: string;
   prompt: string;
@@ -5,6 +28,11 @@ export interface PromptHistory {
   title?: string;
   favorite?: boolean;
   accessCount?: number;
+  timestamp?: Date;
+  style?: string;
+  category?: string;
+  status?: 'new' | 'generating' | 'completed' | 'error';
+  generatedConcept?: GeneratedAppConcept;
 }
 
 export const AppColors = {

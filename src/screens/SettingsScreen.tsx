@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from './MyAppScreen';
 import { AppColors, samplePromptHistory } from '../types/PromptHistory';
+import { SecureStorageService } from '../services/SecureStorageService';
+import { ClaudeApiService } from '../services/ClaudeApiService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -11,6 +13,23 @@ export default function SettingsScreen({ navigation }: Props) {
   const [temperature, setTemperature] = useState(0.3);
   const [selectedModel, setSelectedModel] = useState('Claude 3.5 Sonnet');
   const [selectedLanguage, setSelectedLanguage] = useState('English');
+  const [hasApiKey, setHasApiKey] = useState(false);
+  const [isLoadingApiKey, setIsLoadingApiKey] = useState(true);
+
+  useEffect(() => {
+    checkApiKeyStatus();
+  }, []);
+
+  const checkApiKeyStatus = async () => {
+    try {
+      const hasKey = await SecureStorageService.hasApiKey();
+      setHasApiKey(hasKey);
+    } catch (error) {
+      console.error('Error checking API key status:', error);
+    } finally {
+      setIsLoadingApiKey(false);
+    }
+  };
 
   const models = [
     'Claude 3.5 Sonnet',
@@ -27,7 +46,46 @@ export default function SettingsScreen({ navigation }: Props) {
   ];
 
   const handleApiKeySettings = () => {
-    Alert.alert('API Key Settings', 'Configure your Claude API key', [{ text: 'OK' }]);
+    if (hasApiKey) {
+      Alert.alert(
+        'API Key Settings',
+        'You have a Claude API key configured. What would you like to do?',
+        [
+          { text: 'Test Connection', onPress: testApiConnection },
+          { text: 'Remove API Key', onPress: removeApiKey, style: 'destructive' },
+          { text: 'Update API Key', onPress: () => navigation.navigate('Welcome') },
+          { text: 'Cancel', style: 'cancel' }
+        ]
+      );
+    } else {
+      navigation.navigate('Welcome');
+    }
+  };
+
+  const testApiConnection = async () => {
+    try {
+      const claudeService = ClaudeApiService.getInstance();
+      await claudeService.initialize();
+      const result = await claudeService.testConnection();
+      
+      Alert.alert(
+        result.success ? 'Connection Successful' : 'Connection Failed',
+        result.message,
+        [{ text: 'OK' }]
+      );
+    } catch (error: any) {
+      Alert.alert('Test Failed', error.message || 'Failed to test API connection');
+    }
+  };
+
+  const removeApiKey = async () => {
+    try {
+      await SecureStorageService.removeApiKey();
+      setHasApiKey(false);
+      Alert.alert('Success', 'API key has been removed.');
+    } catch (error: any) {
+      Alert.alert('Error', 'Failed to remove API key.');
+    }
   };
 
   const handleDebugMode = () => {
@@ -62,9 +120,11 @@ export default function SettingsScreen({ navigation }: Props) {
           
           <SettingsCard>
             <SettingsItem
-              title="API Key Settings"
-              description="Configure your Claude API key"
+              title={hasApiKey ? "Claude API Key (Configured)" : "Setup Claude API Key"}
+              description={hasApiKey ? "Test, update, or remove your API key" : "Add your API key to generate apps with AI"}
               onPress={handleApiKeySettings}
+              icon={hasApiKey ? "checkmark-circle" : "key-outline"}
+              statusColor={hasApiKey ? "#10B981" : "#F59E0B"}
             />
             
             <View style={styles.separator} />
@@ -194,16 +254,17 @@ interface SettingsItemProps {
   description: string;
   onPress: () => void;
   icon?: string;
+  statusColor?: string;
 }
 
-function SettingsItem({ title, description, onPress, icon = "chevron-forward" }: SettingsItemProps) {
+function SettingsItem({ title, description, onPress, icon = "chevron-forward", statusColor }: SettingsItemProps) {
   return (
     <TouchableOpacity style={styles.settingsItem} onPress={onPress}>
       <View style={styles.settingsItemContent}>
         <Text style={styles.settingsItemTitle}>{title}</Text>
         <Text style={styles.settingsItemDescription}>{description}</Text>
       </View>
-      <Ionicons name={icon as any} size={20} color="#94A3B8" />
+      <Ionicons name={icon as any} size={20} color={statusColor || "#94A3B8"} />
     </TouchableOpacity>
   );
 }

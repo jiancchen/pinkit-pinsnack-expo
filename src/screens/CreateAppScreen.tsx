@@ -4,13 +4,31 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from './MyAppScreen';
 import { AppColors } from '../types/PromptHistory';
+import { PromptGenerator, AppStyle, AppCategory, AppGenerationRequest } from '../services/PromptGenerator';
+import { ClaudeApiService } from '../services/ClaudeApiService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CreateApp'>;
 
 const styles = {
-  DEFAULT: { name: 'Default', emoji: '🎨' },
-  FUN: { name: 'Fun', emoji: '🎯' },
-  SIMPLE: { name: 'Simple', emoji: '✨' },
+  minimalist: { name: 'Minimalist', emoji: '🎨' },
+  creative: { name: 'Creative', emoji: '🎯' },
+  corporate: { name: 'Corporate', emoji: '💼' },
+  playful: { name: 'Playful', emoji: '🎪' },
+  elegant: { name: 'Elegant', emoji: '✨' },
+  modern: { name: 'Modern', emoji: '🚀' },
+};
+
+const categories = {
+  productivity: { name: 'Productivity', emoji: '⚡' },
+  social: { name: 'Social', emoji: '👥' },
+  utility: { name: 'Utility', emoji: '🔧' },
+  entertainment: { name: 'Entertainment', emoji: '🎮' },
+  education: { name: 'Education', emoji: '📚' },
+  health: { name: 'Health', emoji: '🏥' },
+  finance: { name: 'Finance', emoji: '💰' },
+  travel: { name: 'Travel', emoji: '✈️' },
+  shopping: { name: 'Shopping', emoji: '🛍️' },
+  other: { name: 'Other', emoji: '📱' },
 };
 
 const templates = [
@@ -18,66 +36,130 @@ const templates = [
     emoji: '✅',
     name: 'Todo List',
     description: 'Simple task management',
-    prompt: 'Create a todo list app with add, delete, and mark complete functionality'
+    prompt: 'Create a todo list app with add, delete, and mark complete functionality',
+    style: 'minimalist' as AppStyle,
+    category: 'productivity' as AppCategory
   },
   {
     emoji: '🎯',
     name: 'Habit Tracker',
     description: 'Track daily habits',
-    prompt: 'Create a habit tracker that lets me check off daily habits and shows streaks'
+    prompt: 'Create a habit tracker that lets me check off daily habits and shows streaks',
+    style: 'modern' as AppStyle,
+    category: 'health' as AppCategory
   },
   {
     emoji: '📝',
     name: 'Note Taking',
     description: 'Quick notes and memos',
-    prompt: 'Create a simple note-taking app where I can add, edit, and delete notes'
+    prompt: 'Create a simple note-taking app where I can add, edit, and delete notes',
+    style: 'minimalist' as AppStyle,
+    category: 'productivity' as AppCategory
   },
   {
     emoji: '🧮',
     name: 'Calculator',
     description: 'Basic calculator',
-    prompt: 'Create a calculator app with basic arithmetic operations'
+    prompt: 'Create a calculator app with basic arithmetic operations',
+    style: 'modern' as AppStyle,
+    category: 'utility' as AppCategory
   },
   {
     emoji: '⏰',
     name: 'Timer',
     description: 'Countdown timer',
-    prompt: 'Create a countdown timer app with start, pause, and reset functionality'
+    prompt: 'Create a countdown timer app with start, pause, and reset functionality',
+    style: 'minimalist' as AppStyle,
+    category: 'utility' as AppCategory
   }
 ];
 
 export default function CreateAppScreen({ navigation }: Props) {
   const [prompt, setPrompt] = useState('');
-  const [selectedStyle, setSelectedStyle] = useState('DEFAULT');
-  const [customStyle, setCustomStyle] = useState('');
+  const [selectedStyle, setSelectedStyle] = useState<AppStyle>('modern');
+  const [selectedCategory, setSelectedCategory] = useState<AppCategory>('productivity');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!prompt.trim()) {
       Alert.alert('Error', 'Please enter an app description');
       return;
     }
 
+    const request: AppGenerationRequest = {
+      description: prompt.trim(),
+      style: selectedStyle,
+      category: selectedCategory,
+      platform: 'mobile'
+    };
+
+    // Validate the request
+    const validation = PromptGenerator.validateRequest(request);
+    if (!validation.isValid) {
+      Alert.alert('Validation Error', validation.errors.join('\n'));
+      return;
+    }
+
     setIsLoading(true);
     
-    // Simulate app generation
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const claudeService = ClaudeApiService.getInstance();
+      
+      if (!claudeService.isConfigured()) {
+        Alert.alert(
+          'API Key Required',
+          'To generate apps with AI, you need to configure your Claude API key. You can set this up in Settings.',
+          [
+            { text: 'Go to Settings', onPress: () => navigation.navigate('Settings') },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+        return;
+      }
+
+      // Generate the prompt
+      const generatedPrompt = PromptGenerator.generatePrompt(request);
+      
+      // Call Claude API
+      const generatedConcept = await claudeService.generateAppConcept(generatedPrompt);
+      
+      // TODO: Save the generated concept to app history
+      // For now, just show success
       Alert.alert(
-        'App Generated!',
-        `Your app has been created successfully!`,
+        'App Generated Successfully!',
+        `"${generatedConcept.title}" has been created with ${generatedConcept.features.length} features and detailed specifications.`,
         [
           {
-            text: 'OK',
+            text: 'View Apps',
             onPress: () => navigation.navigate('MyApp'),
           },
+          {
+            text: 'Create Another',
+            onPress: () => {
+              setPrompt('');
+              setSelectedStyle('modern');
+              setSelectedCategory('productivity');
+            },
+            style: 'cancel'
+          }
         ]
       );
-    }, 2000);
+    } catch (error: any) {
+      console.error('App generation error:', error);
+      Alert.alert(
+        'Generation Failed',
+        error.message || 'Failed to generate app. Please try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleTemplateSelect = (templatePrompt: string) => {
-    setPrompt(templatePrompt);
+  const handleTemplateSelect = (template: typeof templates[0]) => {
+    setPrompt(template.prompt);
+    setSelectedStyle(template.style);
+    setSelectedCategory(template.category);
   };
 
   return (
@@ -86,6 +168,12 @@ export default function CreateAppScreen({ navigation }: Props) {
       
       {/* Header */}
       <View style={styleSheet.header}>
+        <TouchableOpacity
+          style={styleSheet.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Ionicons name="arrow-back" size={24} color="rgba(0, 0, 0, 0.8)" />
+        </TouchableOpacity>
         <Text style={styleSheet.headerTitle}>Create New App</Text>
       </View>
 
@@ -99,24 +187,37 @@ export default function CreateAppScreen({ navigation }: Props) {
           <Text style={styleSheet.sectionTitle}>Pick a Style</Text>
           
           <View style={styleSheet.card}>
-            <View style={styleSheet.stylesContainer}>
+            <View style={styleSheet.optionsContainer}>
               {Object.entries(styles).map(([key, style]) => (
-                <StyleCard
+                <OptionCard
                   key={key}
-                  style={key}
+                  id={key as AppStyle}
                   emoji={style.emoji}
                   name={style.name}
                   isSelected={selectedStyle === key}
-                  onSelect={() => setSelectedStyle(key)}
+                  onSelect={() => setSelectedStyle(key as AppStyle)}
                 />
               ))}
-              <StyleCard
-                style="CUSTOM"
-                emoji="✨"
-                name="Custom"
-                isSelected={selectedStyle === 'CUSTOM'}
-                onSelect={() => setSelectedStyle('CUSTOM')}
-              />
+            </View>
+          </View>
+        </View>
+
+        {/* Category Selection Section */}
+        <View style={styleSheet.section}>
+          <Text style={styleSheet.sectionTitle}>Select Category</Text>
+          
+          <View style={styleSheet.card}>
+            <View style={styleSheet.optionsContainer}>
+              {Object.entries(categories).map(([key, category]) => (
+                <OptionCard
+                  key={key}
+                  id={key as AppCategory}
+                  emoji={category.emoji}
+                  name={category.name}
+                  isSelected={selectedCategory === key}
+                  onSelect={() => setSelectedCategory(key as AppCategory)}
+                />
+              ))}
             </View>
           </View>
         </View>
@@ -155,12 +256,12 @@ export default function CreateAppScreen({ navigation }: Props) {
             >
               {isLoading ? (
                 <View style={styleSheet.loadingContainer}>
-                  <Text style={styleSheet.generateButtonText}>Generating...</Text>
+                  <Text style={styleSheet.generateButtonText}>Generating with Claude AI...</Text>
                 </View>
               ) : (
                 <View style={styleSheet.buttonContent}>
-                  <Ionicons name="send" size={20} color="white" />
-                  <Text style={styleSheet.generateButtonText}>Generate App</Text>
+                  <Ionicons name="sparkles" size={20} color="white" />
+                  <Text style={styleSheet.generateButtonText}>Generate App with AI</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -178,7 +279,9 @@ export default function CreateAppScreen({ navigation }: Props) {
                 emoji={template.emoji}
                 name={template.name}
                 description={template.description}
-                onSelect={() => handleTemplateSelect(template.prompt)}
+                style={template.style}
+                category={template.category}
+                onSelect={() => handleTemplateSelect(template)}
               />
             ))}
           </View>
@@ -188,27 +291,27 @@ export default function CreateAppScreen({ navigation }: Props) {
   );
 }
 
-interface StyleCardProps {
-  style: string;
+interface OptionCardProps {
+  id: string;
   emoji: string;
   name: string;
   isSelected: boolean;
   onSelect: () => void;
 }
 
-function StyleCard({ emoji, name, isSelected, onSelect }: StyleCardProps) {
+function OptionCard({ emoji, name, isSelected, onSelect }: OptionCardProps) {
   return (
     <TouchableOpacity
       style={[
-        styleSheet.styleCard,
-        isSelected && styleSheet.styleCardSelected
+        styleSheet.optionCard,
+        isSelected && styleSheet.optionCardSelected
       ]}
       onPress={onSelect}
     >
-      <Text style={styleSheet.styleEmoji}>{emoji}</Text>
+      <Text style={styleSheet.optionEmoji}>{emoji}</Text>
       <Text style={[
-        styleSheet.styleName,
-        isSelected && styleSheet.styleNameSelected
+        styleSheet.optionName,
+        isSelected && styleSheet.optionNameSelected
       ]}>
         {name}
       </Text>
@@ -220,6 +323,8 @@ interface TemplateCardProps {
   emoji: string;
   name: string;
   description: string;
+  style: AppStyle;
+  category: AppCategory;
   onSelect: () => void;
 }
 
@@ -244,6 +349,12 @@ const styleSheet = StyleSheet.create({
     paddingTop: 60,
     paddingHorizontal: 16,
     paddingBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
   },
   headerTitle: {
     fontSize: 24,
@@ -279,13 +390,13 @@ const styleSheet = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-  stylesContainer: {
+  optionsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 8,
   },
-  styleCard: {
+  optionCard: {
     width: 80,
     height: 80,
     backgroundColor: '#fff',
@@ -302,8 +413,9 @@ const styleSheet = StyleSheet.create({
     },
     shadowOpacity: 0.1,
     shadowRadius: 2,
+    margin: 4,
   },
-  styleCardSelected: {
+  optionCardSelected: {
     backgroundColor: '#FFF3C4',
     borderColor: AppColors.FABMain,
     borderWidth: 2,
@@ -311,17 +423,17 @@ const styleSheet = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 4,
   },
-  styleEmoji: {
-    fontSize: 24,
+  optionEmoji: {
+    fontSize: 20,
     marginBottom: 4,
   },
-  styleName: {
-    fontSize: 12,
+  optionName: {
+    fontSize: 10,
     fontWeight: '600',
     color: 'rgba(0, 0, 0, 0.8)',
     textAlign: 'center',
   },
-  styleNameSelected: {
+  optionNameSelected: {
     color: 'rgba(0, 0, 0, 0.8)',
     fontWeight: 'bold',
   },

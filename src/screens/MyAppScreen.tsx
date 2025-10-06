@@ -6,6 +6,7 @@ import FloatingToolbar from '../components/FloatingToolbar';
 import { samplePromptHistory, AppColors } from '../types/PromptHistory';
 
 export type RootStackParamList = {
+  Welcome: undefined;
   MyApp: undefined;
   Settings: undefined;
   CreateApp: undefined;
