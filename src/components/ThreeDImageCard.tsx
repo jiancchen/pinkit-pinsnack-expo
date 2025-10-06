@@ -50,27 +50,22 @@ export default function ThreeDImageCard({
 
   // Load screenshot only when app is first accessed - ONE TIME EFFECT
   useEffect(() => {
+    // Prevent infinite loops by checking screenshotState existence first
+    if (screenshotState?.uri || screenshotState?.isLoading) {
+      return; // Already have screenshot or loading, skip
+    }
+    
     // Only load screenshot if:
     // 1. The app has been accessed at least once
     // 2. We're not generating 
-    // 3. We don't already have a screenshot or loading state
-    const shouldLoad = (historyItem.accessCount || 0) > 0 && 
-                      !isGenerating &&
-                      !screenshotState?.uri &&
-                      !screenshotState?.isLoading;
+    const shouldLoad = (historyItem.accessCount || 0) > 0 && !isGenerating;
                       
     if (shouldLoad) {
       console.log('🔄 [Card] Loading screenshot for accessed app:', historyItem.id);
       // Call the store method directly to avoid function reference issues
       screenshotStore.loadScreenshot(historyItem.id);
     }
-  }, [
-    historyItem.id, 
-    historyItem.accessCount, 
-    isGenerating
-    // NOTE: We intentionally don't include screenshotState or store functions
-    // to prevent infinite loops. The store will update reactively via Zustand.
-  ]);
+  }, [historyItem.id, historyItem.accessCount, isGenerating]);
 
   const displayTitle = historyItem.title?.trim() || 
     (historyItem.prompt.substring(0, 50) + '...');
@@ -161,7 +156,7 @@ export default function ThreeDImageCard({
           <View style={styles.badgeContainer}>
             {isNewItem && (
               <View style={[styles.badge, styles.newBadge]}>
-                <Text style={styles.badgeText}>NEW</Text>
+                <Text style={[styles.badgeText, { fontSize: Math.max(10, 10 * scale) }]}>NEW</Text>
               </View>
             )}
             {isGenerating && (
@@ -178,7 +173,7 @@ export default function ThreeDImageCard({
 
           {/* Title text */}
           <View style={styles.titleContainer}>
-            <Text style={styles.titleText} numberOfLines={2}>
+            <Text style={[styles.titleText, { fontSize: Math.max(18, 18 * scale) }]} numberOfLines={2}>
               {displayTitle}
             </Text>
           </View>

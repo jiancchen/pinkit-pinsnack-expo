@@ -773,7 +773,7 @@ const styles = StyleSheet.create({
   },
   appTitleOverlay: {
     color: 'transparent',
-    fontSize: 0,
+    fontSize: 1, // Minimum font size for Android compatibility (was 0)
     opacity: 0,
   },
 });
