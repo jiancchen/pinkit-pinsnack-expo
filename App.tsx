@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import { Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as NavigationBar from 'expo-navigation-bar';
 import MyAppScreen from './src/screens/MyAppScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import CreateAppScreen from './src/screens/CreateAppScreen';
@@ -24,6 +26,12 @@ export default function App() {
 
   useEffect(() => {
     checkApiKeyStatus();
+    
+    // Configure transparent navigation bar for Android
+    if (Platform.OS === 'android') {
+      NavigationBar.setBackgroundColorAsync('transparent');
+      NavigationBar.setVisibilityAsync('hidden');
+    }
   }, []);
 
   const checkApiKeyStatus = async () => {

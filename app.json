@@ -21,12 +21,16 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "userInterfaceStyle": "automatic",
+      "edgeToEdgeEnabled": true,
       "navigationBar": {
-        "backgroundColor": "transparent"
+        "backgroundColor": "transparent",
+        "visible": false
       },
       "statusBar": {
+        "backgroundColor": "transparent",
         "translucent": true,
-        "backgroundColor": "transparent"
+        "hidden": false
       },
       "permissions": [
         "INTERNET",
@@ -40,7 +44,8 @@
     "plugins": [
       "expo-font",
       "expo-secure-store",
-      "expo-screen-orientation"
+      "expo-screen-orientation",
+      "expo-navigation-bar"
     ]
   }
 }
