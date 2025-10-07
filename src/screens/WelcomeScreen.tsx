@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Linking,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../types/PromptHistory';
 import { SecureStorageService } from '../services/SecureStorageService';
@@ -85,7 +86,8 @@ export default function WelcomeScreen({ onApiKeySetup, navigation }: WelcomeScre
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <SafeAreaView style={styles.container} edges={[]}>
+      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       {/* Header */}
       <View style={styles.header}>
         {navigation && (
@@ -201,7 +203,8 @@ export default function WelcomeScreen({ onApiKeySetup, navigation }: WelcomeScre
           </Text>
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 

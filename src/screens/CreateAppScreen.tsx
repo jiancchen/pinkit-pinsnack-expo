@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, StatusBar } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -246,8 +247,8 @@ export default function CreateAppScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={styleSheet.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={AppColors.Primary} />
+    <SafeAreaView style={styleSheet.container} edges={[]}>
+      <StatusBar translucent backgroundColor="transparent" />
       
       {/* Header */}
       <View style={styleSheet.header}>
@@ -370,7 +371,7 @@ export default function CreateAppScreen({ navigation }: Props) {
           </View>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 

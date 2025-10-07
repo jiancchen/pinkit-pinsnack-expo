@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Alert, StatusBar } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import Scrollable3DStack from '../components/Scrollable3DStack';
@@ -91,8 +92,8 @@ export default function MyAppScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={AppColors.Primary} />
+    <SafeAreaView style={styles.container} edges={[]}>
+      <StatusBar translucent backgroundColor="transparent" />
       
       {/* Main 3D Stack */}
       <Scrollable3DStack
@@ -107,7 +108,7 @@ export default function MyAppScreen({ navigation }: Props) {
         onNavigateToCreate={() => navigation.navigate('CreateApp')}
         onNavigateToSettings={() => navigation.navigate('Settings')}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 

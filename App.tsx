@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import MyAppScreen from './src/screens/MyAppScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import CreateAppScreen from './src/screens/CreateAppScreen';
@@ -60,37 +61,39 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        initialRouteName={"MyApp"}
-        screenOptions={{
-          headerShown: false, // Remove the top app bar
-        }}
-      >
-        <Stack.Screen 
-          name="MyApp" 
-          component={MyAppScreen}
-        />
-        <Stack.Screen 
-          name="Settings" 
-          component={SettingsScreen}
-        />
-        <Stack.Screen 
-          name="CreateApp" 
-          component={CreateAppScreen}
-        />
-        <Stack.Screen 
-          name="AppView" 
-          component={AppViewScreen}
-        />
-        <Stack.Screen 
-          name="Welcome" 
-          options={{ gestureEnabled: false }}
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <Stack.Navigator
+          initialRouteName={"MyApp"}
+          screenOptions={{
+            headerShown: false, // Remove the top app bar
+          }}
         >
-          {(props) => <WelcomeScreen {...props} onApiKeySetup={handleApiKeySetup} navigation={props.navigation} />}
-        </Stack.Screen>
-      </Stack.Navigator>
-      <StatusBar style="light" />
-    </NavigationContainer>
+          <Stack.Screen 
+            name="MyApp" 
+            component={MyAppScreen}
+          />
+          <Stack.Screen 
+            name="Settings" 
+            component={SettingsScreen}
+          />
+          <Stack.Screen 
+            name="CreateApp" 
+            component={CreateAppScreen}
+          />
+          <Stack.Screen 
+            name="AppView" 
+            component={AppViewScreen}
+          />
+          <Stack.Screen 
+            name="Welcome" 
+            options={{ gestureEnabled: false }}
+          >
+            {(props) => <WelcomeScreen {...props} onApiKeySetup={handleApiKeySetup} navigation={props.navigation} />}
+          </Stack.Screen>
+        </Stack.Navigator>
+        <StatusBar style="light" translucent backgroundColor="transparent" />
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }
