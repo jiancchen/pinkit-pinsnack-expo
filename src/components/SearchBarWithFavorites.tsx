@@ -40,9 +40,11 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
   style,
 }) => {
   const insets = useSafeAreaInsets();
-  const [searchBarOffset] = useState(new Animated.Value(0));
-  const [favoritesOffset] = useState(new Animated.Value(0));
-  const [favoritesOpacity] = useState(new Animated.Value(1));
+  
+  // Use useRef for animated values to avoid conflicts
+  const searchBarOffset = React.useRef(new Animated.Value(0)).current;
+  const favoritesOffset = React.useRef(new Animated.Value(0)).current;
+  const favoritesOpacity = React.useRef(new Animated.Value(1)).current;
 
   // Animation for showing/hiding favorites
   useEffect(() => {
@@ -75,62 +77,66 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
     }
   }, [showFavorites]);
 
-//   const handleSearchBarPanGesture = (event: any) => {
-//     const { translationY, velocityY, state } = event.nativeEvent;
-    
-//     if (state === State.ACTIVE) {
-//       // Allow downward swipe to show favorites
-//       if (translationY > 0) {
-//         searchBarOffset.setValue(Math.min(translationY, 50));
-//       }
-//     } else if (state === State.END) {
-//       if (translationY > 30 || velocityY > 500) {
-//         // Show favorites if swiped down enough
-//         if (!showFavorites) {
-//           onToggleFavorites();
-//         }
-//       }
-//       // Reset search bar position
-//       Animated.spring(searchBarOffset, {
-//         toValue: 0,
-//         useNativeDriver: true,
-//       }).start();
-//     }
-//   };
+  // Gesture thresholds based on Android implementation
+  const SWIPE_THRESHOLD = -100; // Swipe up threshold to dismiss favorites
+  const SEARCH_BAR_SWIPE_THRESHOLD = 100; // Swipe down threshold on search bar to show favorites
 
-//   const handleFavoritesPanGesture = (event: any) => {
-//     const { translationY, velocityY, state } = event.nativeEvent;
+  const handleSearchBarPanGesture = (event: any) => {
+    const { translationY, velocityY, state } = event.nativeEvent;
     
-//     if (state === State.ACTIVE) {
-//       // Allow upward swipe to dismiss favorites
-//       if (translationY < 0) {
-//         favoritesOffset.setValue(Math.max(translationY, -100));
-//         favoritesOpacity.setValue(Math.max(1 + (translationY / 100), 0.3));
-//       }
-//     } else if (state === State.END) {
-//       if (translationY < -50 || velocityY < -500) {
-//         // Hide favorites if swiped up enough
-//         onToggleFavorites();
-//       } else {
-//         // Reset position
-//         Animated.parallel([
-//           Animated.spring(favoritesOffset, {
-//             toValue: 0,
-//             useNativeDriver: true,
-//           }),
-//           Animated.spring(favoritesOpacity, {
-//             toValue: 1,
-//             useNativeDriver: true,
-//           }),
-//         ]).start();
-//       }
-//     }
-//   };
+    if (state === State.ACTIVE) {
+      // Allow downward swipe to show favorites (limit to 50px)
+      if (translationY > 0) {
+        searchBarOffset.setValue(Math.min(translationY, 50));
+      }
+    } else if (state === State.END) {
+      if (translationY > SEARCH_BAR_SWIPE_THRESHOLD || velocityY > 500) {
+        // Show favorites if swiped down enough
+        if (!showFavorites) {
+          onToggleFavorites();
+        }
+      }
+      // Reset search bar position
+      Animated.spring(searchBarOffset, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
+    }
+  };
+
+  const handleFavoritesPanGesture = (event: any) => {
+    const { translationY, velocityY, state } = event.nativeEvent;
+    
+    if (state === State.ACTIVE) {
+      // Allow upward swipe to dismiss favorites
+      if (translationY < 0) {
+        favoritesOffset.setValue(Math.max(translationY, SWIPE_THRESHOLD));
+        favoritesOpacity.setValue(Math.max(1 + (translationY / Math.abs(SWIPE_THRESHOLD)), 0.3));
+      }
+    } else if (state === State.END) {
+      if (translationY < SWIPE_THRESHOLD / 2 || velocityY < -500) {
+        // Hide favorites if swiped up enough
+        onToggleFavorites();
+      } else {
+        // Reset position
+        Animated.parallel([
+          Animated.spring(favoritesOffset, {
+            toValue: 0,
+            useNativeDriver: true,
+          }),
+          Animated.spring(favoritesOpacity, {
+            toValue: 1,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      }
+    }
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }, style]}>
       {/* Search Bar */}
-      {/* <PanGestureHandler onGestureEvent={handleSearchBarPanGesture}> */}
+      <PanGestureHandler onGestureEvent={handleSearchBarPanGesture}>
         <Animated.View
           style={[
             styles.searchBarContainer,
@@ -181,11 +187,11 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
             )}
           </View>
         </Animated.View>
-      {/* </PanGestureHandler> */}
+      </PanGestureHandler>
 
       {/* Favorites Section */}
       {showFavorites && searchText.length === 0 && (
-        // <PanGestureHandler onGestureEvent={handleFavoritesPanGesture}>
+        <PanGestureHandler onGestureEvent={handleFavoritesPanGesture}>
           <Animated.View
             style={[
               styles.favoritesContainer,
@@ -239,7 +245,7 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
               )}
             </View>
           </Animated.View>
-        // </PanGestureHandler>
+        </PanGestureHandler>
       )}
     </View>
   );

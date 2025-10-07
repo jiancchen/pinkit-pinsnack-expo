@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Alert, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Scrollable3DStack from '../components/Scrollable3DStack';
 import FloatingToolbar from '../components/FloatingToolbar';
 import SearchBarWithFavorites from '../components/SearchBarWithFavorites';
@@ -92,47 +92,83 @@ export default function MyAppScreen({ navigation }: Props) {
 
   const handleNavigateToMain = () => {
     // Already on main screen
-    Alert.alert('Info', 'You are already on the main screen', [{ text: 'OK' }]);
+    // Alert.alert('Info', 'You are already on the main screen', [{ text: 'OK' }]);
+  };
+
+  // Filter items based on search text
+  const filteredItems = React.useMemo(() => {
+    if (searchText.trim() === '') {
+      return promptHistory;
+    }
+    return promptHistory.filter((item) => 
+      item.title?.toLowerCase().includes(searchText.toLowerCase()) ||
+      item.prompt.toLowerCase().includes(searchText.toLowerCase())
+    );
+  }, [promptHistory, searchText]);
+
+  // Get favorite items
+  const favoriteItems = React.useMemo(() => {
+    return promptHistory.filter((item) => item.favorite === true);
+  }, [promptHistory]);
+
+  // Get most used items (sorted by access count)
+  const mostUsedItems = React.useMemo(() => {
+    return promptHistory
+      .filter((item) => (item.accessCount || 0) > 0)
+      .sort((a, b) => (b.accessCount || 0) - (a.accessCount || 0))
+      .slice(0, 10); // Top 10 most used
+  }, [promptHistory]);
+
+  const handleSearchTextChange = (text: string) => {
+    setSearchText(text);
+    if (text.trim() !== '') {
+      setShowFavorites(false);
+    }
+  };
+
+  const handleToggleFavorites = () => {
+    setShowFavorites(!showFavorites);
+    if (!showFavorites) {
+      setSearchText('');
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchText('');
+    setShowFavorites(false);
   };
 
   return (
     <GestureHandlerRootView style={styles.container}>
       <SafeAreaView style={styles.container} edges={[]}>
         <StatusBar translucent backgroundColor="transparent" />
-      
-      {/* Search Bar with Favorites */}
-      <SearchBarWithFavorites
-        searchText={searchText}
-        onSearchTextChange={setSearchText}
-        showFavorites={showFavorites}
-        onToggleFavorites={() => setShowFavorites(!showFavorites)}
-        onClearSearch={() => {
-          setSearchText('');
-          setShowFavorites(false);
-        }}
-        favoriteItems={promptHistory.filter(app => app.favorite)}
-        mostUsedItems={promptHistory
-          .filter(app => (app.accessCount || 0) > 0)
-          .sort((a, b) => (b.accessCount || 0) - (a.accessCount || 0))
-          .slice(0, 10)
-        }
-        onNavigateToApp={handleNavigateToApp}
-      />
-      
-      {/* Main 3D Stack */}
-      <Scrollable3DStack
-        items={promptHistory}
-        onNavigateToApp={handleNavigateToApp}
-        onShowSnackbar={handleShowSnackbar}
-      />
+        
+        {/* Main 3D Stack */}
+        <Scrollable3DStack
+          items={filteredItems}
+          onNavigateToApp={handleNavigateToApp}
+          onShowSnackbar={handleShowSnackbar}
+        />
 
-      {/* Floating Toolbar */}
-      <FloatingToolbar
-        onNavigateToMain={handleNavigateToMain}
-        onNavigateToCreate={() => navigation.navigate('CreateApp')}
-        onNavigateToSettings={() => navigation.navigate('Settings')}
-      />
-    </SafeAreaView>
+        {/* Search Bar with Favorites */}
+        <SearchBarWithFavorites
+          searchText={searchText}
+          onSearchTextChange={handleSearchTextChange}
+          showFavorites={showFavorites}
+          onToggleFavorites={handleToggleFavorites}
+          onClearSearch={handleClearSearch}
+          favoriteItems={favoriteItems}
+          mostUsedItems={mostUsedItems}
+          onNavigateToApp={handleNavigateToApp}
+        />
+
+        {/* Floating Toolbar */}
+        <FloatingToolbar
+          onNavigateToMain={handleNavigateToMain}
+          onNavigateToCreate={() => navigation.navigate('CreateApp')}
+          onNavigateToSettings={() => navigation.navigate('Settings')}
+        />
+      </SafeAreaView>
     </GestureHandlerRootView>
   );
 }
