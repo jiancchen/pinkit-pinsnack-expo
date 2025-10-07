@@ -10,8 +10,6 @@ import {
 } from 'react-native';
 import { PromptHistory, AppColors } from '../types/PromptHistory';
 import { Ionicons } from '@expo/vector-icons';
-import { ScreenshotService } from '../services/ScreenshotService';
-import { WebViewScreenshotService } from '../services/WebViewScreenshotService';
 import { useScreenshotState, useScreenshotActions, useScreenshotStore } from '../stores/ScreenshotStore';
 
 const { width: screenWidth } = Dimensions.get('window');

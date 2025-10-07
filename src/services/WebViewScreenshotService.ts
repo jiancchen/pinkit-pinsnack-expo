@@ -8,8 +8,8 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
 export class WebViewScreenshotService {
   private static readonly SCREENSHOT_PREFIX = 'webview_screenshot_';
-  private static readonly SCREENSHOT_WIDTH = 200;
-  private static readonly SCREENSHOT_HEIGHT = 300;
+  private static readonly SCREENSHOT_WIDTH = 400;
+  private static readonly SCREENSHOT_HEIGHT = 600;
   private static readonly SCREENSHOT_QUALITY = 0.7;
 
   /**

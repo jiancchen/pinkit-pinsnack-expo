@@ -216,6 +216,24 @@ export default function AppViewScreen({ navigation, route }: Props) {
         const testValue = localStorage.getItem('test_key');
         console.log('🧪 [WebView] Test result:', testValue === ('test_value_' + APP_ID) ? 'PASSED' : 'FAILED');
         
+        // Add message listener for screenshot triggers
+        window.addEventListener('message', function(event) {
+          try {
+            const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+            if (message.type === 'trigger_screenshot' && message.appId === APP_ID) {
+              console.log('📸 [WebView] Received screenshot trigger for app:', APP_ID);
+              // Trigger screenshot capture if function is available
+              if (window.captureWebViewScreenshot) {
+                window.captureWebViewScreenshot();
+              } else {
+                console.warn('⚠️ [WebView] Screenshot function not available yet');
+              }
+            }
+          } catch (e) {
+            // Ignore parsing errors for other messages
+          }
+        });
+        
       })();
     </script>`;
     
@@ -382,79 +400,31 @@ export default function AppViewScreen({ navigation, route }: Props) {
   const captureScreenshot = async () => {
     if (!app || isCapturingScreenshot) return;
     
-    try {
-      console.log('📸 [AppView] Starting screenshot capture for app:', app.id);
-      console.log('📸 [AppView] WebView ref available:', !!webViewRef.current);
-      console.log('📸 [AppView] Container ref available:', !!webViewContainerRef.current);
-      
-      emitScreenshotLoading(app.id, true);
-      setIsCapturingScreenshot(true);
-      
-      // Wait just a bit for any animations to complete
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Platform-specific capture strategies
-      let screenshotUri: string | null = null;
-      
-      if (Platform.OS === 'android') {
-        // Android: WebView screenshots work well - try WebView directly first
-        console.log('🤖 [AppView] Android - trying WebView direct capture...');
-        if (webViewRef.current) {
-          screenshotUri = await ScreenshotService.captureAndStoreScreenshot(
-            webViewRef,
-            app.id
-          );
-        }
-        
-        // Fallback to container on Android if needed
-        if (!screenshotUri && webViewContainerRef.current) {
-          console.log('🤖 [AppView] Android - WebView failed, trying container...');
-          screenshotUri = await ScreenshotService.captureAndStoreScreenshot(
-            webViewContainerRef,
-            app.id
-          );
-        }
-      } else {
-        // iOS: WebView direct capture often fails - try container first
-        console.log('🍎 [AppView] iOS - trying container capture...');
-        if (webViewContainerRef.current) {
-          screenshotUri = await ScreenshotService.captureAndStoreScreenshot(
-            webViewContainerRef,
-            app.id
-          );
-        }
-        
-        // iOS fallback: try WebView direct if container failed
-        if (!screenshotUri && webViewRef.current) {
-          console.log('🍎 [AppView] iOS - container failed, trying WebView direct...');
-          screenshotUri = await ScreenshotService.captureAndStoreScreenshot(
-            webViewRef,
-            app.id
-          );
-        }
-      }
-      
-      if (screenshotUri) {
-        console.log('✅ [AppView] Screenshot captured and stored:', screenshotUri);
-        emitScreenshotCaptured(app.id, screenshotUri, 'external');
-      } else {
-        console.warn('⚠️ [AppView] Screenshot capture failed, creating fallback');
-        emitScreenshotError(app.id, 'External screenshot capture failed');
-        // Create a fallback screenshot with app info
-        await ScreenshotService.createFallbackScreenshot(app.id, app.title, app.style);
-      }
-    } catch (error) {
-      console.error('💥 [AppView] Screenshot capture error:', error);
-      emitScreenshotError(app.id, error instanceof Error ? error.message : 'Screenshot capture failed');
-      // Create a fallback screenshot with app info
+    console.log('📸 [AppView] Screenshot capture now handled by WebView JavaScript injection');
+    console.log('📸 [AppView] WebView script should automatically capture when page loads');
+    
+    // Screenshot capture is now handled by:
+    // 1. JavaScript injection in injectAppId() function
+    // 2. html2canvas library loaded in WebView
+    // 3. Results sent back via WebView postMessage
+    // 4. Processed in handleWebViewScreenshot() function
+    
+    // If no screenshot has been captured yet, we can try to trigger it
+    if (webViewRef.current) {
       try {
+        console.log('📸 [AppView] Triggering WebView screenshot capture...');
+        webViewRef.current.postMessage(JSON.stringify({
+          type: 'trigger_screenshot',
+          appId: app.id
+        }));
+      } catch (error) {
+        console.warn('⚠️ [AppView] Failed to trigger WebView screenshot:', error);
+        // Create fallback screenshot
         await ScreenshotService.createFallbackScreenshot(app.id, app.title, app.style);
-      } catch (fallbackError) {
-        console.error('💥 [AppView] Fallback screenshot creation failed:', fallbackError);
       }
-    } finally {
-      setIsCapturingScreenshot(false);
-      emitScreenshotLoading(app.id, false);
+    } else {
+      console.warn('⚠️ [AppView] No WebView ref available, creating fallback screenshot');
+      await ScreenshotService.createFallbackScreenshot(app.id, app.title, app.style);
     }
   };  const refreshWebView = () => {
     setWebViewError(false);
