@@ -33,10 +33,81 @@ export default function AppViewScreen({ navigation, route }: Props) {
     // Create a more robust storage solution that completely replaces localStorage
     const storageOverride = `
     <script>
+      // Enhanced error handling for WebView JavaScript
+      (function() {
+        // Add global error handling for common DOM errors
+        console.log('🔧 [WebView] Setting up error handling and storage isolation');
+        
+        // Patch DOMTokenList to prevent empty token errors
+        const originalAdd = DOMTokenList.prototype.add;
+        DOMTokenList.prototype.add = function(...tokens) {
+          // Filter out empty tokens to prevent DOMTokenList errors
+          const validTokens = tokens.filter(token => token && typeof token === 'string' && token.trim() !== '');
+          if (validTokens.length > 0) {
+            return originalAdd.apply(this, validTokens);
+          }
+          console.warn('🚨 [WebView] Prevented empty token addition to classList');
+        };
+        
+        const originalRemove = DOMTokenList.prototype.remove;
+        DOMTokenList.prototype.remove = function(...tokens) {
+          // Filter out empty tokens to prevent DOMTokenList errors
+          const validTokens = tokens.filter(token => token && typeof token === 'string' && token.trim() !== '');
+          if (validTokens.length > 0) {
+            return originalRemove.apply(this, validTokens);
+          }
+          console.warn('🚨 [WebView] Prevented empty token removal from classList');
+        };
+        
+        // Global error handler for uncaught errors
+        window.addEventListener('error', function(event) {
+          console.error('🚨 [WebView] Uncaught error:', event.error);
+          console.error('🚨 [WebView] Error details:', event.filename, event.lineno, event.colno);
+          // Don't let errors crash the app
+          event.preventDefault();
+          return true;
+        });
+        
+        // Global promise rejection handler
+        window.addEventListener('unhandledrejection', function(event) {
+          console.error('🚨 [WebView] Unhandled promise rejection:', event.reason);
+          // Don't let promise rejections crash the app
+          event.preventDefault();
+        });
+        
+        // Add additional safety for todo app common patterns
+        window.addEventListener('DOMContentLoaded', function() {
+          console.log('🔧 [WebView] Setting up todo app safety patches');
+          
+          // Patch common todo functions that might cause issues
+          const originalQuerySelector = document.querySelector;
+          const originalQuerySelectorAll = document.querySelectorAll;
+          
+          // Safe querySelector that won't throw on invalid selectors
+          document.querySelector = function(selector) {
+            try {
+              return originalQuerySelector.call(this, selector);
+            } catch (e) {
+              console.warn('🚨 [WebView] Invalid selector prevented:', selector, e);
+              return null;
+            }
+          };
+          
+          document.querySelectorAll = function(selector) {
+            try {
+              return originalQuerySelectorAll.call(this, selector);
+            } catch (e) {
+              console.warn('🚨 [WebView] Invalid selector prevented:', selector, e);
+              return document.createDocumentFragment().querySelectorAll('never-matches');
+            }
+          };
+        });
+      })();
+      
       // COMPLETE localStorage replacement for app isolation
       (function() {
         const APP_ID = '${appId}';
-        console.log('� [WebView] Initializing COMPLETE storage isolation for app:', APP_ID);
+        console.log('🔧 [WebView] Initializing COMPLETE storage isolation for app:', APP_ID);
         
         // Create isolated storage object that completely replaces localStorage
         const isolatedStorage = {
