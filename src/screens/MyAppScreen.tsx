@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Alert, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import Scrollable3DStack from '../components/Scrollable3DStack';
 import FloatingToolbar from '../components/FloatingToolbar';
+import SearchBarWithFavorites from '../components/SearchBarWithFavorites';
 import { AppColors, PromptHistory } from '../types/PromptHistory';
 import { AppStorageService, StoredApp } from '../services/AppStorageService';
 
@@ -21,6 +23,8 @@ type Props = NativeStackScreenProps<RootStackParamList, 'MyApp'>;
 export default function MyAppScreen({ navigation }: Props) {
   const [promptHistory, setPromptHistory] = useState<PromptHistory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [showFavorites, setShowFavorites] = useState(false);
 
   const loadApps = async () => {
     try {
@@ -92,8 +96,28 @@ export default function MyAppScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={[]}>
-      <StatusBar translucent backgroundColor="transparent" />
+    <GestureHandlerRootView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={[]}>
+        <StatusBar translucent backgroundColor="transparent" />
+      
+      {/* Search Bar with Favorites */}
+      <SearchBarWithFavorites
+        searchText={searchText}
+        onSearchTextChange={setSearchText}
+        showFavorites={showFavorites}
+        onToggleFavorites={() => setShowFavorites(!showFavorites)}
+        onClearSearch={() => {
+          setSearchText('');
+          setShowFavorites(false);
+        }}
+        favoriteItems={promptHistory.filter(app => app.favorite)}
+        mostUsedItems={promptHistory
+          .filter(app => (app.accessCount || 0) > 0)
+          .sort((a, b) => (b.accessCount || 0) - (a.accessCount || 0))
+          .slice(0, 10)
+        }
+        onNavigateToApp={handleNavigateToApp}
+      />
       
       {/* Main 3D Stack */}
       <Scrollable3DStack
@@ -109,6 +133,7 @@ export default function MyAppScreen({ navigation }: Props) {
         onNavigateToSettings={() => navigation.navigate('Settings')}
       />
     </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
