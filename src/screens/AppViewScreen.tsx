@@ -8,7 +8,10 @@ import {
   Dimensions,
   Alert,
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  Modal,
+  TextInput,
+  ScrollView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
@@ -269,6 +272,12 @@ export default function AppViewScreen({ navigation, route }: Props) {
   const [webViewError, setWebViewError] = useState(false);
   const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
   const [screenshotMethod, setScreenshotMethod] = useState<'external' | 'webview'>('webview');
+  const [showMenuModal, setShowMenuModal] = useState(false);
+  const [showEditTitleModal, setShowEditTitleModal] = useState(false);
+  const [showEditPromptModal, setShowEditPromptModal] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newPrompt, setNewPrompt] = useState('');
+  const [selectedModel, setSelectedModel] = useState('');
   
   const webViewRef = useRef<WebView>(null);
   const webViewContainerRef = useRef<View>(null);
@@ -330,6 +339,9 @@ export default function AppViewScreen({ navigation, route }: Props) {
       const storedApp = await AppStorageService.getApp(appId);
       if (storedApp) {
         setApp(storedApp);
+        setNewTitle(storedApp.title);
+        setNewPrompt(storedApp.prompt || '');
+        setSelectedModel(storedApp.model || 'gpt-4');
         // Increment access count
         await AppStorageService.incrementAccessCount(appId);
       } else {
@@ -458,6 +470,154 @@ export default function AppViewScreen({ navigation, route }: Props) {
     );
   };
 
+  // Menu functions
+  const openMenu = () => {
+    setShowMenuModal(true);
+  };
+
+  const closeMenu = () => {
+    setShowMenuModal(false);
+  };
+
+  const openEditTitle = () => {
+    setShowMenuModal(false);
+    setShowEditTitleModal(true);
+  };
+
+  const saveTitle = async () => {
+    if (!app || !newTitle.trim()) return;
+    
+    try {
+      const updatedApp = { ...app, title: newTitle.trim() };
+      await AppStorageService.updateApp(app.id, updatedApp);
+      setApp(updatedApp);
+      setShowEditTitleModal(false);
+      Alert.alert('Success', 'Title updated successfully');
+    } catch (error) {
+      console.error('Error updating title:', error);
+      Alert.alert('Error', 'Failed to update title');
+    }
+  };
+
+  const openEditPrompt = () => {
+    setShowMenuModal(false);
+    setShowEditPromptModal(true);
+  };
+
+  const savePromptAndRecreate = async () => {
+    if (!app || !newPrompt.trim()) return;
+    
+    Alert.alert(
+      'Recreate App',
+      'This will create a new version of the app with the updated prompt. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Recreate',
+          onPress: async () => {
+            try {
+              // TODO: Implement app recreation with new prompt
+              setShowEditPromptModal(false);
+              Alert.alert('Coming Soon', 'App recreation feature will be implemented soon');
+            } catch (error) {
+              console.error('Error recreating app:', error);
+              Alert.alert('Error', 'Failed to recreate app');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const changeModel = () => {
+    setShowMenuModal(false);
+    
+    const models = ['gpt-4', 'gpt-3.5-turbo', 'claude-3', 'gemini-pro'];
+    const modelButtons = models.map(model => ({
+      text: model === selectedModel ? `${model} (Current)` : model,
+      onPress: async () => {
+        if (model !== selectedModel && app) {
+          try {
+            const updatedApp = { ...app, model };
+            await AppStorageService.updateApp(app.id, updatedApp);
+            setApp(updatedApp);
+            setSelectedModel(model);
+            Alert.alert('Success', `Model changed to ${model}`);
+          } catch (error) {
+            console.error('Error updating model:', error);
+            Alert.alert('Error', 'Failed to update model');
+          }
+        }
+      }
+    }));
+
+    Alert.alert(
+      'Select Model',
+      'Choose the AI model for this app',
+      [...modelButtons, { text: 'Cancel', style: 'cancel' }]
+    );
+  };
+
+  const toggleFavorite = async () => {
+    if (!app) return;
+    
+    setShowMenuModal(false);
+    
+    try {
+      const updatedApp = { ...app, favorite: !app.favorite };
+      await AppStorageService.updateApp(app.id, updatedApp);
+      setApp(updatedApp);
+      Alert.alert('Success', 
+        updatedApp.favorite ? 'Added to favorites' : 'Removed from favorites'
+      );
+    } catch (error) {
+      console.error('Error updating favorite:', error);
+      Alert.alert('Error', 'Failed to update favorite status');
+    }
+  };
+
+  const deleteApp = () => {
+    if (!app) return;
+    
+    setShowMenuModal(false);
+    
+    Alert.alert(
+      'Delete App',
+      `Are you sure you want to delete "${app.title}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AppStorageService.deleteApp(app.id);
+              Alert.alert('Success', 'App deleted successfully', [
+                { text: 'OK', onPress: () => navigation.goBack() }
+              ]);
+            } catch (error) {
+              console.error('Error deleting app:', error);
+              Alert.alert('Error', 'Failed to delete app');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const fixApp = () => {
+    setShowMenuModal(false);
+    Alert.alert(
+      'Fix App (Coming Soon)',
+      'This feature will allow you to reattach the HTML file and send it back upstream for fixes.',
+      [{ text: 'OK' }]
+    );
+    // TODO: Implement fix functionality
+    // - Reattach HTML file
+    // - Send back to AI for fixes
+    // - Update app with fixed version
+  };
+
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -511,6 +671,9 @@ export default function AppViewScreen({ navigation, route }: Props) {
             </View>
 
             <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.headerButton} onPress={openMenu}>
+                <Ionicons name="ellipsis-vertical" size={24} color="rgba(0, 0, 0, 0.8)" />
+              </TouchableOpacity>
               <TouchableOpacity style={styles.headerButton} onPress={showAppInfo}>
                 <Ionicons name="information-circle" size={24} color="rgba(0, 0, 0, 0.8)" />
               </TouchableOpacity>
@@ -669,6 +832,150 @@ export default function AppViewScreen({ navigation, route }: Props) {
           <Ionicons name="refresh" size={20} color="white" />
         </TouchableOpacity> */}
       </View>
+
+      {/* Menu Modal */}
+      <Modal
+        visible={showMenuModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeMenu}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={closeMenu}
+        >
+          <View style={styles.menuModal}>
+            <Text style={styles.menuTitle}>App Options</Text>
+            
+            <TouchableOpacity style={styles.menuItem} onPress={openEditTitle}>
+              <Ionicons name="create-outline" size={24} color={AppColors.FABMain} />
+              <Text style={styles.menuItemText}>Update Title</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={openEditPrompt}>
+              <Ionicons name="refresh-outline" size={24} color={AppColors.FABMain} />
+              <Text style={styles.menuItemText}>Update Prompt & Recreate</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={changeModel}>
+              <Ionicons name="settings-outline" size={24} color={AppColors.FABMain} />
+              <Text style={styles.menuItemText}>Change Model</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={toggleFavorite}>
+              <Ionicons 
+                name={app?.favorite ? "heart" : "heart-outline"} 
+                size={24} 
+                color={app?.favorite ? "#EF4444" : AppColors.FABMain} 
+              />
+              <Text style={styles.menuItemText}>
+                {app?.favorite ? 'Remove from Favorites' : 'Add to Favorites'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={fixApp}>
+              <Ionicons name="build-outline" size={24} color="#F59E0B" />
+              <Text style={styles.menuItemText}>Fix App (Coming Soon)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.menuItem, styles.deleteMenuItem]} onPress={deleteApp}>
+              <Ionicons name="trash-outline" size={24} color="#EF4444" />
+              <Text style={[styles.menuItemText, styles.deleteMenuText]}>Delete App</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.cancelButton} onPress={closeMenu}>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Edit Title Modal */}
+      <Modal
+        visible={showEditTitleModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowEditTitleModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowEditTitleModal(false)}
+        >
+          <View style={styles.editModal}>
+            <Text style={styles.editModalTitle}>Update Title</Text>
+            <TextInput
+              style={styles.textInput}
+              value={newTitle}
+              onChangeText={setNewTitle}
+              placeholder="Enter new title"
+              autoFocus={true}
+              maxLength={100}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelModalButton]} 
+                onPress={() => setShowEditTitleModal(false)}
+              >
+                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.saveModalButton]} 
+                onPress={saveTitle}
+              >
+                <Text style={styles.saveModalButtonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Edit Prompt Modal */}
+      <Modal
+        visible={showEditPromptModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowEditPromptModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowEditPromptModal(false)}
+        >
+          <View style={styles.editModal}>
+            <Text style={styles.editModalTitle}>Update Prompt & Recreate</Text>
+            <Text style={styles.editModalSubtitle}>
+              Add additional instructions to create a new version of this app
+            </Text>
+            <ScrollView style={styles.scrollableInput}>
+              <TextInput
+                style={[styles.textInput, styles.multilineInput]}
+                value={newPrompt}
+                onChangeText={setNewPrompt}
+                placeholder="Enter additional prompt or changes..."
+                multiline={true}
+                textAlignVertical="top"
+                autoFocus={true}
+              />
+            </ScrollView>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelModalButton]} 
+                onPress={() => setShowEditPromptModal(false)}
+              >
+                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.saveModalButton]} 
+                onPress={savePromptAndRecreate}
+              >
+                <Text style={styles.saveModalButtonText}>Recreate</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -816,5 +1123,134 @@ const styles = StyleSheet.create({
     color: 'transparent',
     fontSize: 1, // Minimum font size for Android compatibility (was 0)
     opacity: 0,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  menuModal: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  menuTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'rgba(0, 0, 0, 0.8)',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  menuItemText: {
+    fontSize: 16,
+    color: 'rgba(0, 0, 0, 0.8)',
+    marginLeft: 12,
+    flex: 1,
+  },
+  deleteMenuItem: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  deleteMenuText: {
+    color: '#EF4444',
+  },
+  cancelButton: {
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(0, 0, 0, 0.6)',
+    textAlign: 'center',
+  },
+  editModal: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 24,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  editModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'rgba(0, 0, 0, 0.8)',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  editModalSubtitle: {
+    fontSize: 14,
+    color: 'rgba(0, 0, 0, 0.6)',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  multilineInput: {
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+  scrollableInput: {
+    maxHeight: 200,
+    marginBottom: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelModalButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  cancelModalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(0, 0, 0, 0.6)',
+  },
+  saveModalButton: {
+    backgroundColor: AppColors.FABMain,
+  },
+  saveModalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
   },
 });
