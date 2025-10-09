@@ -8,6 +8,8 @@ import { RootStackParamList } from './MyAppScreen';
 import { AppColors, samplePromptHistory } from '../types/PromptHistory';
 import { SecureStorageService } from '../services/SecureStorageService';
 import { ClaudeApiService } from '../services/ClaudeApiService';
+import { SeedService } from '../services/SeedService';
+import { AppStorageService } from '../services/AppStorageService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -17,15 +19,19 @@ export default function SettingsScreen({ navigation }: Props) {
   const [selectedLanguage, setSelectedLanguage] = useState('English');
   const [hasApiKey, setHasApiKey] = useState(false);
   const [isLoadingApiKey, setIsLoadingApiKey] = useState(true);
+  const [sampleAppsCount, setSampleAppsCount] = useState(0);
+  const [isManagingSampleApps, setIsManagingSampleApps] = useState(false);
 
   useFocusEffect(
     React.useCallback(() => {
       checkApiKeyStatus();
+      loadSampleAppsCount();
     }, [])
   );
 
   useEffect(() => {
     checkApiKeyStatus();
+    loadSampleAppsCount();
   }, []);
 
   const checkApiKeyStatus = async () => {
@@ -37,6 +43,75 @@ export default function SettingsScreen({ navigation }: Props) {
     } finally {
       setIsLoadingApiKey(false);
     }
+  };
+
+  const loadSampleAppsCount = async () => {
+    try {
+      const allApps = await AppStorageService.getAllApps();
+      const sampleApps = allApps.filter(app => SeedService.isSampleApp(app));
+      setSampleAppsCount(sampleApps.length);
+    } catch (error) {
+      console.error('Error loading sample apps count:', error);
+    }
+  };
+
+  const handleRemoveSampleApps = async () => {
+    Alert.alert(
+      'Remove Sample Apps',
+      'Are you sure you want to remove all sample apps? They will be restored when you restart the app.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            setIsManagingSampleApps(true);
+            try {
+              await SeedService.removeSampleApps();
+              await loadSampleAppsCount();
+              Alert.alert('Success', 'Sample apps have been removed.');
+            } catch (error) {
+              console.error('Error removing sample apps:', error);
+              Alert.alert('Error', 'Failed to remove sample apps.');
+            } finally {
+              setIsManagingSampleApps(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRestoreSampleApps = async () => {
+    Alert.alert(
+      'Restore Sample Apps',
+      'This will restore all sample apps to their original state.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Restore',
+          onPress: async () => {
+            setIsManagingSampleApps(true);
+            try {
+              await SeedService.reseedSampleApps();
+              await loadSampleAppsCount();
+              Alert.alert('Success', 'Sample apps have been restored.');
+            } catch (error) {
+              console.error('Error restoring sample apps:', error);
+              Alert.alert('Error', 'Failed to restore sample apps.');
+            } finally {
+              setIsManagingSampleApps(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const models = [
@@ -215,6 +290,51 @@ export default function SettingsScreen({ navigation }: Props) {
                 value={samplePromptHistory.filter(item => item.favorite).length.toString()}
               />
             </View>
+          </SettingsCard>
+        </View>
+
+        {/* Sample Apps Management Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Sample Apps Management</Text>
+          
+          <SettingsCard>
+            <View style={styles.settingsItem}>
+              <View>
+                <Text style={styles.settingsItemTitle}>Sample Apps</Text>
+                <Text style={styles.settingsItemDescription}>
+                  {sampleAppsCount} sample apps currently available
+                </Text>
+              </View>
+            </View>
+            
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: '#dc3545', opacity: isManagingSampleApps || sampleAppsCount === 0 ? 0.6 : 1 }]}
+                onPress={handleRemoveSampleApps}
+                disabled={isManagingSampleApps || sampleAppsCount === 0}
+              >
+                <Ionicons name="trash-outline" size={16} color="white" style={{ marginRight: 8 }} />
+                <Text style={styles.buttonText}>
+                  {isManagingSampleApps ? 'Removing...' : 'Remove All'}
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: '#28a745', opacity: isManagingSampleApps ? 0.6 : 1 }]}
+                onPress={handleRestoreSampleApps}
+                disabled={isManagingSampleApps}
+              >
+                <Ionicons name="refresh-outline" size={16} color="white" style={{ marginRight: 8 }} />
+                <Text style={styles.buttonText}>
+                  {isManagingSampleApps ? 'Restoring...' : 'Restore All'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={[styles.helperText, { marginTop: 12 }]}>
+              Sample apps are automatically restored when you restart the app. 
+              You can remove them temporarily or restore them to their original state.
+            </Text>
           </SettingsCard>
         </View>
 
@@ -424,5 +544,19 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(0, 0, 0, 0.6)',
     marginTop: 2,
+  },
+  button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    flex: 1,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

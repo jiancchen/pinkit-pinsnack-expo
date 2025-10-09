@@ -14,6 +14,7 @@ import AppViewScreen from './src/screens/AppViewScreen';
 import { RootStackParamList } from './src/screens/MyAppScreen';
 import { SecureStorageService } from './src/services/SecureStorageService';
 import { ClaudeApiService } from './src/services/ClaudeApiService';
+import { SeedService } from './src/services/SeedService';
 import { AppColors } from './src/types/PromptHistory';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -26,6 +27,9 @@ export default function App() {
 
   useEffect(() => {
     checkApiKeyStatus();
+    
+    // Initialize sample apps seeding
+    SeedService.initializeSeeding();
     
     // Configure transparent navigation bar for Android
     if (Platform.OS === 'android') {

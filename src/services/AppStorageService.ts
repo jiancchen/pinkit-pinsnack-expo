@@ -21,6 +21,7 @@ export interface StoredApp {
   request?: AppGenerationRequest;
   baseUrl: string; // For WebView persistence
   model?: string; // Claude model used for generation
+  isSample?: boolean; // Mark as sample app for seeding
 }
 
 export class AppStorageService {
