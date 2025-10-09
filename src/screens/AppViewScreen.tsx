@@ -644,7 +644,7 @@ export default function AppViewScreen({ navigation, route }: Props) {
           />
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        {/* <TouchableOpacity 
           style={[styles.controlButton, styles.rotateButton]} 
           onPress={rotateDevice}
         >
@@ -654,9 +654,9 @@ export default function AppViewScreen({ navigation, route }: Props) {
             color="white" 
             style={orientation === 'landscape' && { transform: [{ rotate: '90deg' }] }}
           />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
-        <TouchableOpacity 
+        {/* <TouchableOpacity 
           style={[styles.controlButton, styles.refreshButton]} 
           onPress={() => {
             refreshWebView();
@@ -667,7 +667,7 @@ export default function AppViewScreen({ navigation, route }: Props) {
           }}
         >
           <Ionicons name="refresh" size={20} color="white" />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
     </View>
   );

@@ -98,7 +98,7 @@ export class AppStorageService {
       
       // Parse title and category from Claude's response (format: "Title | Category")
       const { title, category } = this.parseTitleAndCategory(
-        generatedConcept?.title || `App ${appId.split('_')[1]}`,
+        generatedConcept?.title || request.description,
         'utility' // Default category
       );
       
