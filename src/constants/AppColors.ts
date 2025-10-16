@@ -5,11 +5,13 @@ export const AppColors = {
   PrimaryDeep: '#FF9800',  // Deepest yellow
 
   // FAB Colors (Orange variations)
-  FABMain: '#FFB74D',      // Golden yellow for main FAB
-  FABDarkOrange: '#E5A800', // Dark orange for menu items
-  FABDarkerOrange: '#4FC21A', // Darker orange (green)
-  FABDeepOrange: '#19A3E3',   // Deep orange (blue)
+  FABMain: '#5f0f40',      // Golden yellow for main FAB
+  FABDarkOrange: '#e36414', // Dark orange for menu items
+  FABDarkerOrange: '#9a031e', // Darker orange (green)
+  FABDeepOrange: '#fb8b24',   // Deep orange (blue)
 
+// 0f0faeff, 
+  
   // 3D Stack Card Background Colors
   StackColors: [
     '#E91E63', // Pink

@@ -5,7 +5,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Scrollable3DStack from '../components/Scrollable3DStack';
-import FloatingToolbar from '../components/FloatingToolbar';
+import LiquidGlassNavigation from '../components/LiquidGlassNavigation';
 import SearchBarWithFavorites from '../components/SearchBarWithFavorites';
 import { PromptHistory } from '../types/PromptHistory';
 import { AppColors } from '../constants/AppColors';
@@ -163,8 +163,8 @@ export default function MyAppScreen({ navigation }: Props) {
           onNavigateToApp={handleNavigateToApp}
         />
 
-        {/* Floating Toolbar */}
-        <FloatingToolbar
+        {/* Liquid Glass Navigation */}
+        <LiquidGlassNavigation
           onNavigateToMain={handleNavigateToMain}
           onNavigateToCreate={() => navigation.navigate('CreateApp')}
           onNavigateToSettings={() => navigation.navigate('Settings')}
@@ -178,5 +178,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: AppColors.Primary,
+    position: 'relative', // Add relative positioning for proper stacking
   },
 });
