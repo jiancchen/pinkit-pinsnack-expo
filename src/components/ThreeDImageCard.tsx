@@ -8,7 +8,8 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
-import { PromptHistory, AppColors } from '../types/PromptHistory';
+import { PromptHistory } from '../types/PromptHistory';
+import { AppColors } from '../constants/AppColors';
 import { Ionicons } from '@expo/vector-icons';
 import { useScreenshotState, useScreenshotActions, useScreenshotStore } from '../stores/ScreenshotStore';
 

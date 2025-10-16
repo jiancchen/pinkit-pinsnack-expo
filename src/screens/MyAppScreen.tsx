@@ -7,7 +7,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Scrollable3DStack from '../components/Scrollable3DStack';
 import FloatingToolbar from '../components/FloatingToolbar';
 import SearchBarWithFavorites from '../components/SearchBarWithFavorites';
-import { AppColors, PromptHistory } from '../types/PromptHistory';
+import { PromptHistory } from '../types/PromptHistory';
+import { AppColors } from '../constants/AppColors';
 import { AppStorageService, StoredApp } from '../services/AppStorageService';
 
 export type RootStackParamList = {

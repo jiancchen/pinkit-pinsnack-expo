@@ -15,7 +15,7 @@ import { RootStackParamList } from './src/screens/MyAppScreen';
 import { SecureStorageService } from './src/services/SecureStorageService';
 import { ClaudeApiService } from './src/services/ClaudeApiService';
 import { SeedService } from './src/services/SeedService';
-import { AppColors } from './src/types/PromptHistory';
+import { AppColors } from './src/constants/AppColors';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 

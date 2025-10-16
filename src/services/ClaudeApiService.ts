@@ -8,6 +8,7 @@ import {
 } from '../types/ClaudeApi';
 import { SecureStorageService } from './SecureStorageService';
 import { GeneratedAppConcept } from '../types/PromptHistory';
+import { TokenTrackingService } from './TokenTrackingService';
 
 export class ClaudeApiService {
   private static instance: ClaudeApiService;
@@ -103,6 +104,8 @@ export class ClaudeApiService {
     options: {
       maxTokens: number;
       temperature: number;
+      operation?: string;
+      appId?: string;
     }
   ): Promise<{ content: string }> {
     console.log('📨 [ClaudeAPI] Starting sendMessage');
@@ -140,6 +143,19 @@ export class ClaudeApiService {
         const contentText = response.data.content[0].text;
         console.log('✅ [ClaudeAPI] Successfully extracted content text');
         console.log('📊 [ClaudeAPI] Content length:', contentText?.length || 0);
+        
+        // Track token usage if available
+        if (response.data.usage) {
+          console.log('📊 [ClaudeAPI] Token usage:', response.data.usage);
+          await TokenTrackingService.trackTokenUsage(
+            response.data.usage.input_tokens,
+            response.data.usage.output_tokens,
+            this.config.model,
+            options.operation || 'api_call',
+            options.appId
+          ).catch(err => console.warn('⚠️ [ClaudeAPI] Failed to track tokens:', err));
+        }
+        
         return { content: contentText };
       } else {
         console.error('❌ [ClaudeAPI] Invalid response structure:', response.data);
@@ -171,7 +187,8 @@ export class ClaudeApiService {
     try {
       const response = await this.sendMessage(messages, {
         maxTokens: this.config!.maxTokens,
-        temperature: this.config!.temperature
+        temperature: this.config!.temperature,
+        operation: 'app_generation'
       });
       
       if (response.content && response.content.length > 0) {
@@ -276,7 +293,8 @@ export class ClaudeApiService {
 
       const response = await this.sendMessage(testMessages, {
         maxTokens: 50,
-        temperature: 0
+        temperature: 0,
+        operation: 'connection_test'
       });
 
       if (response.content && response.content.length > 0) {

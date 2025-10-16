@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { RootStackParamList } from './MyAppScreen';
-import { AppColors } from '../types/PromptHistory';
+import { AppColors } from '../constants/AppColors';
 import { AppStorageService, StoredApp } from '../services/AppStorageService';
 import { AsyncStorageService } from '../services/AsyncStorageService';
 import { ScreenshotService } from '../services/ScreenshotService';
@@ -516,7 +516,7 @@ export default function AppViewScreen({ navigation, route }: Props) {
           text: 'Recreate',
           onPress: async () => {
             try {
-              // TODO: Implement app recreation with new prompt
+              // TODO: Implement app recreation with new prompt and selected model
               setShowEditPromptModal(false);
               Alert.alert('Coming Soon', 'App recreation feature will be implemented soon');
             } catch (error) {
@@ -526,35 +526,6 @@ export default function AppViewScreen({ navigation, route }: Props) {
           }
         }
       ]
-    );
-  };
-
-  const changeModel = () => {
-    setShowMenuModal(false);
-    
-    const models = ['gpt-4', 'gpt-3.5-turbo', 'claude-3', 'gemini-pro'];
-    const modelButtons = models.map(model => ({
-      text: model === selectedModel ? `${model} (Current)` : model,
-      onPress: async () => {
-        if (model !== selectedModel && app) {
-          try {
-            const updatedApp = { ...app, model };
-            await AppStorageService.updateApp(app.id, updatedApp);
-            setApp(updatedApp);
-            setSelectedModel(model);
-            Alert.alert('Success', `Model changed to ${model}`);
-          } catch (error) {
-            console.error('Error updating model:', error);
-            Alert.alert('Error', 'Failed to update model');
-          }
-        }
-      }
-    }));
-
-    Alert.alert(
-      'Select Model',
-      'Choose the AI model for this app',
-      [...modelButtons, { text: 'Cancel', style: 'cancel' }]
     );
   };
 
@@ -858,11 +829,6 @@ export default function AppViewScreen({ navigation, route }: Props) {
               <Text style={styles.menuItemText}>Update Prompt & Recreate</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={changeModel}>
-              <Ionicons name="settings-outline" size={24} color={AppColors.FABMain} />
-              <Text style={styles.menuItemText}>Change Model</Text>
-            </TouchableOpacity>
-
             <TouchableOpacity style={styles.menuItem} onPress={toggleFavorite}>
               <Ionicons 
                 name={app?.favorite ? "heart" : "heart-outline"} 
@@ -903,28 +869,30 @@ export default function AppViewScreen({ navigation, route }: Props) {
           activeOpacity={1}
           onPress={() => setShowEditTitleModal(false)}
         >
-          <View style={styles.editModal}>
-            <Text style={styles.editModalTitle}>Update Title</Text>
+          <View style={styles.menuModal}>
+            <Text style={styles.menuTitle}>Update Title</Text>
+            
             <TextInput
-              style={styles.textInput}
+              style={[styles.textInput, { marginBottom: 20 }]}
               value={newTitle}
               onChangeText={setNewTitle}
               placeholder="Enter new title"
               autoFocus={true}
               maxLength={100}
             />
-            <View style={styles.modalButtons}>
+            
+            <View style={{ flexDirection: 'row', gap: 12 }}>
               <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelModalButton]} 
+                style={[styles.button, { backgroundColor: '#f0f0f0', flex: 1 }]} 
                 onPress={() => setShowEditTitleModal(false)}
               >
-                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+                <Text style={[styles.buttonText, { color: 'rgba(0, 0, 0, 0.6)' }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={[styles.modalButton, styles.saveModalButton]} 
+                style={[styles.button, { flex: 1 }]} 
                 onPress={saveTitle}
               >
-                <Text style={styles.saveModalButtonText}>Save</Text>
+                <Text style={styles.buttonText}>Save</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -943,34 +911,59 @@ export default function AppViewScreen({ navigation, route }: Props) {
           activeOpacity={1}
           onPress={() => setShowEditPromptModal(false)}
         >
-          <View style={styles.editModal}>
-            <Text style={styles.editModalTitle}>Update Prompt & Recreate</Text>
-            <Text style={styles.editModalSubtitle}>
+          <View style={styles.menuModal}>
+            <Text style={styles.menuTitle}>Update Prompt & Recreate</Text>
+            <Text style={styles.menuSubtitle}>
               Add additional instructions to create a new version of this app
             </Text>
-            <ScrollView style={styles.scrollableInput}>
-              <TextInput
-                style={[styles.textInput, styles.multilineInput]}
-                value={newPrompt}
-                onChangeText={setNewPrompt}
-                placeholder="Enter additional prompt or changes..."
-                multiline={true}
-                textAlignVertical="top"
-                autoFocus={true}
-              />
-            </ScrollView>
-            <View style={styles.modalButtons}>
+            
+            {/* Model Selection */}
+            <Text style={styles.modelSectionTitle}>Select AI Model:</Text>
+            <View style={styles.modelSelection}>
+              {['gpt-4', 'gpt-3.5-turbo', 'claude-3', 'gemini-pro'].map((model) => (
+                <TouchableOpacity
+                  key={model}
+                  style={[
+                    styles.modelOption,
+                    selectedModel === model && styles.selectedModelOption
+                  ]}
+                  onPress={() => setSelectedModel(model)}
+                >
+                  <Text style={[
+                    styles.modelOptionText,
+                    selectedModel === model && styles.selectedModelOptionText
+                  ]}>
+                    {model}
+                  </Text>
+                  {selectedModel === model && (
+                    <Ionicons name="checkmark" size={16} color="white" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <TextInput
+              style={[styles.textInput, styles.multilineInput, { marginBottom: 20 }]}
+              value={newPrompt}
+              onChangeText={setNewPrompt}
+              placeholder="Enter additional prompt or changes..."
+              multiline={true}
+              textAlignVertical="top"
+              autoFocus={true}
+            />
+            
+            <View style={{ flexDirection: 'row', gap: 12 }}>
               <TouchableOpacity 
-                style={[styles.modalButton, styles.cancelModalButton]} 
+                style={[styles.button, { backgroundColor: '#f0f0f0', flex: 1 }]} 
                 onPress={() => setShowEditPromptModal(false)}
               >
-                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+                <Text style={[styles.buttonText, { color: 'rgba(0, 0, 0, 0.6)' }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={[styles.modalButton, styles.saveModalButton]} 
+                style={[styles.button, { flex: 1 }]} 
                 onPress={savePromptAndRecreate}
               >
-                <Text style={styles.saveModalButtonText}>Recreate</Text>
+                <Text style={styles.buttonText}>Recreate</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1151,6 +1144,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
+  menuSubtitle: {
+    fontSize: 14,
+    color: 'rgba(0, 0, 0, 0.6)',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1183,32 +1182,6 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.6)',
     textAlign: 'center',
   },
-  editModal: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 24,
-    width: '100%',
-    maxWidth: 500,
-    maxHeight: '80%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  editModalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: 'rgba(0, 0, 0, 0.8)',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  editModalSubtitle: {
-    fontSize: 14,
-    color: 'rgba(0, 0, 0, 0.6)',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
   textInput: {
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.2)',
@@ -1222,35 +1195,40 @@ const styles = StyleSheet.create({
     minHeight: 120,
     textAlignVertical: 'top',
   },
-  scrollableInput: {
-    maxHeight: 200,
+  // Model selection styles
+  modelSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(0, 0, 0, 0.8)',
+    marginBottom: 12,
+  },
+  modelSelection: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 20,
   },
-  modalButtons: {
+  modelOption: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
     alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    gap: 6,
   },
-  cancelModalButton: {
-    backgroundColor: '#f0f0f0',
-  },
-  cancelModalButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: 'rgba(0, 0, 0, 0.6)',
-  },
-  saveModalButton: {
+  selectedModelOption: {
     backgroundColor: AppColors.FABMain,
+    borderColor: AppColors.FABMain,
   },
-  saveModalButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
+  modelOptionText: {
+    fontSize: 14,
+    color: 'rgba(0, 0, 0, 0.8)',
+  },
+  selectedModelOptionText: {
     color: 'white',
+    fontWeight: '600',
   },
 });

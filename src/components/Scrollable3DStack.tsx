@@ -8,7 +8,8 @@ import {
   NativeSyntheticEvent,
 } from 'react-native';
 import ThreeDImageCard from './ThreeDImageCard';
-import { PromptHistory, AppColors } from '../types/PromptHistory';
+import { PromptHistory } from '../types/PromptHistory';
+import { AppColors } from '../constants/AppColors';
 
 const { height: screenHeight } = Dimensions.get('window');
 

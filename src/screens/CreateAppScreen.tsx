@@ -5,7 +5,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from './MyAppScreen';
-import { AppColors } from '../types/PromptHistory';
+import { AppColors } from '../constants/AppColors';
 import { PromptGenerator, AppStyle, AppCategory, AppGenerationRequest } from '../services/PromptGenerator';
 import { ClaudeApiService } from '../services/ClaudeApiService';
 import { AppStorageService } from '../services/AppStorageService';

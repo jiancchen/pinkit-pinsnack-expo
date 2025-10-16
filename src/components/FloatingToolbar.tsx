@@ -8,7 +8,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { AppColors } from '../types/PromptHistory';
+import { AppColors } from '../constants/AppColors';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 

@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { AppColors } from '../types/PromptHistory';
+import { AppColors } from '../constants/AppColors';
 import { SecureStorageService } from '../services/SecureStorageService';
 import { ClaudeApiService } from '../services/ClaudeApiService';
 

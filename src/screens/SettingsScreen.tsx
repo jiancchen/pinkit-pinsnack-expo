@@ -5,11 +5,13 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { RootStackParamList } from './MyAppScreen';
-import { AppColors, samplePromptHistory } from '../types/PromptHistory';
+import { AppColors } from '../constants/AppColors';
+import { samplePromptHistory } from '../types/Samples';
 import { SecureStorageService } from '../services/SecureStorageService';
 import { ClaudeApiService } from '../services/ClaudeApiService';
 import { SeedService } from '../services/SeedService';
 import { AppStorageService } from '../services/AppStorageService';
+import { TokenTrackingService, TokenStats } from '../services/TokenTrackingService';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
@@ -21,17 +23,21 @@ export default function SettingsScreen({ navigation }: Props) {
   const [isLoadingApiKey, setIsLoadingApiKey] = useState(true);
   const [sampleAppsCount, setSampleAppsCount] = useState(0);
   const [isManagingSampleApps, setIsManagingSampleApps] = useState(false);
+  const [tokenStats, setTokenStats] = useState<TokenStats | null>(null);
+  const [isLoadingTokenStats, setIsLoadingTokenStats] = useState(true);
 
   useFocusEffect(
     React.useCallback(() => {
       checkApiKeyStatus();
       loadSampleAppsCount();
+      loadTokenStats();
     }, [])
   );
 
   useEffect(() => {
     checkApiKeyStatus();
     loadSampleAppsCount();
+    loadTokenStats();
   }, []);
 
   const checkApiKeyStatus = async () => {
@@ -53,6 +59,42 @@ export default function SettingsScreen({ navigation }: Props) {
     } catch (error) {
       console.error('Error loading sample apps count:', error);
     }
+  };
+
+  const loadTokenStats = async () => {
+    try {
+      setIsLoadingTokenStats(true);
+      const stats = await TokenTrackingService.getTokenStats();
+      setTokenStats(stats);
+    } catch (error) {
+      console.error('Error loading token stats:', error);
+    } finally {
+      setIsLoadingTokenStats(false);
+    }
+  };
+
+  const handleClearTokenHistory = () => {
+    Alert.alert(
+      'Clear Token History',
+      'Are you sure you want to clear all token usage history? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await TokenTrackingService.clearTokenHistory();
+              await loadTokenStats(); // Reload stats
+              Alert.alert('Success', 'Token history cleared successfully');
+            } catch (error) {
+              console.error('Error clearing token history:', error);
+              Alert.alert('Error', 'Failed to clear token history');
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleRemoveSampleApps = async () => {
@@ -290,6 +332,64 @@ export default function SettingsScreen({ navigation }: Props) {
                 value={samplePromptHistory.filter(item => item.favorite).length.toString()}
               />
             </View>
+          </SettingsCard>
+        </View>
+
+        {/* Token Usage Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Token Usage & Costs</Text>
+          
+          <SettingsCard>
+            {isLoadingTokenStats ? (
+              <View style={styles.settingsItem}>
+                <Text style={styles.settingsItemDescription}>Loading token usage statistics...</Text>
+              </View>
+            ) : tokenStats ? (
+              <View>
+                <View style={styles.settingsItem}>
+                  <View>
+                    <Text style={styles.settingsItemTitle}>Total Usage</Text>
+                    <Text style={styles.settingsItemDescription}>
+                      {tokenStats.totalTokens.toLocaleString()} tokens across {tokenStats.totalRequests} requests
+                    </Text>
+                  </View>
+                </View>
+                
+                <View style={styles.settingsItem}>
+                  <View>
+                    <Text style={styles.settingsItemTitle}>Input/Output Breakdown</Text>
+                    <Text style={styles.settingsItemDescription}>
+                      Input: {tokenStats.totalInputTokens.toLocaleString()} • Output: {tokenStats.totalOutputTokens.toLocaleString()}
+                    </Text>
+                  </View>
+                </View>
+
+                {Object.entries(tokenStats.usageByModel).length > 0 && (
+                  <View style={styles.settingsItem}>
+                    <View>
+                      <Text style={styles.settingsItemTitle}>Usage by Model</Text>
+                      {Object.entries(tokenStats.usageByModel).map(([model, usage]) => (
+                        <Text key={model} style={styles.settingsItemDescription}>
+                          {model}: {(usage.inputTokens + usage.outputTokens).toLocaleString()} tokens ({usage.requests} requests)
+                        </Text>
+                      ))}
+                    </View>
+                  </View>
+                )}
+                
+                <TouchableOpacity
+                  style={[styles.button, { backgroundColor: '#dc3545', marginTop: 16 }]}
+                  onPress={handleClearTokenHistory}
+                >
+                  <Ionicons name="trash-outline" size={16} color="white" style={{ marginRight: 8 }} />
+                  <Text style={styles.buttonText}>Clear Token History</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.settingsItem}>
+                <Text style={styles.settingsItemDescription}>No token usage data available</Text>
+              </View>
+            )}
           </SettingsCard>
         </View>
 

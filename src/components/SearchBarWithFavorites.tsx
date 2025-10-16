@@ -12,7 +12,8 @@ import {
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AppColors, PromptHistory } from '../types/PromptHistory';
+import {PromptHistory } from '../types/PromptHistory';
+import { AppColors } from '../constants/AppColors';
 import FavoriteAppCard from './FavoriteAppCard';
 import MostUsedAppCard from './MostUsedAppCard';
 
