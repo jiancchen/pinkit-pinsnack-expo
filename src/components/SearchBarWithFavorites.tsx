@@ -137,7 +137,7 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
   return (
     <View style={[styles.container, { paddingTop: insets.top }, style]}>
       {/* Search Bar */}
-      <PanGestureHandler onGestureEvent={handleSearchBarPanGesture}>
+      <View>
         <Animated.View
           style={[
             styles.searchBarContainer,
@@ -188,11 +188,11 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
             )}
           </View>
         </Animated.View>
-      </PanGestureHandler>
+      </View>
 
       {/* Favorites Section */}
       {showFavorites && searchText.length === 0 && (
-        <PanGestureHandler onGestureEvent={handleFavoritesPanGesture}>
+        <View>
           <Animated.View
             style={[
               styles.favoritesContainer,
@@ -246,7 +246,7 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
               )}
             </View>
           </Animated.View>
-        </PanGestureHandler>
+        </View>
       )}
     </View>
   );

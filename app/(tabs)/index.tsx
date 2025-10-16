@@ -1,27 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Alert, StatusBar } from 'react-native';
+import { View, StyleSheet, Alert, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useFocusEffect } from '@react-navigation/native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import Scrollable3DStack from '../components/Scrollable3DStack';
-import SearchBarWithFavorites from '../components/SearchBarWithFavorites';
-import { PromptHistory } from '../types/PromptHistory';
-import { AppColors } from '../constants/AppColors';
-import { AppStorageService, StoredApp } from '../services/AppStorageService';
-import GlassBottomTabs from '../components/GlassBottomTabs';
+import { useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
+import Scrollable3DStack from '../../src/components/Scrollable3DStack';
+import SearchBarWithFavorites from '../../src/components/SearchBarWithFavorites';
+import { PromptHistory } from '../../src/types/PromptHistory';
+import { AppColors } from '../../src/constants/AppColors';
+import { AppStorageService, StoredApp } from '../../src/services/AppStorageService';
 
-export type RootStackParamList = {
-  Welcome: undefined;
-  MyApp: undefined;
-  Settings: undefined;
-  CreateApp: undefined;
-  AppView: { appId: string };
-};
-
-type Props = NativeStackScreenProps<RootStackParamList, 'MyApp'>;
-
-export default function MyAppScreen({ navigation }: Props) {
+export default function MyAppsPage() {
+  const router = useRouter();
   const [promptHistory, setPromptHistory] = useState<PromptHistory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -74,26 +63,21 @@ export default function MyAppScreen({ navigation }: Props) {
         // Update access count
         await AppStorageService.incrementAccessCount(appId);
         
-        // Navigate to the app view screen
-        navigation.navigate('AppView', { appId });
+        // Navigate to the app view screen using Expo Router
+        router.push(`/app-view?appId=${appId}`);
         
         // Reload apps to update access count
         loadApps();
       } catch (error) {
         console.error('Error updating access count:', error);
         // Navigate anyway even if access count update fails
-        navigation.navigate('AppView', { appId });
+        router.push(`/app-view?appId=${appId}`);
       }
     }
   };
 
   const handleShowSnackbar = (message: string) => {
     Alert.alert('Info', message, [{ text: 'OK' }]);
-  };
-
-  const handleNavigateToMain = () => {
-    // Already on main screen
-    // Alert.alert('Info', 'You are already on the main screen', [{ text: 'OK' }]);
   };
 
   // Filter items based on search text
@@ -140,55 +124,28 @@ export default function MyAppScreen({ navigation }: Props) {
   };
 
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <SafeAreaView style={styles.container} edges={[]}>
-        <StatusBar translucent backgroundColor="transparent" />
-        
-        {/* Main 3D Stack */}
-        <Scrollable3DStack
-          items={filteredItems}
-          onNavigateToApp={handleNavigateToApp}
-          onShowSnackbar={handleShowSnackbar}
-        />
+    <SafeAreaView style={styles.container} edges={[]}>
+      <StatusBar translucent backgroundColor="transparent" />
+      
+      {/* Main 3D Stack */}
+      <Scrollable3DStack
+        items={filteredItems}
+        onNavigateToApp={handleNavigateToApp}
+        onShowSnackbar={handleShowSnackbar}
+      />
 
-        {/* Search Bar with Favorites */}
-        <SearchBarWithFavorites
-          searchText={searchText}
-          onSearchTextChange={handleSearchTextChange}
-          showFavorites={showFavorites}
-          onToggleFavorites={handleToggleFavorites}
-          onClearSearch={handleClearSearch}
-          favoriteItems={favoriteItems}
-          mostUsedItems={mostUsedItems}
-          onNavigateToApp={handleNavigateToApp}
-        />
-
-        {/* Glass Bottom Navigation */}
-        <GlassBottomTabs
-          activeTab="home"
-          tabs={[
-            {
-              key: 'home',
-              title: 'My Apps',
-              icon: 'home',
-              onPress: handleNavigateToMain,
-            },
-            {
-              key: 'create',
-              title: 'Create',
-              icon: 'add-circle',
-              onPress: () => navigation.navigate('CreateApp'),
-            },
-            {
-              key: 'settings',
-              title: 'Settings',
-              icon: 'settings',
-              onPress: () => navigation.navigate('Settings'),
-            },
-          ]}
-        />
-      </SafeAreaView>
-    </GestureHandlerRootView>
+      {/* Search Bar with Favorites */}
+      <SearchBarWithFavorites
+        searchText={searchText}
+        onSearchTextChange={handleSearchTextChange}
+        showFavorites={showFavorites}
+        onToggleFavorites={handleToggleFavorites}
+        onClearSearch={handleClearSearch}
+        favoriteItems={favoriteItems}
+        mostUsedItems={mostUsedItems}
+        onNavigateToApp={handleNavigateToApp}
+      />
+    </SafeAreaView>
   );
 }
 
