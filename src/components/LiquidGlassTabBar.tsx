@@ -1,47 +1,111 @@
 import React from 'react';
-import { StyleSheet, useWindowDimensions, Platform, TouchableOpacity, Text } from 'react-native';
-import {
-  Canvas,
-  Skia,
-  Fill,
-  Shader,
-  vec,
-  BackdropFilter,
-  Blur,
-  RoundedRect,
-  Group,
-} from '@shopify/react-native-skia';
+import { StyleSheet, useWindowDimensions, Platform, TouchableOpacity } from 'react-native';
+import { BlurView } from 'expo-blur';
 import {
   GestureHandlerRootView,
 } from 'react-native-gesture-handler';
 import Animated, {
+  useSharedValue,
   useDerivedValue,
+  withRepeat,
+  withTiming,
+  interpolate,
 } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { useEffect } from 'react';
 
 interface LiquidGlassTabBarProps extends BottomTabBarProps {}
 
 export default function LiquidGlassTabBar({ state, descriptors, navigation }: LiquidGlassTabBarProps) {
-  const { width, height } = useWindowDimensions();
+  const { width } = useWindowDimensions();
   
-  // Calculate pill position and size
-  const bottomOffset = Platform.OS === 'ios' ? 30 : 20;
-  const tabHeight = 60;
-  const pillWidth = width - 40;
-  const pillHeight = 60;
-  const pillX = 20; // Left position
-  const pillY = height - bottomOffset - tabHeight; // Top position
+  // Animation values
+  const progress = useSharedValue(0);
+  const rotation = useSharedValue(0);
+
+  useEffect(() => {
+    // Slow radial movement animation
+    progress.value = withRepeat(
+      withTiming(1, { duration: 4000 }),
+      -1,
+      true
+    );
+    
+    // Slow rotation animation
+    rotation.value = withRepeat(
+      withTiming(360, { duration: 8000 }),
+      -1,
+      false
+    );
+  }, []);
+
+  // Animated gradient positions
+  const animatedGradient = useDerivedValue(() => {
+    const centerX = interpolate(progress.value, [0, 1], [0.2, 0.8]);
+    const centerY = interpolate(progress.value, [0, 1], [0.3, 0.7]);
+    
+    return {
+      centerX,
+      centerY,
+      rotation: rotation.value,
+    };
+  });
+
+  // Animated gradient style
+  const animatedGradientStyle = useDerivedValue(() => {
+    return {
+      transform: [
+        { 
+          translateX: interpolate(
+            animatedGradient.value.centerX, 
+            [0, 1], 
+            [-50, 50]
+          ) 
+        },
+        { 
+          translateY: interpolate(
+            animatedGradient.value.centerY, 
+            [0, 1], 
+            [-20, 20]
+          ) 
+        },
+        { rotate: `${animatedGradient.value.rotation}deg` }
+      ]
+    };
+  });
 
   return (
     <GestureHandlerRootView style={[styles.container, { height: Platform.OS === 'ios' ? 100 : 80 }]}>
+      {/* Blur background layer */}
+      <BlurView 
+        intensity={80} 
+        tint="dark"
+        style={styles.blurContainer}
+      >
+        {/* Animated gradient overlay */}
+        <Animated.View style={[styles.gradientContainer, animatedGradientStyle]}>
+          <LinearGradient
+            colors={[
+              'rgba(255, 255, 255, 0.3)',
+              'rgba(100, 200, 255, 0.4)',
+              'rgba(255, 100, 200, 0.3)',
+              'rgba(200, 100, 255, 0.4)',
+              'rgba(100, 255, 200, 0.3)',
+              'rgba(255, 255, 255, 0.2)'
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.gradient}
+          />
+        </Animated.View>
+      </BlurView>
 
-      
       {/* Tab items overlay */}
       <Animated.View style={styles.tabContainer}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
-          const label = options.tabBarLabel ?? options.title ?? route.name;
           const isFocused = state.index === index;
 
           const onPress = () => {
@@ -76,7 +140,7 @@ export default function LiquidGlassTabBar({ state, descriptors, navigation }: Li
               style={[
                 styles.tabItem,
                 { 
-                  opacity: isFocused ? 1 : 0.6,
+                  opacity: isFocused ? 1 : 0.7,
                   transform: [{ scale: isFocused ? 1.1 : 1 }]
                 }
               ]}
@@ -84,24 +148,13 @@ export default function LiquidGlassTabBar({ state, descriptors, navigation }: Li
               <Ionicons
                 name={getIconName(route.name, isFocused) as any}
                 size={24}
-                color={isFocused ? '#FFFFFF' : '#B0B0B0'}
+                color={isFocused ? '#FFFFFF' : '#E0E0E0'}
                 style={{
-                  textShadowColor: 'rgba(0, 0, 0, 0.5)',
+                  textShadowColor: 'rgba(0, 0, 0, 0.8)',
                   textShadowOffset: { width: 0, height: 1 },
-                  textShadowRadius: 2,
+                  textShadowRadius: 3,
                 }}
               />
-              {/* <Text style={[
-                styles.tabLabel,
-                { 
-                  color: isFocused ? '#FFFFFF' : '#B0B0B0',
-                  textShadowColor: 'rgba(0, 0, 0, 0.5)',
-                  textShadowOffset: { width: 0, height: 1 },
-                  textShadowRadius: 2,
-                }
-              ]}>
-                {typeof label === 'string' ? label : route.name}
-              </Text> */}
             </TouchableOpacity>
           );
         })}
@@ -118,18 +171,38 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: 'transparent',
   },
+  blurContainer: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 30 : 20,
+    left: 20,
+    right: 20,
+    height: 60,
+    borderRadius: 30,
+    overflow: 'hidden',
+  },
+  gradientContainer: {
+    position: 'absolute',
+    top: -50,
+    left: -50,
+    right: -50,
+    bottom: -50,
+  },
+  gradient: {
+    flex: 1,
+    borderRadius: 50,
+  },
   tabContainer: {
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 30 : 20,
-    left: 40,
-    right: 40,
+    left: 20,
+    right: 20,
     height: 60,
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
     borderRadius: 30,
     paddingHorizontal: 20,
-    backgroundColor: '#0f989ddd', // Completely transparent to show shader below
+    backgroundColor: 'transparent',
   },
   tabItem: {
     alignItems: 'center',
