@@ -1,20 +1,32 @@
-import { NativeTabs, Icon, Label } from 'expo-router/unstable-native-tabs';
+import { Tabs } from 'expo-router';
+import LiquidGlassTabBar from '../../src/components/LiquidGlassTabBar';
 
 export default function TabLayout() {
   return (
-    <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <Label>My Apps</Label>
-        <Icon sf="house.fill" drawable="home" />
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="create">
-        <Label>Create</Label>
-        <Icon sf="plus.circle.fill" drawable="add_circle" />
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="settings">
-        <Icon sf="gear" drawable="settings" />
-        <Label>Settings</Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+      }}
+      tabBar={(props) => <LiquidGlassTabBar {...props} />}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'My Apps',
+        }}
+      />
+      <Tabs.Screen
+        name="create"
+        options={{
+          title: 'Create',
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+        }}
+      />
+    </Tabs>
   );
 }
