@@ -91,7 +91,7 @@ export default function LiquidGlassTabBar({ state, descriptors, navigation }: Li
                   textShadowRadius: 2,
                 }}
               />
-              <Text style={[
+              {/* <Text style={[
                 styles.tabLabel,
                 { 
                   color: isFocused ? '#FFFFFF' : '#B0B0B0',
@@ -101,7 +101,7 @@ export default function LiquidGlassTabBar({ state, descriptors, navigation }: Li
                 }
               ]}>
                 {typeof label === 'string' ? label : route.name}
-              </Text>
+              </Text> */}
             </TouchableOpacity>
           );
         })}
@@ -121,15 +121,15 @@ const styles = StyleSheet.create({
   tabContainer: {
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 30 : 20,
-    left: 20,
-    right: 20,
+    left: 40,
+    right: 40,
     height: 60,
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
     borderRadius: 30,
     paddingHorizontal: 20,
-    backgroundColor: '#bbaaffdd', // Completely transparent to show shader below
+    backgroundColor: '#0f989ddd', // Completely transparent to show shader below
   },
   tabItem: {
     alignItems: 'center',
