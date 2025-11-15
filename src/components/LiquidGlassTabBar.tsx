@@ -90,7 +90,7 @@ export default function LiquidGlassTabBar({ state, descriptors, navigation }: Li
             colors={[
               'rgba(255, 255, 255, 0.3)',
               'rgba(100, 200, 255, 0.4)',
-              'rgba(255, 100, 200, 0.3)',
+              'rgba(100, 255, 227, 0.3)',
               'rgba(200, 100, 255, 0.4)',
               'rgba(100, 255, 200, 0.3)',
               'rgba(255, 255, 255, 0.2)'
@@ -174,8 +174,8 @@ const styles = StyleSheet.create({
   blurContainer: {
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 30 : 20,
-    left: 20,
-    right: 20,
+    left: 60,
+    right: 60,
     height: 60,
     borderRadius: 30,
     overflow: 'hidden',
@@ -194,8 +194,8 @@ const styles = StyleSheet.create({
   tabContainer: {
     position: 'absolute',
     bottom: Platform.OS === 'ios' ? 30 : 20,
-    left: 20,
-    right: 20,
+    left: 60,
+    right: 60,
     height: 60,
     flexDirection: 'row',
     justifyContent: 'space-around',
