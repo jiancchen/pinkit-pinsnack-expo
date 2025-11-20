@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,11 +10,12 @@ import { ClaudeApiService } from '../../src/services/ClaudeApiService';
 import { SeedService } from '../../src/services/SeedService';
 import { AppStorageService } from '../../src/services/AppStorageService';
 import { TokenTrackingService, TokenStats } from '../../src/services/TokenTrackingService';
+import { CLAUDE_MODELS, MODEL_INFO } from '../../src/types/ClaudeApi';
 
 export default function SettingsPage() {
   const router = useRouter();
   const [temperature, setTemperature] = useState(0.3);
-  const [selectedModel, setSelectedModel] = useState('Claude 3 Haiku');
+  const [selectedModel, setSelectedModel] = useState<string>(CLAUDE_MODELS.HAIKU_3);
   const [selectedLanguage, setSelectedLanguage] = useState('English');
   const [hasApiKey, setHasApiKey] = useState(false);
   const [isLoadingApiKey, setIsLoadingApiKey] = useState(true);
@@ -22,6 +23,7 @@ export default function SettingsPage() {
   const [isManagingSampleApps, setIsManagingSampleApps] = useState(false);
   const [tokenStats, setTokenStats] = useState<TokenStats | null>(null);
   const [isLoadingTokenStats, setIsLoadingTokenStats] = useState(true);
+  const [showModelSelector, setShowModelSelector] = useState(false);
 
   useEffect(() => {
     checkApiKeyStatus();
@@ -200,6 +202,24 @@ export default function SettingsPage() {
     Alert.alert('Terms of Service', 'Read our terms and conditions', [{ text: 'OK' }]);
   };
 
+  const handleModelSelect = async (model: string) => {
+    try {
+      setSelectedModel(model);
+      setShowModelSelector(false);
+      
+      // Update the Claude API service configuration
+      const claudeService = ClaudeApiService.getInstance();
+      const apiKey = await SecureStorageService.getApiKey();
+      if (apiKey) {
+        await claudeService.updateConfig(apiKey, { model, maxTokens: 4000, temperature });
+        Alert.alert('Success', `Model updated to ${MODEL_INFO[model]?.name || model}`);
+      }
+    } catch (error) {
+      console.error('Error updating model:', error);
+      Alert.alert('Error', 'Failed to update model');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={[]}>
       <StatusBar translucent backgroundColor="transparent" />
@@ -244,12 +264,15 @@ export default function SettingsPage() {
           <SettingsCard>
             <View style={styles.settingGroup}>
               <Text style={styles.settingLabel}>Model</Text>
-              <TouchableOpacity style={styles.dropdown}>
-                <Text style={styles.dropdownText}>{selectedModel}</Text>
+              <TouchableOpacity 
+                style={styles.dropdown}
+                onPress={() => setShowModelSelector(true)}
+              >
+                <Text style={styles.dropdownText}>{MODEL_INFO[selectedModel]?.name || selectedModel}</Text>
                 <Ionicons name="chevron-down" size={20} color="#666" />
               </TouchableOpacity>
               <Text style={styles.helperText}>
-                Current model: {selectedModel} - {selectedModel === 'Claude 3 Haiku' ? '$0.25/$1.25 per million tokens' : selectedModel === 'Claude 3.5 Sonnet' ? '$3/$15 per million tokens' : '$15/$75 per million tokens'}
+                Current model: {MODEL_INFO[selectedModel]?.name || selectedModel} - {MODEL_INFO[selectedModel]?.displayPricing || 'Pricing unavailable'}
               </Text>
             </View>
 
@@ -436,6 +459,57 @@ export default function SettingsPage() {
           </SettingsCard>
         </View>
       </ScrollView>
+
+      {/* Model Selector Modal */}
+      <Modal
+        visible={showModelSelector}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowModelSelector(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowModelSelector(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Claude Model</Text>
+            
+            {Object.entries(CLAUDE_MODELS).map(([key, modelId]) => (
+              <TouchableOpacity
+                key={modelId}
+                style={[
+                  styles.modelOption,
+                  selectedModel === modelId && styles.modelOptionSelected
+                ]}
+                onPress={() => handleModelSelect(modelId)}
+              >
+                <View style={styles.modelOptionContent}>
+                  <Text style={[
+                    styles.modelOptionTitle,
+                    selectedModel === modelId && styles.modelOptionTitleSelected
+                  ]}>
+                    {MODEL_INFO[modelId]?.name || modelId}
+                  </Text>
+                  <Text style={styles.modelOptionPricing}>
+                    {MODEL_INFO[modelId]?.displayPricing || 'Pricing unavailable'}
+                  </Text>
+                </View>
+                {selectedModel === modelId && (
+                  <Ionicons name="checkmark-circle" size={24} color={AppColors.FABMain} />
+                )}
+              </TouchableOpacity>
+            ))}
+            
+            <TouchableOpacity 
+              style={styles.modalCancelButton}
+              onPress={() => setShowModelSelector(false)}
+            >
+              <Text style={styles.modalCancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -633,5 +707,67 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 40,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'rgba(0, 0, 0, 0.8)',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  modelOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  modelOptionSelected: {
+    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+    borderColor: AppColors.FABMain,
+  },
+  modelOptionContent: {
+    flex: 1,
+  },
+  modelOptionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(0, 0, 0, 0.8)',
+    marginBottom: 4,
+  },
+  modelOptionTitleSelected: {
+    color: 'rgba(0, 0, 0, 0.9)',
+  },
+  modelOptionPricing: {
+    fontSize: 12,
+    color: 'rgba(0, 0, 0, 0.6)',
+  },
+  modalCancelButton: {
+    backgroundColor: '#f0f0f0',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 12,
+  },
+  modalCancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(0, 0, 0, 0.6)',
+    textAlign: 'center',
   },
 });

@@ -1,73 +1,851 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Alert, StatusBar, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  StatusBar,
+  Dimensions,
+  Alert,
+  Platform,
+  ActivityIndicator,
+  Modal,
+  TextInput,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { WebView } from 'react-native-webview';
+import { Ionicons } from '@expo/vector-icons';
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { AppColors } from '../src/constants/AppColors';
 import { AppStorageService, StoredApp } from '../src/services/AppStorageService';
+import { AsyncStorageService } from '../src/services/AsyncStorageService';
+import { ScreenshotService } from '../src/services/ScreenshotService';
+import { WebViewScreenshotService } from '../src/services/WebViewScreenshotService';
+import { emitScreenshotCaptured, emitScreenshotError, emitScreenshotLoading } from '../src/stores/ScreenshotStore';
 
 export default function AppViewPage() {
   const router = useRouter();
   const { appId } = useLocalSearchParams<{ appId: string }>();
+  
   const [app, setApp] = useState<StoredApp | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
+  const [dimensions, setDimensions] = useState(Dimensions.get('window'));
+  const [webViewError, setWebViewError] = useState(false);
+  const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
+  const [screenshotMethod, setScreenshotMethod] = useState<'external' | 'webview'>('webview');
+  const [showMenuModal, setShowMenuModal] = useState(false);
+  const [showEditTitleModal, setShowEditTitleModal] = useState(false);
+  const [showEditPromptModal, setShowEditPromptModal] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newPrompt, setNewPrompt] = useState('');
+  const [selectedModel, setSelectedModel] = useState('');
+  
+  const webViewRef = useRef<WebView>(null);
+  const webViewContainerRef = useRef<View>(null);
 
   useEffect(() => {
     if (appId) {
-      loadApp(appId);
+      loadApp(appId as string);
     }
+    setupOrientationListener();
+    return () => {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    };
   }, [appId]);
+
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener('change', ({ window }) => {
+      setDimensions(window);
+      setOrientation(window.width > window.height ? 'landscape' : 'portrait');
+    });
+
+    return () => subscription?.remove();
+  }, []);
+
+  useEffect(() => {
+    if (app) {
+      const timer = setTimeout(() => {
+        if (webViewContainerRef.current && !isCapturingScreenshot) {
+          console.log('🔄 [AppView] Attempting early screenshot capture for:', app.id);
+          captureScreenshot();
+        }
+      }, 2500);
+
+      return () => {
+        clearTimeout(timer);
+        if (!isCapturingScreenshot && webViewContainerRef.current) {
+          console.log('🏃 [AppView] Quick screenshot capture before navigation for:', app.id);
+          captureScreenshot().catch(console.warn);
+        }
+      };
+    }
+  }, [app?.id]);
+
+  const setupOrientationListener = async () => {
+    const currentOrientation = await ScreenOrientation.getOrientationAsync();
+    setOrientation(
+      currentOrientation === ScreenOrientation.Orientation.LANDSCAPE_LEFT ||
+      currentOrientation === ScreenOrientation.Orientation.LANDSCAPE_RIGHT
+        ? 'landscape' 
+        : 'portrait'
+    );
+  };
+
+  const injectAppId = (html: string, appId: string): string => {
+    console.log('🔧 [AppView] Injecting storage isolation for app:', appId);
+    
+    const storageOverride = `
+    <script>
+      (function() {
+        console.log('🔧 [WebView] Setting up error handling and storage isolation');
+        
+        const originalAdd = DOMTokenList.prototype.add;
+        DOMTokenList.prototype.add = function(...tokens) {
+          const validTokens = tokens.filter(token => token && typeof token === 'string' && token.trim() !== '');
+          if (validTokens.length > 0) {
+            return originalAdd.apply(this, validTokens);
+          }
+          console.warn('🚨 [WebView] Prevented empty token addition to classList');
+        };
+        
+        const originalRemove = DOMTokenList.prototype.remove;
+        DOMTokenList.prototype.remove = function(...tokens) {
+          const validTokens = tokens.filter(token => token && typeof token === 'string' && token.trim() !== '');
+          if (validTokens.length > 0) {
+            return originalRemove.apply(this, validTokens);
+          }
+          console.warn('🚨 [WebView] Prevented empty token removal from classList');
+        };
+        
+        window.addEventListener('error', function(event) {
+          console.error('🚨 [WebView] Uncaught error:', event.error);
+          event.preventDefault();
+          return true;
+        });
+        
+        window.addEventListener('unhandledrejection', function(event) {
+          console.error('🚨 [WebView] Unhandled promise rejection:', event.reason);
+          event.preventDefault();
+        });
+        
+        window.addEventListener('DOMContentLoaded', function() {
+          console.log('🔧 [WebView] Setting up todo app safety patches');
+          
+          const originalQuerySelector = document.querySelector;
+          const originalQuerySelectorAll = document.querySelectorAll;
+          
+          document.querySelector = function(selector) {
+            try {
+              return originalQuerySelector.call(this, selector);
+            } catch (e) {
+              console.warn('🚨 [WebView] Invalid selector prevented:', selector, e);
+              return null;
+            }
+          };
+          
+          document.querySelectorAll = function(selector) {
+            try {
+              return originalQuerySelectorAll.call(this, selector);
+            } catch (e) {
+              console.warn('🚨 [WebView] Invalid selector prevented:', selector, e);
+              return document.createDocumentFragment().querySelectorAll('never-matches');
+            }
+          };
+        });
+      })();
+      
+      (function() {
+        const APP_ID = '${appId}';
+        console.log('🔧 [WebView] Initializing COMPLETE storage isolation for app:', APP_ID);
+        
+        const isolatedStorage = {
+          _data: {},
+          
+          setItem: function(key, value) {
+            const isolatedKey = APP_ID + '_' + key;
+            console.log('📦 [IsolatedStorage] setItem:', key, '->', isolatedKey);
+            this._data[isolatedKey] = String(value);
+            
+            try {
+              window.originalLocalStorage.setItem(isolatedKey, String(value));
+            } catch(e) {
+              console.warn('⚠️ [IsolatedStorage] Backup localStorage failed:', e);
+            }
+          },
+          
+          getItem: function(key) {
+            const isolatedKey = APP_ID + '_' + key;
+            
+            if (this._data.hasOwnProperty(isolatedKey)) {
+              return this._data[isolatedKey];
+            }
+            
+            try {
+              const value = window.originalLocalStorage.getItem(isolatedKey);
+              if (value !== null) {
+                this._data[isolatedKey] = value;
+                return value;
+              }
+            } catch(e) {
+              console.warn('⚠️ [IsolatedStorage] Backup localStorage read failed:', e);
+            }
+            
+            return null;
+          },
+          
+          removeItem: function(key) {
+            const isolatedKey = APP_ID + '_' + key;
+            delete this._data[isolatedKey];
+            
+            try {
+              window.originalLocalStorage.removeItem(isolatedKey);
+            } catch(e) {
+              console.warn('⚠️ [IsolatedStorage] Backup localStorage remove failed:', e);
+            }
+          },
+          
+          clear: function() {
+            Object.keys(this._data).forEach(key => {
+              if (key.startsWith(APP_ID + '_')) {
+                delete this._data[key];
+              }
+            });
+            
+            try {
+              const keys = Object.keys(window.originalLocalStorage);
+              keys.forEach(key => {
+                if (key.startsWith(APP_ID + '_')) {
+                  window.originalLocalStorage.removeItem(key);
+                }
+              });
+            } catch(e) {
+              console.warn('⚠️ [IsolatedStorage] Backup localStorage clear failed:', e);
+            }
+          },
+          
+          get length() {
+            return Object.keys(this._data).filter(key => key.startsWith(APP_ID + '_')).length;
+          },
+          
+          key: function(index) {
+            const appKeys = Object.keys(this._data).filter(key => key.startsWith(APP_ID + '_'));
+            const fullKey = appKeys[index];
+            return fullKey ? fullKey.replace(APP_ID + '_', '') : null;
+          }
+        };
+        
+        window.originalLocalStorage = window.localStorage;
+        
+        Object.defineProperty(window, 'localStorage', {
+          value: isolatedStorage,
+          writable: false,
+          configurable: false
+        });
+        
+        console.log('✅ [WebView] localStorage COMPLETELY REPLACED for app:', APP_ID);
+        
+        window.addEventListener('message', function(event) {
+          try {
+            const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+            if (message.type === 'trigger_screenshot' && message.appId === APP_ID) {
+              console.log('📸 [WebView] Received screenshot trigger for app:', APP_ID);
+              if (window.captureWebViewScreenshot) {
+                window.captureWebViewScreenshot();
+              }
+            }
+          } catch (e) {}
+        });
+        
+      })();
+    </script>`;
+    
+    const headRegex = /(<head[^>]*>)/i;
+    if (headRegex.test(html)) {
+      const screenshotScript = screenshotMethod === 'webview' 
+        ? `<script>${WebViewScreenshotService.generateScreenshotScript(appId)}</script>`
+        : '';
+      
+      return html.replace(headRegex, `$1${storageOverride}${screenshotScript}`);
+    }
+    
+    const screenshotScript = screenshotMethod === 'webview' 
+      ? `<script>${WebViewScreenshotService.generateScreenshotScript(appId)}</script>`
+      : '';
+    return storageOverride + screenshotScript + html;
+  };
 
   const loadApp = async (id: string) => {
     try {
       setIsLoading(true);
-      const appData = await AppStorageService.getApp(id);
-      if (appData) {
-        setApp(appData);
+      const storedApp = await AppStorageService.getApp(id);
+      if (storedApp) {
+        setApp(storedApp);
+        setNewTitle(storedApp.title);
+        setNewPrompt(storedApp.prompt || '');
+        setSelectedModel(storedApp.model || 'gpt-4');
+        await AppStorageService.incrementAccessCount(id);
       } else {
-        Alert.alert('Error', 'App not found.');
-        router.back();
+        Alert.alert('Error', 'App not found', [
+          { text: 'OK', onPress: () => router.back() }
+        ]);
       }
     } catch (error) {
       console.error('Error loading app:', error);
-      Alert.alert('Error', 'Failed to load app.');
-      router.back();
+      Alert.alert('Error', 'Failed to load app', [
+        { text: 'OK', onPress: () => router.back() }
+      ]);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const toggleFullscreen = async () => {
+    if (isFullscreen) {
+      setIsFullscreen(false);
+      await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+    } else {
+      setIsFullscreen(true);
+      await ScreenOrientation.unlockAsync();
+    }
+  };
+
+  const handleWebViewScreenshot = async (appId: string, dataURL: string, method: string) => {
+    try {
+      console.log(`📸 [AppView] Processing WebView screenshot for app: ${appId}, method: ${method}`);
+      emitScreenshotLoading(appId, true);
+      setIsCapturingScreenshot(true);
+      
+      const processedUri = await WebViewScreenshotService.processWebViewScreenshot(appId, dataURL, method);
+      
+      if (processedUri) {
+        console.log('✅ [AppView] WebView screenshot processed and stored:', processedUri);
+        emitScreenshotCaptured(appId, processedUri, 'webview');
+      } else {
+        console.warn('⚠️ [AppView] WebView screenshot processing failed');
+        emitScreenshotError(appId, 'WebView screenshot processing failed');
+        setScreenshotMethod('external');
+        setTimeout(() => captureScreenshot(), 1000);
+      }
+    } catch (error) {
+      console.error('💥 [AppView] WebView screenshot handling error:', error);
+      emitScreenshotError(appId, error instanceof Error ? error.message : 'WebView screenshot failed');
+      setScreenshotMethod('external');
+      setTimeout(() => captureScreenshot(), 1000);
+    } finally {
+      setIsCapturingScreenshot(false);
+      emitScreenshotLoading(appId, false);
+    }
+  };
+
+  const captureScreenshot = async () => {
+    if (!app || isCapturingScreenshot) return;
+    
+    console.log('📸 [AppView] Screenshot capture handled by WebView JavaScript injection');
+    
+    if (webViewRef.current) {
+      try {
+        console.log('📸 [AppView] Triggering WebView screenshot capture...');
+        webViewRef.current.postMessage(JSON.stringify({
+          type: 'trigger_screenshot',
+          appId: app.id
+        }));
+      } catch (error) {
+        console.warn('⚠️ [AppView] Failed to trigger WebView screenshot:', error);
+        await ScreenshotService.createFallbackScreenshot(app.id, app.title, app.style);
+      }
+    } else {
+      console.warn('⚠️ [AppView] No WebView ref available, creating fallback screenshot');
+      await ScreenshotService.createFallbackScreenshot(app.id, app.title, app.style);
+    }
+  };
+
+  const refreshWebView = () => {
+    setWebViewError(false);
+    webViewRef.current?.reload();
+  };
+
+  const shareApp = () => {
+    Alert.alert(
+      'Share App',
+      `Share "${app?.title}" with others`,
+      [
+        { text: 'Copy Link', onPress: () => {} },
+        { text: 'Export HTML', onPress: () => {} },
+        { text: 'Cancel', style: 'cancel' }
+      ]
+    );
+  };
+
+  const showAppInfo = () => {
+    if (!app) return;
+    
+    Alert.alert(
+      app.title,
+      `Created: ${new Date(app.timestamp).toLocaleDateString()}\n` +
+      `Style: ${app.style}\n` +
+      `Category: ${app.category}\n` +
+      `Model Used: ${app.model || 'Unknown'}\n` +
+      `Access Count: ${app.accessCount}\n` +
+      `Status: ${app.status}`,
+      [{ text: 'OK' }]
+    );
+  };
+
+  const openMenu = () => setShowMenuModal(true);
+  const closeMenu = () => setShowMenuModal(false);
+
+  const openEditTitle = () => {
+    setShowMenuModal(false);
+    setShowEditTitleModal(true);
+  };
+
+  const saveTitle = async () => {
+    if (!app || !newTitle.trim()) return;
+    
+    try {
+      const updatedApp = { ...app, title: newTitle.trim() };
+      await AppStorageService.updateApp(app.id, updatedApp);
+      setApp(updatedApp);
+      setShowEditTitleModal(false);
+      Alert.alert('Success', 'Title updated successfully');
+    } catch (error) {
+      console.error('Error updating title:', error);
+      Alert.alert('Error', 'Failed to update title');
+    }
+  };
+
+  const openEditPrompt = () => {
+    setShowMenuModal(false);
+    setShowEditPromptModal(true);
+  };
+
+  const savePromptAndRecreate = async () => {
+    if (!app || !newPrompt.trim()) return;
+    
+    Alert.alert(
+      'Recreate App',
+      'This will create a new version of the app with the updated prompt. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Recreate',
+          onPress: async () => {
+            try {
+              setShowEditPromptModal(false);
+              Alert.alert('Coming Soon', 'App recreation feature will be implemented soon');
+            } catch (error) {
+              console.error('Error recreating app:', error);
+              Alert.alert('Error', 'Failed to recreate app');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const toggleFavorite = async () => {
+    if (!app) return;
+    
+    setShowMenuModal(false);
+    
+    try {
+      const updatedApp = { ...app, favorite: !app.favorite };
+      await AppStorageService.updateApp(app.id, updatedApp);
+      setApp(updatedApp);
+      Alert.alert('Success', 
+        updatedApp.favorite ? 'Added to favorites' : 'Removed from favorites'
+      );
+    } catch (error) {
+      console.error('Error updating favorite:', error);
+      Alert.alert('Error', 'Failed to update favorite status');
+    }
+  };
+
+  const deleteApp = () => {
+    if (!app) return;
+    
+    setShowMenuModal(false);
+    
+    Alert.alert(
+      'Delete App',
+      `Are you sure you want to delete "${app.title}"? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AppStorageService.deleteApp(app.id);
+              Alert.alert('Success', 'App deleted successfully', [
+                { text: 'OK', onPress: () => router.back() }
+              ]);
+            } catch (error) {
+              console.error('Error deleting app:', error);
+              Alert.alert('Error', 'Failed to delete app');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const fixApp = () => {
+    setShowMenuModal(false);
+    Alert.alert(
+      'Fix App (Coming Soon)',
+      'This feature will allow you to reattach the HTML file and send it back upstream for fixes.',
+      [{ text: 'OK' }]
+    );
   };
 
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={AppColors.FABDeepOrange} />
+          <ActivityIndicator size="large" color={AppColors.FABMain} />
+          <Text style={styles.loadingText}>Loading app...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   if (!app) {
-    return null;
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Ionicons name="alert-circle" size={64} color="#EF4444" />
+          <Text style={styles.errorText}>App not found</Text>
+          <TouchableOpacity style={styles.button} onPress={() => router.back()}>
+            <Text style={styles.buttonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
   }
 
+  const webViewStyle = {
+    flex: 1,
+    width: dimensions.width,
+    height: isFullscreen ? dimensions.height : dimensions.height - (Platform.OS === 'ios' ? 160 : 140)
+  };
+
   return (
-    <SafeAreaView style={styles.container} edges={[]}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      
-      <WebView
-        source={{ html: app.html }}
-        style={styles.webview}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        allowsInlineMediaPlayback={true}
-        mediaPlaybackRequiresUserAction={false}
-        onError={(error) => {
-          console.error('WebView error:', error);
-          Alert.alert('Error', 'Failed to load the app.');
-        }}
+    <View style={[styles.container, isFullscreen && styles.fullscreenContainer]}>
+      <StatusBar 
+        barStyle={isFullscreen ? "light-content" : "dark-content"}
+        backgroundColor={isFullscreen ? "#000" : AppColors.Primary}
+        hidden={isFullscreen}
       />
-    </SafeAreaView>
+      
+      {!isFullscreen && (
+        <SafeAreaView>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
+              <Ionicons name="arrow-back" size={24} color="rgba(0, 0, 0, 0.8)" />
+            </TouchableOpacity>
+            
+            <View style={styles.headerContent}>
+              <Text style={styles.headerTitle} numberOfLines={1}>{app.title}</Text>
+              <Text style={styles.headerSubtitle}>{app.style} • {app.category}</Text>
+            </View>
+
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.headerButton} onPress={openMenu}>
+                <Ionicons name="ellipsis-vertical" size={24} color="rgba(0, 0, 0, 0.8)" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.headerButton} onPress={showAppInfo}>
+                <Ionicons name="information-circle" size={24} color="rgba(0, 0, 0, 0.8)" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.headerButton} onPress={shareApp}>
+                <Ionicons name="share" size={24} color="rgba(0, 0, 0, 0.8)" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </SafeAreaView>
+      )}
+
+      <View style={styles.webViewContainer} ref={webViewContainerRef}>
+        {webViewError ? (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle" size={48} color="#EF4444" />
+            <Text style={styles.errorText}>Failed to load app</Text>
+            <Text style={styles.errorSubtext}>There was an issue loading the web content</Text>
+            <TouchableOpacity style={styles.button} onPress={refreshWebView}>
+              <Text style={styles.buttonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <WebView
+            ref={webViewRef}
+            source={{ 
+              html: injectAppId(app.html, app.id),
+              baseUrl: app.baseUrl || `https://sandbox/${app.id}/`
+            }}
+            style={webViewStyle}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            startInLoadingState={true}
+            webviewDebuggingEnabled={true}
+            mixedContentMode="compatibility"
+            allowsInlineMediaPlayback={true}
+            mediaPlaybackRequiresUserAction={false}
+            onError={() => setWebViewError(true)}
+            onLoadEnd={() => {
+              setWebViewError(false);
+              const delay = Platform.OS === 'ios' ? 1500 : 1000;
+              setTimeout(() => {
+                captureScreenshot();
+              }, delay);
+            }}
+            renderLoading={() => (
+              <View style={styles.webViewLoading}>
+                <ActivityIndicator size="large" color={AppColors.FABMain} />
+              </View>
+            )}
+            onMessage={(event: any) => {
+              try {
+                const message = JSON.parse(event.nativeEvent.data);
+                console.log('📨 WebView message:', message);
+                
+                switch (message.type) {
+                  case 'storage_set':
+                    AsyncStorageService.setItem(message.key, message.value);
+                    break;
+                    
+                  case 'storage_get':
+                    AsyncStorageService.getItem(message.key).then((value: string | null) => {
+                      webViewRef.current?.postMessage(JSON.stringify({
+                        type: 'storage_response',
+                        key: message.key,
+                        value: value
+                      }));
+                    });
+                    break;
+                    
+                  case 'storage_remove':
+                    AsyncStorageService.removeItem(message.key);
+                    break;
+                    
+                  case 'storage_clear':
+                    AsyncStorageService.clearAppData(message.appId);
+                    break;
+                    
+                  case 'screenshot_captured':
+                    handleWebViewScreenshot(message.appId, message.dataURL, message.method);
+                    break;
+                    
+                  case 'screenshot_error':
+                    console.error('💥 [WebView] Screenshot error:', message.error);
+                    if (screenshotMethod === 'webview') {
+                      console.log('🔄 [AppView] Falling back to external screenshot method');
+                      setScreenshotMethod('external');
+                      setTimeout(() => captureScreenshot(), 1000);
+                    }
+                    break;
+                    
+                  default:
+                    console.log('📝 Other WebView message:', message);
+                }
+              } catch (error) {
+                console.warn('Failed to parse WebView message:', error);
+              }
+            }}
+          />
+        )}
+        
+        {!webViewError && (
+          <View style={styles.screenshotOverlay} pointerEvents="none">
+            <Text style={styles.appTitleOverlay}>{app.title}</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={[
+        styles.floatingControls,
+        isFullscreen && styles.floatingControlsFullscreen,
+        orientation === 'landscape' && styles.floatingControlsLandscape
+      ]}>
+        <TouchableOpacity 
+          style={[styles.controlButton, styles.fullscreenButton]} 
+          onPress={toggleFullscreen}
+        >
+          <Ionicons 
+            name={isFullscreen ? "contract" : "expand"} 
+            size={20} 
+            color="white" 
+          />
+        </TouchableOpacity>
+      </View>
+
+      {/* Menu Modal */}
+      <Modal
+        visible={showMenuModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={closeMenu}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={closeMenu}
+        >
+          <View style={styles.menuModal}>
+            <Text style={styles.menuTitle}>App Options</Text>
+            
+            <TouchableOpacity style={styles.menuItem} onPress={openEditTitle}>
+              <Ionicons name="create-outline" size={24} color={AppColors.FABMain} />
+              <Text style={styles.menuItemText}>Update Title</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={openEditPrompt}>
+              <Ionicons name="refresh-outline" size={24} color={AppColors.FABMain} />
+              <Text style={styles.menuItemText}>Update Prompt & Recreate</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={toggleFavorite}>
+              <Ionicons 
+                name={app?.favorite ? "heart" : "heart-outline"} 
+                size={24} 
+                color={app?.favorite ? "#EF4444" : AppColors.FABMain} 
+              />
+              <Text style={styles.menuItemText}>
+                {app?.favorite ? 'Remove from Favorites' : 'Add to Favorites'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={fixApp}>
+              <Ionicons name="build-outline" size={24} color="#F59E0B" />
+              <Text style={styles.menuItemText}>Fix App (Coming Soon)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.menuItem, styles.deleteMenuItem]} onPress={deleteApp}>
+              <Ionicons name="trash-outline" size={24} color="#EF4444" />
+              <Text style={[styles.menuItemText, styles.deleteMenuText]}>Delete App</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.cancelButton} onPress={closeMenu}>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Edit Title Modal */}
+      <Modal
+        visible={showEditTitleModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowEditTitleModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowEditTitleModal(false)}
+        >
+          <View style={styles.menuModal}>
+            <Text style={styles.menuTitle}>Update Title</Text>
+            
+            <TextInput
+              style={[styles.textInput, { marginBottom: 20 }]}
+              value={newTitle}
+              onChangeText={setNewTitle}
+              placeholder="Enter new title"
+              autoFocus={true}
+              maxLength={100}
+            />
+            
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity 
+                style={[styles.button, { backgroundColor: '#f0f0f0', flex: 1 }]} 
+                onPress={() => setShowEditTitleModal(false)}
+              >
+                <Text style={[styles.buttonText, { color: 'rgba(0, 0, 0, 0.6)' }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.button, { flex: 1 }]} 
+                onPress={saveTitle}
+              >
+                <Text style={styles.buttonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Edit Prompt Modal */}
+      <Modal
+        visible={showEditPromptModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowEditPromptModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowEditPromptModal(false)}
+        >
+          <View style={styles.menuModal}>
+            <Text style={styles.menuTitle}>Update Prompt & Recreate</Text>
+            <Text style={styles.menuSubtitle}>
+              Add additional instructions to create a new version of this app
+            </Text>
+            
+            <Text style={styles.modelSectionTitle}>Select AI Model:</Text>
+            <View style={styles.modelSelection}>
+              {['gpt-4', 'gpt-3.5-turbo', 'claude-3', 'gemini-pro'].map((model) => (
+                <TouchableOpacity
+                  key={model}
+                  style={[
+                    styles.modelOption,
+                    selectedModel === model && styles.selectedModelOption
+                  ]}
+                  onPress={() => setSelectedModel(model)}
+                >
+                  <Text style={[
+                    styles.modelOptionText,
+                    selectedModel === model && styles.selectedModelOptionText
+                  ]}>
+                    {model}
+                  </Text>
+                  {selectedModel === model && (
+                    <Ionicons name="checkmark" size={16} color="white" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <TextInput
+              style={[styles.textInput, styles.multilineInput, { marginBottom: 20 }]}
+              value={newPrompt}
+              onChangeText={setNewPrompt}
+              placeholder="Enter additional prompt or changes..."
+              multiline={true}
+              textAlignVertical="top"
+              autoFocus={true}
+            />
+            
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity 
+                style={[styles.button, { backgroundColor: '#f0f0f0', flex: 1 }]} 
+                onPress={() => setShowEditPromptModal(false)}
+              >
+                <Text style={[styles.buttonText, { color: 'rgba(0, 0, 0, 0.6)' }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.button, { flex: 1 }]} 
+                onPress={savePromptAndRecreate}
+              >
+                <Text style={styles.buttonText}>Recreate</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
   );
 }
 
@@ -76,12 +854,250 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: AppColors.Primary,
   },
+  fullscreenContainer: {
+    backgroundColor: '#000',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: AppColors.Primary,
+  },
+  headerButton: {
+    padding: 8,
+  },
+  headerContent: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'rgba(0, 0, 0, 0.8)',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: 'rgba(0, 0, 0, 0.6)',
+    marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: 'row',
+  },
+  webViewContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  webViewLoading: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: AppColors.Primary,
   },
-  webview: {
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: 'rgba(0, 0, 0, 0.6)',
+  },
+  errorContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  errorText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#EF4444',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  errorSubtext: {
+    fontSize: 14,
+    color: 'rgba(0, 0, 0, 0.6)',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  button: {
+    backgroundColor: AppColors.FABMain,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  floatingControls: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    flexDirection: 'column',
+    gap: 12,
+  },
+  floatingControlsFullscreen: {
+    bottom: Platform.OS === 'ios' ? 40 : 20,
+  },
+  floatingControlsLandscape: {
+    bottom: 10,
+    right: 10,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  controlButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  fullscreenButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+  },
+  screenshotOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: -1,
+  },
+  appTitleOverlay: {
+    color: 'transparent',
+    fontSize: 1,
+    opacity: 0,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  menuModal: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  menuTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'rgba(0, 0, 0, 0.8)',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  menuSubtitle: {
+    fontSize: 14,
+    color: 'rgba(0, 0, 0, 0.6)',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  menuItemText: {
+    fontSize: 16,
+    color: 'rgba(0, 0, 0, 0.8)',
+    marginLeft: 12,
+    flex: 1,
+  },
+  deleteMenuItem: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  },
+  deleteMenuText: {
+    color: '#EF4444',
+  },
+  cancelButton: {
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(0, 0, 0, 0.6)',
+    textAlign: 'center',
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  multilineInput: {
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+  modelSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'rgba(0, 0, 0, 0.8)',
+    marginBottom: 12,
+  },
+  modelSelection: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 20,
+  },
+  modelOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    gap: 6,
+  },
+  selectedModelOption: {
+    backgroundColor: AppColors.FABMain,
+    borderColor: AppColors.FABMain,
+  },
+  modelOptionText: {
+    fontSize: 14,
+    color: 'rgba(0, 0, 0, 0.8)',
+  },
+  selectedModelOptionText: {
+    color: 'white',
+    fontWeight: '600',
   },
 });

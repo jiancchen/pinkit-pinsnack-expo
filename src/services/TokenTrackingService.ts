@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { estimateCost as calculateCost } from '../types/ClaudeApi';
 
 export interface TokenUsage {
   input_tokens: number;
@@ -193,23 +194,10 @@ export class TokenTrackingService {
   /**
    * Get estimated cost based on token usage (approximate)
    * These are rough estimates and actual costs may vary
+   * @deprecated Use estimateCost from ClaudeApi.ts instead
    */
   static estimateCost(inputTokens: number, outputTokens: number, model: string): number {
-    // Approximate pricing per 1K tokens (in USD)
-    const pricing: Record<string, { input: number; output: number }> = {
-      'claude-3-5-sonnet-20240620': { input: 0.003, output: 0.015 },
-      'claude-3-haiku-20240307': { input: 0.00025, output: 0.00125 },
-      'claude-3-opus-20240229': { input: 0.015, output: 0.075 },
-      'gpt-4': { input: 0.03, output: 0.06 },
-      'gpt-3.5-turbo': { input: 0.0015, output: 0.002 }
-    };
-
-    const modelPricing = pricing[model] || pricing['claude-3-haiku-20240307']; // Default to cheapest
-    
-    const inputCost = (inputTokens / 1000) * modelPricing.input;
-    const outputCost = (outputTokens / 1000) * modelPricing.output;
-    
-    return inputCost + outputCost;
+    return calculateCost(inputTokens, outputTokens, model);
   }
 
   /**
