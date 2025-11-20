@@ -86,7 +86,7 @@ export default function LiquidGlassTabBar({ state, descriptors, navigation }: Li
       >
         {/* Animated gradient overlay */}
         <Animated.View style={[styles.gradientContainer, animatedGradientStyle]}>
-          <LinearGradient
+          {/* <LinearGradient
             colors={[
               'rgba(255, 255, 255, 0.3)',
               'rgba(100, 200, 255, 0.4)',
@@ -94,6 +94,15 @@ export default function LiquidGlassTabBar({ state, descriptors, navigation }: Li
               'rgba(200, 100, 255, 0.4)',
               'rgba(100, 255, 200, 0.3)',
               'rgba(255, 255, 255, 0.2)'
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.gradient}
+          /> */}
+          <LinearGradient
+            colors={[
+              'rgba(95, 42, 194, 0.48)',
+              'rgba(180, 41, 255, 0.4)'
             ]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
