@@ -164,6 +164,11 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
               style={styles.searchInput}
               value={searchText}
               onChangeText={onSearchTextChange}
+              onFocus={() => {
+                if (!showFavorites && searchText.length === 0) {
+                  onToggleFavorites();
+                }
+              }}
               placeholder="Search your apps..."
               placeholderTextColor="#999"
               returnKeyType="search"

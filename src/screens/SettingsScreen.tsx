@@ -12,13 +12,12 @@ import { ClaudeApiService } from '../services/ClaudeApiService';
 import { SeedService } from '../services/SeedService';
 import { AppStorageService } from '../services/AppStorageService';
 import { TokenTrackingService, TokenStats } from '../services/TokenTrackingService';
-import { CLAUDE_MODELS, MODEL_INFO } from '../types/ClaudeApi';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Settings'>;
 
 export default function SettingsScreen({ navigation }: Props) {
   const [temperature, setTemperature] = useState(0.3);
-  const [selectedModel, setSelectedModel] = useState<string>(CLAUDE_MODELS.HAIKU_3);
+  const [selectedModel, setSelectedModel] = useState('Claude 3 Haiku');
   const [selectedLanguage, setSelectedLanguage] = useState('English');
   const [hasApiKey, setHasApiKey] = useState(false);
   const [isLoadingApiKey, setIsLoadingApiKey] = useState(true);
@@ -157,6 +156,12 @@ export default function SettingsScreen({ navigation }: Props) {
     );
   };
 
+  const models = [
+    'Claude 3 Haiku',
+    'Claude 3.5 Sonnet',
+    'Claude 3 Opus',
+  ];
+
   const languages = [
     'English',
     'Spanish',
@@ -265,11 +270,11 @@ export default function SettingsScreen({ navigation }: Props) {
             <View style={styles.settingGroup}>
               <Text style={styles.settingLabel}>Model</Text>
               <TouchableOpacity style={styles.dropdown}>
-                <Text style={styles.dropdownText}>{MODEL_INFO[selectedModel]?.name || selectedModel}</Text>
+                <Text style={styles.dropdownText}>{selectedModel}</Text>
                 <Ionicons name="chevron-down" size={20} color="#666" />
               </TouchableOpacity>
               <Text style={styles.helperText}>
-                Current model: {MODEL_INFO[selectedModel]?.name || selectedModel} - {MODEL_INFO[selectedModel]?.displayPricing || 'Pricing unavailable'}
+                Current model: {selectedModel} - {selectedModel === 'Claude 3 Haiku' ? '$0.25/$1.25 per million tokens' : selectedModel === 'Claude 3.5 Sonnet' ? '$3/$15 per million tokens' : '$15/$75 per million tokens'}
               </Text>
             </View>
 
