@@ -35,9 +35,12 @@
       },
       "permissions": [
         "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "INTERNET",
         "ACCESS_NETWORK_STATE"
       ],
-      "usesCleartextTraffic": false
+      "usesCleartextTraffic": false,
+      "package": "com.jcchen13.MyApp"
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -48,7 +51,16 @@
       "expo-secure-store",
       "expo-screen-orientation",
       "expo-navigation-bar",
-      "expo-router"
+      "expo-router",
+      [
+        "react-native-edge-to-edge",
+        {
+          "android": {
+            "parentTheme": "Default",
+            "enforceNavigationBarContrast": false
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

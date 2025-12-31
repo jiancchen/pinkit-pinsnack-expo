@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Alert, StatusBar } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { useRouter } from 'expo-router';
 import Scrollable3DStack from '../../src/components/Scrollable3DStack';
@@ -124,7 +123,7 @@ export default function MyAppsPage() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={[]}>
+    <View style={styles.container}>
       <StatusBar translucent backgroundColor="transparent" />
       
       {/* Main 3D Stack */}
@@ -145,7 +144,7 @@ export default function MyAppsPage() {
         mostUsedItems={mostUsedItems}
         onNavigateToApp={handleNavigateToApp}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 

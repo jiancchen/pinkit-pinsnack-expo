@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Platform, View, ActivityIndicator } from 'react-native';
 import * as NavigationBar from 'expo-navigation-bar';
 import { useEffect, useState } from 'react';
+import { SystemBars } from 'react-native-edge-to-edge';
 import { SecureStorageService } from '../src/services/SecureStorageService';
 import { ClaudeApiService } from '../src/services/ClaudeApiService';
 import { SeedService } from '../src/services/SeedService';
@@ -22,10 +23,12 @@ export default function RootLayout() {
     // Initialize sample apps seeding
     SeedService.initializeSeeding();
     
-    // Configure transparent navigation bar for Android
+    // Configure navigation bar for Android - make it transparent and edge-to-edge
     if (Platform.OS === 'android') {
-      NavigationBar.setBackgroundColorAsync('transparent');
-      NavigationBar.setVisibilityAsync('hidden');
+      NavigationBar.setBackgroundColorAsync('#00000000'); // Fully transparent
+      NavigationBar.setButtonStyleAsync('light'); // Light colored icons
+      NavigationBar.setPositionAsync('absolute'); // Content renders behind it
+      // NavigationBar.setVisibilityAsync("hidden")
     }
   }, []);
 
@@ -60,8 +63,9 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
+    <SafeAreaProvider>
+      <SystemBars style="light" />
+      <GestureHandlerRootView style={{ flex: 1 }}>
         <Stack
           screenOptions={{
             headerShown: false,
@@ -71,7 +75,7 @@ export default function RootLayout() {
           <Stack.Screen name="app-view" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="light" translucent backgroundColor="transparent" />
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+      </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }
