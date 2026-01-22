@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   TextInput,
@@ -7,9 +7,10 @@ import {
   Text,
   Animated,
   ScrollView,
-  Dimensions,
+  Keyboard,
+  Pressable,
 } from 'react-native';
-import { PanGestureHandler, State } from 'react-native-gesture-handler';
+import { State } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {PromptHistory } from '../types/PromptHistory';
@@ -41,6 +42,13 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
   style,
 }) => {
   const insets = useSafeAreaInsets();
+
+  const isPopupVisible = showFavorites && searchText.length === 0;
+  const closePopup = React.useCallback(() => {
+    if (showFavorites) {
+      onToggleFavorites();
+    }
+  }, [showFavorites, onToggleFavorites]);
   
   // Use useRef for animated values to avoid conflicts
   const searchBarOffset = React.useRef(new Animated.Value(0)).current;
@@ -77,6 +85,22 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
       ]).start();
     }
   }, [showFavorites]);
+
+  useEffect(() => {
+    const onKeyboardHide = () => {
+      if (isPopupVisible) {
+        closePopup();
+      }
+    };
+
+    const didHide = Keyboard.addListener('keyboardDidHide', onKeyboardHide);
+    const willHide = Keyboard.addListener('keyboardWillHide', onKeyboardHide);
+
+    return () => {
+      didHide.remove();
+      willHide.remove();
+    };
+  }, [closePopup, isPopupVisible]);
 
   // Gesture thresholds based on Android implementation
   const SWIPE_THRESHOLD = -100; // Swipe up threshold to dismiss favorites
@@ -135,124 +159,130 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }, style]}>
-      {/* Search Bar */}
-      <View>
-        <Animated.View
-          style={[
-            styles.searchBarContainer,
-            {
-              transform: [{ translateY: searchBarOffset }],
-            },
-          ]}
-        >
-          <View style={styles.searchBar}>
-            {/* Star/Favorites Toggle */}
-            <TouchableOpacity
-              style={styles.starButton}
-              onPress={onToggleFavorites}
-            >
-              <Ionicons
-                name="star"
-                size={24}
-                color={showFavorites ? AppColors.FABMain : '#999'}
-              />
-            </TouchableOpacity>
+    <View
+      style={[
+        styles.container,
+        { paddingTop: insets.top },
+        style,
+        isPopupVisible ? styles.containerExpanded : null,
+      ]}
+    >
+      {isPopupVisible && (
+        <Pressable
+          style={styles.backdrop}
+          onPress={() => {
+            Keyboard.dismiss();
+            closePopup();
+          }}
+        />
+      )}
 
-            {/* Search Input */}
-            <TextInput
-              style={styles.searchInput}
-              value={searchText}
-              onChangeText={onSearchTextChange}
-              onFocus={() => {
-                if (!showFavorites && searchText.length === 0) {
-                  onToggleFavorites();
-                }
-              }}
-              placeholder="Search your apps..."
-              placeholderTextColor="#999"
-              returnKeyType="search"
-            />
-
-            {/* Leading Search Icon */}
-            <Ionicons
-              name="search"
-              size={20}
-              color="#999"
-              style={styles.searchIcon}
-            />
-
-            {/* Clear Button */}
-            {searchText.length > 0 && (
-              <TouchableOpacity
-                style={styles.clearButton}
-                onPress={onClearSearch}
-              >
-                <Ionicons name="close" size={20} color="#999" />
-              </TouchableOpacity>
-            )}
-          </View>
-        </Animated.View>
-      </View>
-
-      {/* Favorites Section */}
-      {showFavorites && searchText.length === 0 && (
+      <View style={styles.content}>
+        {/* Search Bar */}
         <View>
           <Animated.View
             style={[
-              styles.favoritesContainer,
+              styles.searchBarContainer,
               {
-                opacity: favoritesOpacity,
-                transform: [{ translateY: favoritesOffset }],
+                transform: [{ translateY: searchBarOffset }],
               },
             ]}
           >
-            <View style={styles.favoritesContent}>
-              {/* Favorite Apps Section */}
-              <Text style={styles.sectionTitle}>Favorite Apps</Text>
-              {favoriteItems.length > 0 ? (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.horizontalScrollContent}
-                >
-                  {favoriteItems.map((item) => (
-                    <FavoriteAppCard
-                      key={item.id}
-                      historyItem={item}
-                      onNavigateToApp={onNavigateToApp}
-                    />
-                  ))}
-                </ScrollView>
-              ) : (
-                <Text style={styles.emptyText}>No favorite apps yet</Text>
-              )}
+            <View style={styles.searchBar}>
+              {/* Star/Favorites Toggle */}
+              <TouchableOpacity style={styles.starButton} onPress={onToggleFavorites}>
+                <Ionicons
+                  name="star"
+                  size={24}
+                  color={showFavorites ? AppColors.FABMain : '#999'}
+                />
+              </TouchableOpacity>
 
-              {/* Most Used Apps Section */}
-              <Text style={[styles.sectionTitle, { marginTop: 20 }]}>
-                Most Used Apps
-              </Text>
-              {mostUsedItems.length > 0 ? (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.horizontalScrollContent}
-                >
-                  {mostUsedItems.map((item) => (
-                    <MostUsedAppCard
-                      key={item.id}
-                      historyItem={item}
-                      onNavigateToApp={onNavigateToApp}
-                    />
-                  ))}
-                </ScrollView>
-              ) : (
-                <Text style={styles.emptyText}>No usage data yet</Text>
+              {/* Search Input */}
+              <TextInput
+                style={styles.searchInput}
+                value={searchText}
+                onChangeText={onSearchTextChange}
+                onFocus={() => {
+                  if (!showFavorites && searchText.length === 0) {
+                    onToggleFavorites();
+                  }
+                }}
+                placeholder="Search your apps..."
+                placeholderTextColor="#999"
+                returnKeyType="search"
+              />
+
+              {/* Leading Search Icon */}
+              <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+
+              {/* Clear Button */}
+              {searchText.length > 0 && (
+                <TouchableOpacity style={styles.clearButton} onPress={onClearSearch}>
+                  <Ionicons name="close" size={20} color="#999" />
+                </TouchableOpacity>
               )}
             </View>
           </Animated.View>
         </View>
-      )}
+
+        {/* Favorites Section */}
+        {isPopupVisible && (
+          <View>
+            <Animated.View
+              style={[
+                styles.favoritesContainer,
+                {
+                  opacity: favoritesOpacity,
+                  transform: [{ translateY: favoritesOffset }],
+                },
+              ]}
+            >
+              <View style={styles.favoritesContent}>
+                {/* Favorite Apps Section */}
+                <Text style={styles.sectionTitle}>Favorite Apps</Text>
+                {favoriteItems.length > 0 ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.horizontalScrollContent}
+                  >
+                    {favoriteItems.map((item) => (
+                      <FavoriteAppCard
+                        key={item.id}
+                        historyItem={item}
+                        onNavigateToApp={onNavigateToApp}
+                      />
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <Text style={styles.emptyText}>No favorite apps yet</Text>
+                )}
+
+                {/* Most Used Apps Section */}
+                <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Most Used Apps</Text>
+                {mostUsedItems.length > 0 ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.horizontalScrollContent}
+                  >
+                    {mostUsedItems.map((item) => (
+                      <MostUsedAppCard
+                        key={item.id}
+                        historyItem={item}
+                        onNavigateToApp={onNavigateToApp}
+                      />
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <Text style={styles.emptyText}>No usage data yet</Text>
+                )}
+              </View>
+            </Animated.View>
+          </View>
+        )}
+      </View>
     </View>
   );
 };
@@ -266,6 +296,15 @@ const styles = StyleSheet.create({
     zIndex: 1000,
     paddingHorizontal: 16,
     paddingBottom: 8,
+  },
+  containerExpanded: {
+    bottom: 0,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  content: {
+    zIndex: 1,
   },
   searchBarContainer: {
     marginBottom: 8,

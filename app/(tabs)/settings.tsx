@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../../src/constants/AppColors';
 import { samplePromptHistory } from '../../src/types/Samples';
@@ -30,6 +30,15 @@ export default function SettingsPage() {
     loadSampleAppsCount();
     loadTokenStats();
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      // When returning from /welcome (or other screens), refresh state.
+      checkApiKeyStatus();
+      loadSampleAppsCount();
+      loadTokenStats();
+    }, [])
+  );
 
   const checkApiKeyStatus = async () => {
     try {
@@ -155,12 +164,12 @@ export default function SettingsPage() {
         [
           { text: 'Test Connection', onPress: testApiConnection },
           { text: 'Remove API Key', onPress: removeApiKey, style: 'destructive' },
-          { text: 'Update API Key', onPress: () => router.push('/welcome' as any) },
+          { text: 'Update API Key', onPress: () => router.push('/welcome') },
           { text: 'Cancel', style: 'cancel' }
         ]
       );
     } else {
-      router.push('/welcome' as any);
+      router.push('/welcome');
     }
   };
 
