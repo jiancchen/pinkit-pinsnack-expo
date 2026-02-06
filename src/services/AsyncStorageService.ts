@@ -1,4 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createLogger } from '../utils/Logger';
+
+const log = createLogger('WebViewStorage');
 
 /**
  * Service for handling WebView app data storage with unlimited size
@@ -14,9 +17,9 @@ export class AsyncStorageService {
     try {
       const storageKey = this.WEBVIEW_STORAGE_PREFIX + key;
       await AsyncStorage.setItem(storageKey, value);
-      console.log('💾 AsyncStorage.setItem:', key, 'size:', value.length);
+      log.debug('AsyncStorage.setItem:', key, 'size:', value.length);
     } catch (error) {
-      console.error('Failed to store WebView data:', error);
+      log.error('Failed to store WebView data:', error);
       throw error;
     }
   }
@@ -28,10 +31,10 @@ export class AsyncStorageService {
     try {
       const storageKey = this.WEBVIEW_STORAGE_PREFIX + key;
       const value = await AsyncStorage.getItem(storageKey);
-      console.log('📖 AsyncStorage.getItem:', key, 'found:', value !== null);
+      log.debug('AsyncStorage.getItem:', key, 'found:', value !== null);
       return value;
     } catch (error) {
-      console.error('Failed to retrieve WebView data:', error);
+      log.error('Failed to retrieve WebView data:', error);
       return null;
     }
   }
@@ -43,9 +46,9 @@ export class AsyncStorageService {
     try {
       const storageKey = this.WEBVIEW_STORAGE_PREFIX + key;
       await AsyncStorage.removeItem(storageKey);
-      console.log('🗑️ AsyncStorage.removeItem:', key);
+      log.debug('AsyncStorage.removeItem:', key);
     } catch (error) {
-      console.error('Failed to remove WebView data:', error);
+      log.error('Failed to remove WebView data:', error);
     }
   }
 
@@ -61,10 +64,10 @@ export class AsyncStorageService {
       
       if (appKeys.length > 0) {
         await AsyncStorage.multiRemove(appKeys);
-        console.log('🧹 Cleared', appKeys.length, 'storage items for app:', appId);
+        log.info('Cleared', appKeys.length, 'storage items for app:', appId);
       }
     } catch (error) {
-      console.error('Failed to clear app data:', error);
+      log.error('Failed to clear app data:', error);
     }
   }
 
@@ -104,7 +107,7 @@ export class AsyncStorageService {
         estimatedSize: totalEstimatedSize
       };
     } catch (error) {
-      console.error('Failed to get storage stats:', error);
+      log.error('Failed to get storage stats:', error);
       return { totalKeys: 0, webViewKeys: 0, estimatedSize: 0 };
     }
   }
@@ -117,7 +120,7 @@ export class AsyncStorageService {
       const stats = await this.getStorageStats();
       
       if (stats.estimatedSize > maxSizeBytes) {
-        console.warn('WebView storage approaching limits, cleaning up...');
+        log.warn('WebView storage approaching limits, cleaning up...');
         
         const allKeys = await AsyncStorage.getAllKeys();
         const webViewKeys = allKeys.filter(key => 
@@ -128,10 +131,10 @@ export class AsyncStorageService {
         const keysToRemove = webViewKeys.slice(0, Math.floor(webViewKeys.length * 0.1));
         await AsyncStorage.multiRemove(keysToRemove);
         
-        console.log('🧽 Cleaned up', keysToRemove.length, 'storage items');
+        log.info('Cleaned up', keysToRemove.length, 'storage items');
       }
     } catch (error) {
-      console.error('Failed to cleanup storage:', error);
+      log.error('Failed to cleanup storage:', error);
     }
   }
 }

@@ -258,14 +258,13 @@ export class AppStorageService {
         ` : '<p>Generating your app with AI...</p>'}
     </div>
     
-    <script>
-        // Persistent storage demo
-        const appData = JSON.parse(localStorage.getItem('appData') || '{}');
-        console.log('App data loaded:', appData);
-        
-        // Save some demo data
-        localStorage.setItem('appData', JSON.stringify({
-            id: '${request.description.slice(0, 20)}',
+	    <script>
+	        // Persistent storage demo
+	        const appData = JSON.parse(localStorage.getItem('appData') || '{}');
+	        
+	        // Save some demo data
+	        localStorage.setItem('appData', JSON.stringify({
+	            id: '${request.description.slice(0, 20)}',
             visits: (appData.visits || 0) + 1,
             lastVisit: new Date().toISOString()
         }));

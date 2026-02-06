@@ -18,6 +18,9 @@ import {
   MODEL_INFO,
   PRICING_AS_OF_DISPLAY
 } from '../../src/types/ClaudeApi';
+import { createLogger } from '../../src/utils/Logger';
+
+const log = createLogger('Settings');
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -54,7 +57,7 @@ export default function SettingsPage() {
       const hasKey = await SecureStorageService.hasApiKey();
       setHasApiKey(hasKey);
     } catch (error) {
-      console.error('Error checking API key status:', error);
+      log.error('Error checking API key status:', error);
     } finally {
       setIsLoadingApiKey(false);
     }
@@ -66,7 +69,7 @@ export default function SettingsPage() {
       setSelectedModel(config.model);
       setTemperature(config.temperature);
     } catch (error) {
-      console.error('Error loading Claude config:', error);
+      log.error('Error loading Claude config:', error);
     }
   };
 
@@ -76,7 +79,7 @@ export default function SettingsPage() {
       const sampleApps = allApps.filter(app => SeedService.isSampleApp(app));
       setSampleAppsCount(sampleApps.length);
     } catch (error) {
-      console.error('Error loading sample apps count:', error);
+      log.error('Error loading sample apps count:', error);
     }
   };
 
@@ -86,7 +89,7 @@ export default function SettingsPage() {
       const stats = await TokenTrackingService.getTokenStats();
       setTokenStats(stats);
     } catch (error) {
-      console.error('Error loading token stats:', error);
+      log.error('Error loading token stats:', error);
     } finally {
       setIsLoadingTokenStats(false);
     }
@@ -107,7 +110,7 @@ export default function SettingsPage() {
               await loadTokenStats();
               Alert.alert('Success', 'Token history cleared successfully');
             } catch (error) {
-              console.error('Error clearing token history:', error);
+              log.error('Error clearing token history:', error);
               Alert.alert('Error', 'Failed to clear token history');
             }
           }
@@ -135,7 +138,7 @@ export default function SettingsPage() {
               await loadSampleAppsCount();
               Alert.alert('Success', 'Sample apps have been removed.');
             } catch (error) {
-              console.error('Error removing sample apps:', error);
+              log.error('Error removing sample apps:', error);
               Alert.alert('Error', 'Failed to remove sample apps.');
             } finally {
               setIsManagingSampleApps(false);
@@ -164,7 +167,7 @@ export default function SettingsPage() {
               await loadSampleAppsCount();
               Alert.alert('Success', 'Sample apps have been restored.');
             } catch (error) {
-              console.error('Error restoring sample apps:', error);
+              log.error('Error restoring sample apps:', error);
               Alert.alert('Error', 'Failed to restore sample apps.');
             } finally {
               setIsManagingSampleApps(false);
@@ -260,7 +263,7 @@ export default function SettingsPage() {
         Alert.alert('Success', `Model updated to ${getModelDisplayName(model)}`);
       }
     } catch (error) {
-      console.error('Error updating model:', error);
+      log.error('Error updating model:', error);
       Alert.alert('Error', 'Failed to update model');
     }
   };

@@ -7,6 +7,9 @@ import SearchBarWithFavorites from '../../src/components/SearchBarWithFavorites'
 import { PromptHistory } from '../../src/types/PromptHistory';
 import { AppColors } from '../../src/constants/AppColors';
 import { AppStorageService, StoredApp } from '../../src/services/AppStorageService';
+import { createLogger } from '../../src/utils/Logger';
+
+const log = createLogger('MyApps');
 
 export default function MyAppsPage() {
   const router = useRouter();
@@ -37,7 +40,7 @@ export default function MyAppsPage() {
       
       setPromptHistory(converted);
     } catch (error) {
-      console.error('Failed to load apps:', error);
+      log.error('Failed to load apps:', error);
       Alert.alert('Error', 'Failed to load your apps. Please try again.');
     } finally {
       setIsLoading(false);
@@ -68,7 +71,7 @@ export default function MyAppsPage() {
         // Reload apps to update access count
         loadApps();
       } catch (error) {
-        console.error('Error updating access count:', error);
+        log.error('Error updating access count:', error);
         // Navigate anyway even if access count update fails
         router.push(`/app-view?appId=${appId}`);
       }

@@ -8,6 +8,9 @@ import { PromptGenerator, AppStyle, AppCategory, AppGenerationRequest } from '..
 import { ClaudeApiService } from '../../src/services/ClaudeApiService';
 import { AppStorageService } from '../../src/services/AppStorageService';
 import { SecureStorageService } from '../../src/services/SecureStorageService';
+import { createLogger } from '../../src/utils/Logger';
+
+const log = createLogger('CreateApp');
 
 const styles = {
   minimalist: { name: 'Minimalist', emoji: '🎨' },
@@ -74,7 +77,7 @@ export default function CreatePage() {
       const hasKey = await SecureStorageService.hasApiKey();
       setHasApiKey(hasKey);
     } catch (error) {
-      console.error('Error checking API key status:', error);
+      log.error('Error checking API key status:', error);
       setHasApiKey(false);
     } finally {
       setIsCheckingApiKey(false);
@@ -88,16 +91,16 @@ export default function CreatePage() {
   );
 
   const handleSubmit = async () => {
-    console.log('🚀 [CreateApp] Starting app generation process');
+    log.debug('Starting app generation process');
     
     if (!prompt.trim()) {
-      console.log('❌ [CreateApp] Empty prompt provided');
+      log.warn('Empty prompt provided');
       Alert.alert('Error', 'Please enter an app description');
       return;
     }
 
     if (!hasApiKey) {
-      console.log('❌ [CreateApp] No API key configured');
+      log.warn('No API key configured');
       Alert.alert(
         'API Key Required',
         'You need to set up your Claude API key to generate apps. Would you like to add one now?',
@@ -115,26 +118,26 @@ export default function CreatePage() {
       platform: 'mobile'
     };
     
-    console.log('📝 [CreateApp] Generation request:', request);
+    log.debug('Generation request:', request);
 
     // Validate the request
     const validation = PromptGenerator.validateRequest(request);
     if (!validation.isValid) {
-      console.log('❌ [CreateApp] Request validation failed:', validation.errors);
+      log.warn('Request validation failed:', validation.errors);
       Alert.alert('Validation Error', validation.errors.join('\n'));
       return;
     }
     
-    console.log('✅ [CreateApp] Request validation passed');
+    log.debug('Request validation passed');
 
     setIsLoading(true);
     
     try {
-      console.log('🔧 [CreateApp] Initializing Claude service...');
+      log.debug('Initializing Claude service...');
       const claudeService = ClaudeApiService.getInstance();
       
       if (!claudeService.isConfigured()) {
-        console.log('❌ [CreateApp] Claude service not configured');
+        log.warn('Claude service not configured');
         Alert.alert(
           'Configuration Error',
           'There was an issue with your API configuration. Please check your settings.',
@@ -143,29 +146,29 @@ export default function CreatePage() {
         return;
       }
       
-      console.log('✅ [CreateApp] Claude service configured');
+      log.debug('Claude service configured');
 
       // Get the current model being used
       const currentConfig = claudeService.getCurrentConfig();
       const modelUsed = currentConfig?.model || 'unknown';
-      console.log('🤖 [CreateApp] Using model:', modelUsed);
+      log.info('Using model:', modelUsed);
       
       // First, save the app with placeholder content
-      console.log('💾 [CreateApp] Saving app with placeholder content...');
+      log.debug('Saving app with placeholder content...');
       const savedApp = await AppStorageService.saveApp(request, undefined, undefined, modelUsed);
-      console.log('✅ [CreateApp] App saved with ID:', savedApp.id);
+      log.debug('App saved with ID:', savedApp.id);
 
       // Generate the prompt
-      console.log('📝 [CreateApp] Generating prompt...');
+      log.debug('Generating prompt...');
       const generatedPrompt = PromptGenerator.generatePrompt(request);
-      console.log('📝 [CreateApp] Generated prompt length:', generatedPrompt.length);
-      console.log('📝 [CreateApp] Generated prompt preview:', generatedPrompt.substring(0, 200) + '...');
+      log.debug('Generated prompt length:', generatedPrompt.length);
+      log.verbose('Generated prompt preview:', generatedPrompt.substring(0, 200) + '...');
       
       // Call Claude API
-      console.log('🌐 [CreateApp] Calling Claude API...');
+      log.debug('Calling Claude API...');
       const generatedResponse = await claudeService.generateAppConcept(generatedPrompt);
-      console.log('✅ [CreateApp] Received response from Claude API');
-      console.log('📊 [CreateApp] Generated response:', {
+      log.debug('Received response from Claude API');
+      log.verbose('Generated response:', {
         name: generatedResponse.name,
         category: generatedResponse.category,
         htmlLength: generatedResponse.html?.length || 0,
@@ -173,7 +176,7 @@ export default function CreatePage() {
       });
       
       // Update the app with the generated content
-      console.log('🔄 [CreateApp] Updating app with generated content...');
+      log.debug('Updating app with generated content...');
       const updateResult = await AppStorageService.updateAppHTML(
         savedApp.id,
         generatedResponse.html, // Use the actual generated HTML
@@ -187,7 +190,7 @@ export default function CreatePage() {
         },
         modelUsed
       );
-      console.log('✅ [CreateApp] App update result:', updateResult);
+      log.debug('App update result:', updateResult);
       
       Alert.alert(
         'App Generated Successfully!',
@@ -208,19 +211,14 @@ export default function CreatePage() {
         ]
       );
     } catch (error: any) {
-      console.error('💥 [CreateApp] App generation error:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-        response: error.response?.data
-      });
+      log.error('App generation error:', error);
       Alert.alert(
         'Generation Failed',
         error.message || 'Failed to generate app. Please try again.',
         [{ text: 'OK' }]
       );
     } finally {
-      console.log('🏁 [CreateApp] Generation process completed');
+      log.debug('Generation process completed');
       setIsLoading(false);
     }
   };

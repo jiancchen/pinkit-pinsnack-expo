@@ -12,6 +12,9 @@ import { PromptHistory } from '../types/PromptHistory';
 import { AppColors } from '../constants/AppColors';
 import { Ionicons } from '@expo/vector-icons';
 import { useScreenshotState, useScreenshotActions, useScreenshotStore } from '../stores/ScreenshotStore';
+import { createLogger } from '../utils/Logger';
+
+const log = createLogger('ThreeDImageCard');
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -60,7 +63,7 @@ export default function ThreeDImageCard({
     const shouldLoad = (historyItem.accessCount || 0) > 0 && !isGenerating;
                       
     if (shouldLoad) {
-      console.log('🔄 [Card] Loading screenshot for accessed app:', historyItem.id);
+      log.debug('Loading screenshot for accessed app:', historyItem.id);
       // Call the store method directly to avoid function reference issues
       screenshotStore.loadScreenshot(historyItem.id);
     }

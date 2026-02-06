@@ -10,6 +10,9 @@ import { SecureStorageService } from '../src/services/SecureStorageService';
 import { ClaudeApiService } from '../src/services/ClaudeApiService';
 import { SeedService } from '../src/services/SeedService';
 import { AppColors } from '../src/constants/AppColors';
+import { createLogger } from '../src/utils/Logger';
+
+const log = createLogger('RootLayout');
 
 export default function RootLayout() {
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
@@ -42,7 +45,7 @@ export default function RootLayout() {
       }
       setHasApiKey(hasKey);
     } catch (error) {
-      console.error('Error checking API key status:', error);
+      log.error('Error checking API key status:', error);
       setHasApiKey(false);
     } finally {
       setIsLoading(false);

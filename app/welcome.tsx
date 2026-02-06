@@ -17,6 +17,9 @@ import { useRouter } from 'expo-router';
 import { AppColors } from '../src/constants/AppColors';
 import { SecureStorageService } from '../src/services/SecureStorageService';
 import { ClaudeApiService } from '../src/services/ClaudeApiService';
+import { createLogger } from '../src/utils/Logger';
+
+const log = createLogger('Welcome');
 
 export default function WelcomePage() {
   const router = useRouter();
@@ -66,7 +69,7 @@ export default function WelcomePage() {
         await SecureStorageService.removeApiKey();
       }
     } catch (error: any) {
-      console.error('API key setup error:', error);
+      log.error('API key setup error:', error);
       Alert.alert('Setup Failed', error.message || 'Failed to set up your API key. Please try again.');
       await SecureStorageService.removeApiKey();
     } finally {
@@ -75,11 +78,15 @@ export default function WelcomePage() {
   };
 
   const openClaudeConsole = () => {
-    Linking.openURL('https://console.anthropic.com/');
+    void Linking.openURL('https://console.anthropic.com/').catch((error) =>
+      log.warn('Failed to open Claude Console:', error)
+    );
   };
 
   const openClaudeDocumentation = () => {
-    Linking.openURL('https://docs.anthropic.com/en/api/getting-started');
+    void Linking.openURL('https://docs.anthropic.com/en/api/getting-started').catch((error) =>
+      log.warn('Failed to open Claude documentation:', error)
+    );
   };
 
   return (

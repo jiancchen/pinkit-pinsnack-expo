@@ -46,6 +46,113 @@ const DEFAULT_CONFIG: LoggerConfig = {
   enableColors: true,
 };
 
+const MAX_LOG_STRING_LENGTH = 2000;
+
+const REDACTED = '[REDACTED]';
+
+const SENSITIVE_FIELD_NAMES = new Set([
+  'apikey',
+  'api_key',
+  'x-api-key',
+  'x_api_key',
+  'authorization',
+  'access_token',
+  'accesstoken',
+  'refresh_token',
+  'refreshtoken',
+  'password',
+  'secret',
+]);
+
+const API_KEY_PATTERN = /sk-ant-[a-zA-Z0-9_-]{20,}/g;
+const BEARER_PATTERN = /Bearer\s+[a-zA-Z0-9._-]{10,}/g;
+
+function sanitizeStringForLog(value: string): string {
+  let sanitized = value;
+
+  sanitized = sanitized.replace(API_KEY_PATTERN, 'sk-ant-***');
+  sanitized = sanitized.replace(BEARER_PATTERN, 'Bearer ***');
+
+  if (sanitized.length > MAX_LOG_STRING_LENGTH) {
+    return `${sanitized.slice(0, MAX_LOG_STRING_LENGTH)}… (truncated, ${sanitized.length} chars)`;
+  }
+
+  return sanitized;
+}
+
+function sanitizeForLog(value: unknown, depth: number, seen: WeakMap<object, unknown>): unknown {
+  if (value === null || value === undefined) return value;
+
+  if (typeof value === 'string') return sanitizeStringForLog(value);
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return value;
+  if (typeof value === 'symbol' || typeof value === 'function') return String(value);
+
+  if (value instanceof Date) return value.toISOString();
+  if (value instanceof RegExp) return value.toString();
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: sanitizeStringForLog(value.message),
+      stack: value.stack ? sanitizeStringForLog(value.stack) : undefined,
+    };
+  }
+
+  if (typeof value !== 'object') return value;
+
+  if (depth > 6) return '[Object]';
+
+  const obj = value as object;
+  const cached = seen.get(obj);
+  if (cached) return cached;
+
+  if (Array.isArray(value)) {
+    const arr: unknown[] = [];
+    seen.set(obj, arr);
+    for (const item of value) {
+      arr.push(sanitizeForLog(item, depth + 1, seen));
+    }
+    return arr;
+  }
+
+  // Map/Set: convert to arrays for stable logging.
+  if (value instanceof Map) {
+    const entries: unknown[] = [];
+    seen.set(obj, entries);
+    for (const [k, v] of value.entries()) {
+      entries.push([sanitizeForLog(k, depth + 1, seen), sanitizeForLog(v, depth + 1, seen)]);
+    }
+    return { type: 'Map', entries };
+  }
+  if (value instanceof Set) {
+    const entries: unknown[] = [];
+    seen.set(obj, entries);
+    for (const v of value.values()) {
+      entries.push(sanitizeForLog(v, depth + 1, seen));
+    }
+    return { type: 'Set', entries };
+  }
+
+  const out: Record<string, unknown> = {};
+  seen.set(obj, out);
+
+  for (const [rawKey, rawVal] of Object.entries(value as Record<string, unknown>)) {
+    const key = rawKey.toLowerCase();
+    if (SENSITIVE_FIELD_NAMES.has(key)) {
+      out[rawKey] = REDACTED;
+      continue;
+    }
+
+    out[rawKey] = sanitizeForLog(rawVal, depth + 1, seen);
+  }
+
+  return out;
+}
+
+function sanitizeArgsForLog(args: unknown[]): unknown[] {
+  const seen = new WeakMap<object, unknown>();
+  return args.map((arg) => sanitizeForLog(arg, 0, seen));
+}
+
 class LoggerManager {
   private static instance: LoggerManager;
   private config: LoggerConfig = DEFAULT_CONFIG;
@@ -125,16 +232,17 @@ class LoggerManager {
       const prefix = formatMessage(levelName, args);
       const emoji = getEmoji(level);
       const fullPrefix = emoji ? `${emoji} ${prefix.join(' ')}` : prefix.join(' ');
+      const safeArgs = sanitizeArgsForLog(args);
       
       switch (level) {
         case LogLevel.ERROR:
-          console.error(fullPrefix, ...args);
+          console.error(fullPrefix, ...safeArgs);
           break;
         case LogLevel.WARN:
-          console.warn(fullPrefix, ...args);
+          console.warn(fullPrefix, ...safeArgs);
           break;
         default:
-          console.log(fullPrefix, ...args);
+          console.log(fullPrefix, ...safeArgs);
       }
     };
 

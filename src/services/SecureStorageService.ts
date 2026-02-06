@@ -1,5 +1,8 @@
 import * as SecureStore from 'expo-secure-store';
 import { ClaudeApiConfig, DEFAULT_CONFIG, resolveSupportedClaudeModel } from '../types/ClaudeApi';
+import { createLogger } from '../utils/Logger';
+
+const log = createLogger('SecureStorage');
 
 const API_KEY_STORAGE_KEY = 'claude_api_key';
 const CONFIG_STORAGE_KEY = 'claude_api_config';
@@ -12,7 +15,7 @@ export class SecureStorageService {
     try {
       await SecureStore.setItemAsync(API_KEY_STORAGE_KEY, apiKey);
     } catch (error) {
-      console.error('Failed to store API key:', error);
+      log.error('Failed to store API key:', error);
       throw new Error('Failed to save API key securely');
     }
   }
@@ -25,7 +28,7 @@ export class SecureStorageService {
       const apiKey = await SecureStore.getItemAsync(API_KEY_STORAGE_KEY);
       return apiKey;
     } catch (error) {
-      console.error('Failed to retrieve API key:', error);
+      log.error('Failed to retrieve API key:', error);
       return null;
     }
   }
@@ -37,7 +40,7 @@ export class SecureStorageService {
     try {
       await SecureStore.deleteItemAsync(API_KEY_STORAGE_KEY);
     } catch (error) {
-      console.error('Failed to remove API key:', error);
+      log.error('Failed to remove API key:', error);
       throw new Error('Failed to remove API key');
     }
   }
@@ -50,7 +53,7 @@ export class SecureStorageService {
       const apiKey = await SecureStore.getItemAsync(API_KEY_STORAGE_KEY);
       return apiKey !== null && apiKey.length > 0;
     } catch (error) {
-      console.error('Failed to check API key:', error);
+      log.error('Failed to check API key:', error);
       return false;
     }
   }
@@ -62,7 +65,7 @@ export class SecureStorageService {
     try {
       await SecureStore.setItemAsync(CONFIG_STORAGE_KEY, JSON.stringify(config));
     } catch (error) {
-      console.error('Failed to store config:', error);
+      log.error('Failed to store config:', error);
       throw new Error('Failed to save configuration');
     }
   }
@@ -83,7 +86,7 @@ export class SecureStorageService {
       }
       return DEFAULT_CONFIG;
     } catch (error) {
-      console.error('Failed to retrieve config:', error);
+      log.error('Failed to retrieve config:', error);
       return DEFAULT_CONFIG;
     }
   }
@@ -104,7 +107,7 @@ export class SecureStorageService {
         apiKey
       };
     } catch (error) {
-      console.error('Failed to get full config:', error);
+      log.error('Failed to get full config:', error);
       return null;
     }
   }
@@ -119,7 +122,7 @@ export class SecureStorageService {
         SecureStore.deleteItemAsync(CONFIG_STORAGE_KEY)
       ]);
     } catch (error) {
-      console.error('Failed to clear all data:', error);
+      log.error('Failed to clear all data:', error);
       throw new Error('Failed to clear stored data');
     }
   }

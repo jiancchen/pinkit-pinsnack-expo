@@ -5,6 +5,9 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { createLogger } from '../utils/Logger';
+
+const log = createLogger('WebViewScreenshot');
 
 export class WebViewScreenshotService {
   private static readonly SCREENSHOT_PREFIX = 'webview_screenshot_';
@@ -16,14 +19,19 @@ export class WebViewScreenshotService {
    * Generate JavaScript code to inject into WebView for screenshot capture
    */
   static generateScreenshotScript(appId: string): string {
+    const debugLogging = __DEV__;
     return `
       (function() {
-        console.log('🎯 [WebView] Screenshot script loaded for app: ${appId}');
+        const DEBUG = ${debugLogging ? 'true' : 'false'};
+        const debugLog = (...args) => { if (DEBUG) console.log(...args); };
+        const debugWarn = (...args) => { if (DEBUG) console.warn(...args); };
+
+        debugLog('🎯 [WebView] Screenshot script loaded for app: ${appId}');
         
         // Function to capture screenshot using canvas
         function captureWebViewScreenshot() {
           try {
-            console.log('📸 [WebView] Starting DOM screenshot capture...');
+            debugLog('📸 [WebView] Starting DOM screenshot capture...');
             
             // Create a canvas element
             const canvas = document.createElement('canvas');
@@ -38,12 +46,12 @@ export class WebViewScreenshotService {
             canvas.width = Math.max(rect.width, window.innerWidth);
             canvas.height = Math.max(rect.height, window.innerHeight);
             
-            console.log('📐 [WebView] Canvas size:', canvas.width, 'x', canvas.height);
+            debugLog('📐 [WebView] Canvas size:', canvas.width, 'x', canvas.height);
             
             // Try to capture the current state of the document
             // Method 1: Try html2canvas if available
             if (window.html2canvas) {
-              console.log('🎨 [WebView] Using html2canvas method');
+              debugLog('🎨 [WebView] Using html2canvas method');
               window.html2canvas(document.body).then(function(canvas) {
                 const dataURL = canvas.toDataURL('image/png', 0.8);
                 window.ReactNativeWebView.postMessage(JSON.stringify({
@@ -58,7 +66,7 @@ export class WebViewScreenshotService {
               });
             } else {
               // Method 2: Manual canvas rendering fallback
-              console.log('🔧 [WebView] Using manual canvas method');
+              debugLog('🔧 [WebView] Using manual canvas method');
               fallbackScreenshot();
             }
             
@@ -96,7 +104,7 @@ export class WebViewScreenshotService {
                 method: 'fallback'
               }));
               
-              console.log('✅ [WebView] Fallback screenshot captured');
+              debugLog('✅ [WebView] Fallback screenshot captured');
             }
             
           } catch (error) {
@@ -119,11 +127,11 @@ export class WebViewScreenshotService {
           const script = document.createElement('script');
           script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
           script.onload = function() {
-            console.log('✅ [WebView] html2canvas loaded successfully');
+            debugLog('✅ [WebView] html2canvas loaded successfully');
             setTimeout(captureWebViewScreenshot, 100);
           };
           script.onerror = function() {
-            console.warn('⚠️ [WebView] html2canvas failed to load, using fallback');
+            debugWarn('⚠️ [WebView] html2canvas failed to load, using fallback');
             captureWebViewScreenshot();
           };
           document.head.appendChild(script);
@@ -151,7 +159,7 @@ export class WebViewScreenshotService {
     method: string
   ): Promise<string | null> {
     try {
-      console.log(`🔧 [WebViewScreenshot] Processing ${method} screenshot for app:`, appId);
+      log.debug(`Processing ${method} screenshot for app:`, appId);
       
       // Convert data URL to processable format
       if (!dataURL.startsWith('data:image/')) {
@@ -184,12 +192,12 @@ export class WebViewScreenshotService {
       await this.storeWebViewScreenshot(appId, processedImage.base64, method);
       
       const resultDataURL = `data:image/jpeg;base64,${processedImage.base64}`;
-      console.log('✅ [WebViewScreenshot] Processed and stored screenshot for app:', appId);
+      log.debug('Processed and stored screenshot for app:', appId);
       
       return resultDataURL;
 
     } catch (error) {
-      console.error('💥 [WebViewScreenshot] Processing failed:', error);
+      log.error('Processing failed:', error);
       return null;
     }
   }
@@ -217,10 +225,10 @@ export class WebViewScreenshotService {
       };
 
       await AsyncStorage.setItem(key, JSON.stringify(screenshotData));
-      console.log('💾 [WebViewScreenshot] Stored screenshot data, method:', method, 'size:', base64Data.length, 'chars');
+      log.debug('Stored screenshot data, method:', method, 'size:', base64Data.length, 'chars');
 
     } catch (error) {
-      console.error('💥 [WebViewScreenshot] Error storing screenshot:', error);
+      log.error('Error storing screenshot:', error);
       throw error;
     }
   }
@@ -234,18 +242,18 @@ export class WebViewScreenshotService {
       const data = await AsyncStorage.getItem(key);
       
       if (!data) {
-        console.log('📷 [WebViewScreenshot] No screenshot found for app:', appId);
+        log.debug('No screenshot found for app:', appId);
         return null;
       }
 
       const screenshotData = JSON.parse(data);
       const base64Uri = `data:image/jpeg;base64,${screenshotData.base64}`;
       
-      console.log('📖 [WebViewScreenshot] Retrieved screenshot for app:', appId, 'method:', screenshotData.method);
+      log.debug('Retrieved screenshot for app:', appId, 'method:', screenshotData.method);
       return base64Uri;
 
     } catch (error) {
-      console.error('💥 [WebViewScreenshot] Error retrieving screenshot:', error);
+      log.error('Error retrieving screenshot:', error);
       return null;
     }
   }
@@ -257,9 +265,9 @@ export class WebViewScreenshotService {
     try {
       const key = this.SCREENSHOT_PREFIX + appId;
       await AsyncStorage.removeItem(key);
-      console.log('🗑️ [WebViewScreenshot] Deleted screenshot for app:', appId);
+      log.debug('Deleted screenshot for app:', appId);
     } catch (error) {
-      console.error('💥 [WebViewScreenshot] Error deleting screenshot:', error);
+      log.error('Error deleting screenshot:', error);
     }
   }
 }

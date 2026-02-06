@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { WebView } from 'react-native-webview';
+import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { AppColors } from '../src/constants/AppColors';
@@ -23,6 +23,9 @@ import { AsyncStorageService } from '../src/services/AsyncStorageService';
 import { ScreenshotService } from '../src/services/ScreenshotService';
 import { WebViewScreenshotService } from '../src/services/WebViewScreenshotService';
 import { emitScreenshotCaptured, emitScreenshotError, emitScreenshotLoading } from '../src/stores/ScreenshotStore';
+import { createLogger } from '../src/utils/Logger';
+
+const log = createLogger('AppView');
 
 export default function AppViewPage() {
   const router = useRouter();
@@ -69,7 +72,7 @@ export default function AppViewPage() {
     if (app) {
       const timer = setTimeout(() => {
         if (webViewContainerRef.current && !isCapturingScreenshot) {
-          console.log('🔄 [AppView] Attempting early screenshot capture for:', app.id);
+          log.debug('Attempting early screenshot capture for:', app.id);
           captureScreenshot();
         }
       }, 2500);
@@ -77,8 +80,8 @@ export default function AppViewPage() {
       return () => {
         clearTimeout(timer);
         if (!isCapturingScreenshot && webViewContainerRef.current) {
-          console.log('🏃 [AppView] Quick screenshot capture before navigation for:', app.id);
-          captureScreenshot().catch(console.warn);
+          log.debug('Quick screenshot capture before navigation for:', app.id);
+          captureScreenshot().catch((error) => log.warn('Quick screenshot capture failed:', error));
         }
       };
     }
@@ -95,12 +98,17 @@ export default function AppViewPage() {
   };
 
   const injectAppId = (html: string, appId: string): string => {
-    console.log('🔧 [AppView] Injecting storage isolation for app:', appId);
+    log.debug('Injecting storage isolation for app:', appId);
     
     const storageOverride = `
-    <script>
-      (function() {
-        console.log('🔧 [WebView] Setting up error handling and storage isolation');
+	    <script>
+	      const DEBUG = ${__DEV__ ? 'true' : 'false'};
+	      const debugLog = (...args) => { if (DEBUG) console.log(...args); };
+	      const debugWarn = (...args) => { if (DEBUG) console.warn(...args); };
+	      const debugError = (...args) => { if (DEBUG) console.error(...args); };
+
+	      (function() {
+	        debugLog('🔧 [WebView] Setting up error handling and storage isolation');
         
         const originalAdd = DOMTokenList.prototype.add;
         DOMTokenList.prototype.add = function(...tokens) {
@@ -108,8 +116,8 @@ export default function AppViewPage() {
           if (validTokens.length > 0) {
             return originalAdd.apply(this, validTokens);
           }
-          console.warn('🚨 [WebView] Prevented empty token addition to classList');
-        };
+	          debugWarn('🚨 [WebView] Prevented empty token addition to classList');
+	        };
         
         const originalRemove = DOMTokenList.prototype.remove;
         DOMTokenList.prototype.remove = function(...tokens) {
@@ -117,22 +125,22 @@ export default function AppViewPage() {
           if (validTokens.length > 0) {
             return originalRemove.apply(this, validTokens);
           }
-          console.warn('🚨 [WebView] Prevented empty token removal from classList');
-        };
-        
-        window.addEventListener('error', function(event) {
-          console.error('🚨 [WebView] Uncaught error:', event.error);
-          event.preventDefault();
-          return true;
-        });
-        
-        window.addEventListener('unhandledrejection', function(event) {
-          console.error('🚨 [WebView] Unhandled promise rejection:', event.reason);
-          event.preventDefault();
-        });
-        
-        window.addEventListener('DOMContentLoaded', function() {
-          console.log('🔧 [WebView] Setting up todo app safety patches');
+	          debugWarn('🚨 [WebView] Prevented empty token removal from classList');
+	        };
+	        
+	        window.addEventListener('error', function(event) {
+	          debugError('🚨 [WebView] Uncaught error:', event.error);
+	          event.preventDefault();
+	          return true;
+	        });
+	        
+	        window.addEventListener('unhandledrejection', function(event) {
+	          debugError('🚨 [WebView] Unhandled promise rejection:', event.reason);
+	          event.preventDefault();
+	        });
+	        
+	        window.addEventListener('DOMContentLoaded', function() {
+	          debugLog('🔧 [WebView] Setting up todo app safety patches');
           
           const originalQuerySelector = document.querySelector;
           const originalQuerySelectorAll = document.querySelectorAll;
@@ -141,40 +149,40 @@ export default function AppViewPage() {
             try {
               return originalQuerySelector.call(this, selector);
             } catch (e) {
-              console.warn('🚨 [WebView] Invalid selector prevented:', selector, e);
-              return null;
-            }
-          };
+	              debugWarn('🚨 [WebView] Invalid selector prevented:', selector, e);
+	              return null;
+	            }
+	          };
           
           document.querySelectorAll = function(selector) {
             try {
               return originalQuerySelectorAll.call(this, selector);
             } catch (e) {
-              console.warn('🚨 [WebView] Invalid selector prevented:', selector, e);
-              return document.createDocumentFragment().querySelectorAll('never-matches');
-            }
-          };
-        });
-      })();
-      
-      (function() {
-        const APP_ID = '${appId}';
-        console.log('🔧 [WebView] Initializing COMPLETE storage isolation for app:', APP_ID);
+	              debugWarn('🚨 [WebView] Invalid selector prevented:', selector, e);
+	              return document.createDocumentFragment().querySelectorAll('never-matches');
+	            }
+	          };
+	        });
+	      })();
+	      
+	      (function() {
+	        const APP_ID = '${appId}';
+	        debugLog('🔧 [WebView] Initializing COMPLETE storage isolation for app:', APP_ID);
         
         const isolatedStorage = {
           _data: {},
           
-          setItem: function(key, value) {
-            const isolatedKey = APP_ID + '_' + key;
-            console.log('📦 [IsolatedStorage] setItem:', key, '->', isolatedKey);
-            this._data[isolatedKey] = String(value);
-            
-            try {
-              window.originalLocalStorage.setItem(isolatedKey, String(value));
-            } catch(e) {
-              console.warn('⚠️ [IsolatedStorage] Backup localStorage failed:', e);
-            }
-          },
+	          setItem: function(key, value) {
+	            const isolatedKey = APP_ID + '_' + key;
+	            debugLog('📦 [IsolatedStorage] setItem:', key, '->', isolatedKey);
+	            this._data[isolatedKey] = String(value);
+	            
+	            try {
+	              window.originalLocalStorage.setItem(isolatedKey, String(value));
+	            } catch(e) {
+	              debugWarn('⚠️ [IsolatedStorage] Backup localStorage failed:', e);
+	            }
+	          },
           
           getItem: function(key) {
             const isolatedKey = APP_ID + '_' + key;
@@ -183,15 +191,15 @@ export default function AppViewPage() {
               return this._data[isolatedKey];
             }
             
-            try {
-              const value = window.originalLocalStorage.getItem(isolatedKey);
-              if (value !== null) {
-                this._data[isolatedKey] = value;
-                return value;
-              }
-            } catch(e) {
-              console.warn('⚠️ [IsolatedStorage] Backup localStorage read failed:', e);
-            }
+	            try {
+	              const value = window.originalLocalStorage.getItem(isolatedKey);
+	              if (value !== null) {
+	                this._data[isolatedKey] = value;
+	                return value;
+	              }
+	            } catch(e) {
+	              debugWarn('⚠️ [IsolatedStorage] Backup localStorage read failed:', e);
+	            }
             
             return null;
           },
@@ -200,12 +208,12 @@ export default function AppViewPage() {
             const isolatedKey = APP_ID + '_' + key;
             delete this._data[isolatedKey];
             
-            try {
-              window.originalLocalStorage.removeItem(isolatedKey);
-            } catch(e) {
-              console.warn('⚠️ [IsolatedStorage] Backup localStorage remove failed:', e);
-            }
-          },
+	            try {
+	              window.originalLocalStorage.removeItem(isolatedKey);
+	            } catch(e) {
+	              debugWarn('⚠️ [IsolatedStorage] Backup localStorage remove failed:', e);
+	            }
+	          },
           
           clear: function() {
             Object.keys(this._data).forEach(key => {
@@ -221,10 +229,10 @@ export default function AppViewPage() {
                   window.originalLocalStorage.removeItem(key);
                 }
               });
-            } catch(e) {
-              console.warn('⚠️ [IsolatedStorage] Backup localStorage clear failed:', e);
-            }
-          },
+	            } catch(e) {
+	              debugWarn('⚠️ [IsolatedStorage] Backup localStorage clear failed:', e);
+	            }
+	          },
           
           get length() {
             return Object.keys(this._data).filter(key => key.startsWith(APP_ID + '_')).length;
@@ -239,25 +247,25 @@ export default function AppViewPage() {
         
         window.originalLocalStorage = window.localStorage;
         
-        Object.defineProperty(window, 'localStorage', {
-          value: isolatedStorage,
-          writable: false,
-          configurable: false
-        });
-        
-        console.log('✅ [WebView] localStorage COMPLETELY REPLACED for app:', APP_ID);
+	        Object.defineProperty(window, 'localStorage', {
+	          value: isolatedStorage,
+	          writable: false,
+	          configurable: false
+	        });
+	        
+	        debugLog('✅ [WebView] localStorage COMPLETELY REPLACED for app:', APP_ID);
         
         window.addEventListener('message', function(event) {
           try {
-            const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-            if (message.type === 'trigger_screenshot' && message.appId === APP_ID) {
-              console.log('📸 [WebView] Received screenshot trigger for app:', APP_ID);
-              if (window.captureWebViewScreenshot) {
-                window.captureWebViewScreenshot();
-              }
-            }
-          } catch (e) {}
-        });
+	            const message = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+	            if (message.type === 'trigger_screenshot' && message.appId === APP_ID) {
+	              debugLog('📸 [WebView] Received screenshot trigger for app:', APP_ID);
+	              if (window.captureWebViewScreenshot) {
+	                window.captureWebViewScreenshot();
+	              }
+	            }
+	          } catch (e) {}
+	        });
         
       })();
     </script>`;
@@ -293,7 +301,7 @@ export default function AppViewPage() {
         ]);
       }
     } catch (error) {
-      console.error('Error loading app:', error);
+      log.error('Error loading app:', error);
       Alert.alert('Error', 'Failed to load app', [
         { text: 'OK', onPress: () => router.back() }
       ]);
@@ -314,23 +322,23 @@ export default function AppViewPage() {
 
   const handleWebViewScreenshot = async (appId: string, dataURL: string, method: string) => {
     try {
-      console.log(`📸 [AppView] Processing WebView screenshot for app: ${appId}, method: ${method}`);
+      log.debug(`Processing WebView screenshot for app: ${appId}, method: ${method}`);
       emitScreenshotLoading(appId, true);
       setIsCapturingScreenshot(true);
       
       const processedUri = await WebViewScreenshotService.processWebViewScreenshot(appId, dataURL, method);
       
       if (processedUri) {
-        console.log('✅ [AppView] WebView screenshot processed and stored:', processedUri);
+        log.debug('WebView screenshot processed and stored:', processedUri);
         emitScreenshotCaptured(appId, processedUri, 'webview');
       } else {
-        console.warn('⚠️ [AppView] WebView screenshot processing failed');
+        log.warn('WebView screenshot processing failed');
         emitScreenshotError(appId, 'WebView screenshot processing failed');
         setScreenshotMethod('external');
         setTimeout(() => captureScreenshot(), 1000);
       }
     } catch (error) {
-      console.error('💥 [AppView] WebView screenshot handling error:', error);
+      log.error('WebView screenshot handling error:', error);
       emitScreenshotError(appId, error instanceof Error ? error.message : 'WebView screenshot failed');
       setScreenshotMethod('external');
       setTimeout(() => captureScreenshot(), 1000);
@@ -343,21 +351,21 @@ export default function AppViewPage() {
   const captureScreenshot = async () => {
     if (!app || isCapturingScreenshot) return;
     
-    console.log('📸 [AppView] Screenshot capture handled by WebView JavaScript injection');
+    log.debug('Screenshot capture handled by WebView JavaScript injection');
     
     if (webViewRef.current) {
       try {
-        console.log('📸 [AppView] Triggering WebView screenshot capture...');
+        log.debug('Triggering WebView screenshot capture...');
         webViewRef.current.postMessage(JSON.stringify({
           type: 'trigger_screenshot',
           appId: app.id
         }));
       } catch (error) {
-        console.warn('⚠️ [AppView] Failed to trigger WebView screenshot:', error);
+        log.warn('Failed to trigger WebView screenshot:', error);
         await ScreenshotService.createFallbackScreenshot(app.id, app.title, app.style);
       }
     } else {
-      console.warn('⚠️ [AppView] No WebView ref available, creating fallback screenshot');
+      log.warn('No WebView ref available, creating fallback screenshot');
       await ScreenshotService.createFallbackScreenshot(app.id, app.title, app.style);
     }
   };
@@ -412,7 +420,7 @@ export default function AppViewPage() {
       setShowEditTitleModal(false);
       Alert.alert('Success', 'Title updated successfully');
     } catch (error) {
-      console.error('Error updating title:', error);
+      log.error('Error updating title:', error);
       Alert.alert('Error', 'Failed to update title');
     }
   };
@@ -437,7 +445,7 @@ export default function AppViewPage() {
               setShowEditPromptModal(false);
               Alert.alert('Coming Soon', 'App recreation feature will be implemented soon');
             } catch (error) {
-              console.error('Error recreating app:', error);
+              log.error('Error recreating app:', error);
               Alert.alert('Error', 'Failed to recreate app');
             }
           }
@@ -459,7 +467,7 @@ export default function AppViewPage() {
         updatedApp.favorite ? 'Added to favorites' : 'Removed from favorites'
       );
     } catch (error) {
-      console.error('Error updating favorite:', error);
+      log.error('Error updating favorite:', error);
       Alert.alert('Error', 'Failed to update favorite status');
     }
   };
@@ -484,7 +492,7 @@ export default function AppViewPage() {
                 { text: 'OK', onPress: () => router.back() }
               ]);
             } catch (error) {
-              console.error('Error deleting app:', error);
+              log.error('Error deleting app:', error);
               Alert.alert('Error', 'Failed to delete app');
             }
           }
@@ -589,7 +597,7 @@ export default function AppViewPage() {
             javaScriptEnabled={true}
             domStorageEnabled={true}
             startInLoadingState={true}
-            webviewDebuggingEnabled={true}
+            webviewDebuggingEnabled={__DEV__}
             mixedContentMode="compatibility"
             allowsInlineMediaPlayback={true}
             mediaPlaybackRequiresUserAction={false}
@@ -606,52 +614,115 @@ export default function AppViewPage() {
                 <ActivityIndicator size="large" color={AppColors.FABMain} />
               </View>
             )}
-            onMessage={(event: any) => {
+            onMessage={(event: WebViewMessageEvent) => {
               try {
-                const message = JSON.parse(event.nativeEvent.data);
-                console.log('📨 WebView message:', message);
+                const rawData = event.nativeEvent.data;
+                const parsed: unknown = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+                if (!parsed || typeof parsed !== 'object') {
+                  log.warn('Invalid WebView message:', parsed);
+                  return;
+                }
+
+                const message = parsed as Record<string, unknown>;
+                const messageType = message.type;
+                if (typeof messageType !== 'string') {
+                  log.warn('WebView message missing type:', message);
+                  return;
+                }
+
+                log.verbose('WebView message:', message);
                 
-                switch (message.type) {
-                  case 'storage_set':
-                    AsyncStorageService.setItem(message.key, message.value);
+                switch (messageType) {
+                  case 'storage_set': {
+                    const key = message.key;
+                    const value = message.value;
+                    if (typeof key !== 'string' || typeof value !== 'string') {
+                      log.warn('Invalid storage_set message:', message);
+                      return;
+                    }
+                    void AsyncStorageService.setItem(key, value).catch((error) =>
+                      log.warn('WebView storage_set failed:', error)
+                    );
                     break;
+                  }
                     
-                  case 'storage_get':
-                    AsyncStorageService.getItem(message.key).then((value: string | null) => {
-                      webViewRef.current?.postMessage(JSON.stringify({
-                        type: 'storage_response',
-                        key: message.key,
-                        value: value
-                      }));
-                    });
+                  case 'storage_get': {
+                    const key = message.key;
+                    if (typeof key !== 'string') {
+                      log.warn('Invalid storage_get message:', message);
+                      return;
+                    }
+
+                    void AsyncStorageService.getItem(key)
+                      .then((value: string | null) => {
+                        webViewRef.current?.postMessage(
+                          JSON.stringify({
+                            type: 'storage_response',
+                            key,
+                            value
+                          })
+                        );
+                      })
+                      .catch((error) => log.warn('WebView storage_get failed:', error));
                     break;
+                  }
                     
-                  case 'storage_remove':
-                    AsyncStorageService.removeItem(message.key);
+                  case 'storage_remove': {
+                    const key = message.key;
+                    if (typeof key !== 'string') {
+                      log.warn('Invalid storage_remove message:', message);
+                      return;
+                    }
+                    void AsyncStorageService.removeItem(key).catch((error) =>
+                      log.warn('WebView storage_remove failed:', error)
+                    );
                     break;
+                  }
                     
-                  case 'storage_clear':
-                    AsyncStorageService.clearAppData(message.appId);
+                  case 'storage_clear': {
+                    const clearAppId = message.appId;
+                    if (typeof clearAppId !== 'string') {
+                      log.warn('Invalid storage_clear message:', message);
+                      return;
+                    }
+                    void AsyncStorageService.clearAppData(clearAppId).catch((error) =>
+                      log.warn('WebView storage_clear failed:', error)
+                    );
                     break;
+                  }
                     
-                  case 'screenshot_captured':
-                    handleWebViewScreenshot(message.appId, message.dataURL, message.method);
+                  case 'screenshot_captured': {
+                    const screenshotAppId = message.appId;
+                    const dataURL = message.dataURL;
+                    const method = message.method;
+                    if (
+                      typeof screenshotAppId !== 'string' ||
+                      typeof dataURL !== 'string' ||
+                      typeof method !== 'string'
+                    ) {
+                      log.warn('Invalid screenshot_captured message:', message);
+                      return;
+                    }
+                    void handleWebViewScreenshot(screenshotAppId, dataURL, method);
                     break;
+                  }
                     
-                  case 'screenshot_error':
-                    console.error('💥 [WebView] Screenshot error:', message.error);
+                  case 'screenshot_error': {
+                    const errorMessage = message.error;
+                    log.error('WebView screenshot error:', errorMessage);
                     if (screenshotMethod === 'webview') {
-                      console.log('🔄 [AppView] Falling back to external screenshot method');
+                      log.warn('Falling back to external screenshot method');
                       setScreenshotMethod('external');
                       setTimeout(() => captureScreenshot(), 1000);
                     }
                     break;
+                  }
                     
                   default:
-                    console.log('📝 Other WebView message:', message);
+                    log.verbose('Other WebView message:', message);
                 }
               } catch (error) {
-                console.warn('Failed to parse WebView message:', error);
+                log.warn('Failed to parse WebView message:', error);
               }
             }}
           />
