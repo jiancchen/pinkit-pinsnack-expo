@@ -1,4 +1,7 @@
 import { PromptHistory, GeneratedAppConcept } from '../types/PromptHistory';
+import { createLogger } from '../utils/Logger';
+
+const log = createLogger('PromptGenerator');
 
 export type AppStyle = 'minimalist' | 'creative' | 'corporate' | 'playful' | 'elegant' | 'modern';
 export type AppCategory = 'productivity' | 'social' | 'utility' | 'entertainment' | 'education' | 'health' | 'finance' | 'travel' | 'shopping' | 'other';
@@ -167,11 +170,11 @@ Note: localStorage is ALLOWED for data persistence within the app. Use it for sa
    * Generate a comprehensive prompt for Claude API based on user requirements
    */
   static generatePrompt(request: AppGenerationRequest): string {
-    console.log('📝 [PromptGenerator] Starting prompt generation for request:', request);
+    log.debug('Starting prompt generation for request:', request);
     
     const { description, style, features } = request;
     
-    console.log('🎨 [PromptGenerator] Building prompt with parameters:', {
+    log.verbose('Building prompt with parameters:', {
       description: description.substring(0, 50) + '...',
       style,
       featuresCount: features?.length || 0,
@@ -205,8 +208,8 @@ Note: localStorage is ALLOWED for data persistence within the app. Use it for sa
       featuresContext + 
       '\n</user_request>\n\nGenerate the complete HTML application now:';
     
-    console.log('✅ [PromptGenerator] Generated prompt length:', fullPrompt.length);
-    console.log('📄 [PromptGenerator] Prompt preview:', fullPrompt.substring(0, 200) + '...');
+    log.debug('Generated prompt length:', fullPrompt.length);
+    log.verbose('Prompt preview:', fullPrompt.substring(0, 200) + '...');
     
     return fullPrompt;
   }

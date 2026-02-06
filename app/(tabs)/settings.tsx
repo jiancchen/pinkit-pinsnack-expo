@@ -10,12 +10,19 @@ import { ClaudeApiService } from '../../src/services/ClaudeApiService';
 import { SeedService } from '../../src/services/SeedService';
 import { AppStorageService } from '../../src/services/AppStorageService';
 import { TokenTrackingService, TokenStats } from '../../src/services/TokenTrackingService';
-import { CLAUDE_MODELS, MODEL_INFO } from '../../src/types/ClaudeApi';
+import {
+  CLAUDE_MODELS,
+  CLAUDE_MODEL_PICKER_OPTIONS,
+  formatModelPricingFull,
+  formatModelPricingShort,
+  MODEL_INFO,
+  PRICING_AS_OF_DISPLAY
+} from '../../src/types/ClaudeApi';
 
 export default function SettingsPage() {
   const router = useRouter();
   const [temperature, setTemperature] = useState(0.3);
-  const [selectedModel, setSelectedModel] = useState<string>(CLAUDE_MODELS.HAIKU_3);
+  const [selectedModel, setSelectedModel] = useState<string>(CLAUDE_MODELS.HAIKU_4_5);
   const [selectedLanguage, setSelectedLanguage] = useState('English');
   const [hasApiKey, setHasApiKey] = useState(false);
   const [isLoadingApiKey, setIsLoadingApiKey] = useState(true);
@@ -27,6 +34,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     checkApiKeyStatus();
+    loadClaudeConfig();
     loadSampleAppsCount();
     loadTokenStats();
   }, []);
@@ -35,6 +43,7 @@ export default function SettingsPage() {
     React.useCallback(() => {
       // When returning from /welcome (or other screens), refresh state.
       checkApiKeyStatus();
+      loadClaudeConfig();
       loadSampleAppsCount();
       loadTokenStats();
     }, [])
@@ -48,6 +57,16 @@ export default function SettingsPage() {
       console.error('Error checking API key status:', error);
     } finally {
       setIsLoadingApiKey(false);
+    }
+  };
+
+  const loadClaudeConfig = async () => {
+    try {
+      const config = await SecureStorageService.getConfig();
+      setSelectedModel(config.model);
+      setTemperature(config.temperature);
+    } catch (error) {
+      console.error('Error loading Claude config:', error);
     }
   };
 
@@ -211,8 +230,25 @@ export default function SettingsPage() {
     Alert.alert('Terms of Service', 'Read our terms and conditions', [{ text: 'OK' }]);
   };
 
+  const getModelDisplayName = (model: string): string => {
+    const modelInfo = MODEL_INFO[model];
+    if (!modelInfo) return model;
+    if (modelInfo.status === 'deprecated') return `${modelInfo.name} (deprecated)`;
+    if (modelInfo.status === 'retired') return `${modelInfo.name} (retired)`;
+    return modelInfo.name;
+  };
+
   const handleModelSelect = async (model: string) => {
     try {
+      const modelInfo = MODEL_INFO[model];
+      if (modelInfo?.status === 'retired') {
+        Alert.alert(
+          'Model Retired',
+          `${modelInfo.name} was retired on ${modelInfo.retiresOn || 'an earlier date'} and can no longer be used. Please select a different model.`
+        );
+        return;
+      }
+
       setSelectedModel(model);
       setShowModelSelector(false);
       
@@ -221,7 +257,7 @@ export default function SettingsPage() {
       const apiKey = await SecureStorageService.getApiKey();
       if (apiKey) {
         await claudeService.updateConfig(apiKey, { model, maxTokens: 4000, temperature });
-        Alert.alert('Success', `Model updated to ${MODEL_INFO[model]?.name || model}`);
+        Alert.alert('Success', `Model updated to ${getModelDisplayName(model)}`);
       }
     } catch (error) {
       console.error('Error updating model:', error);
@@ -277,11 +313,13 @@ export default function SettingsPage() {
                 style={styles.dropdown}
                 onPress={() => setShowModelSelector(true)}
               >
-                <Text style={styles.dropdownText}>{MODEL_INFO[selectedModel]?.name || selectedModel}</Text>
+                <Text style={styles.dropdownText}>{getModelDisplayName(selectedModel)}</Text>
                 <Ionicons name="chevron-down" size={20} color="#666" />
               </TouchableOpacity>
               <Text style={styles.helperText}>
-                Current model: {MODEL_INFO[selectedModel]?.name || selectedModel} - {MODEL_INFO[selectedModel]?.displayPricing || 'Pricing unavailable'}
+                Current model: {getModelDisplayName(selectedModel)}
+                {'\n'}
+                {formatModelPricingShort(selectedModel) || 'Pricing unavailable'} (as of {PRICING_AS_OF_DISPLAY})
               </Text>
             </View>
 
@@ -377,7 +415,7 @@ export default function SettingsPage() {
                       <Text style={styles.settingsItemTitle}>Usage by Model</Text>
                       {Object.entries(tokenStats.usageByModel).map(([model, usage]) => (
                         <Text key={model} style={styles.settingsItemDescription}>
-                          {model}: {(usage.inputTokens + usage.outputTokens).toLocaleString()} tokens ({usage.requests} requests)
+                          {getModelDisplayName(model)}: {(usage.inputTokens + usage.outputTokens).toLocaleString()} tokens ({usage.requests} requests)
                         </Text>
                       ))}
                     </View>
@@ -483,32 +521,41 @@ export default function SettingsPage() {
         >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Select Claude Model</Text>
+            <Text style={styles.modalSubtitle}>Prices as of {PRICING_AS_OF_DISPLAY} (USD per MTok)</Text>
             
-            {Object.entries(CLAUDE_MODELS).map(([key, modelId]) => (
-              <TouchableOpacity
-                key={modelId}
-                style={[
-                  styles.modelOption,
-                  selectedModel === modelId && styles.modelOptionSelected
-                ]}
-                onPress={() => handleModelSelect(modelId)}
-              >
-                <View style={styles.modelOptionContent}>
-                  <Text style={[
-                    styles.modelOptionTitle,
-                    selectedModel === modelId && styles.modelOptionTitleSelected
-                  ]}>
-                    {MODEL_INFO[modelId]?.name || modelId}
-                  </Text>
-                  <Text style={styles.modelOptionPricing}>
-                    {MODEL_INFO[modelId]?.displayPricing || 'Pricing unavailable'}
-                  </Text>
-                </View>
-                {selectedModel === modelId && (
-                  <Ionicons name="checkmark-circle" size={24} color={AppColors.FABMain} />
-                )}
-              </TouchableOpacity>
-            ))}
+            {CLAUDE_MODEL_PICKER_OPTIONS.map((modelId) => {
+              const modelInfo = MODEL_INFO[modelId];
+              const isRetired = modelInfo?.status === 'retired';
+
+              return (
+                <TouchableOpacity
+                  key={modelId}
+                  style={[
+                    styles.modelOption,
+                    isRetired && styles.modelOptionDisabled,
+                    selectedModel === modelId && styles.modelOptionSelected
+                  ]}
+                  disabled={isRetired}
+                  onPress={() => handleModelSelect(modelId)}
+                >
+                  <View style={styles.modelOptionContent}>
+                    <Text style={[
+                      styles.modelOptionTitle,
+                      isRetired && styles.modelOptionTitleDisabled,
+                      selectedModel === modelId && styles.modelOptionTitleSelected
+                    ]}>
+                      {getModelDisplayName(modelId)}
+                    </Text>
+                    <Text style={styles.modelOptionPricing}>
+                      {formatModelPricingFull(modelId) || 'Pricing unavailable'}
+                    </Text>
+                  </View>
+                  {selectedModel === modelId && (
+                    <Ionicons name="checkmark-circle" size={24} color={AppColors.FABMain} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
             
             <TouchableOpacity 
               style={styles.modalCancelButton}
@@ -736,6 +783,13 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
+  modalSubtitle: {
+    fontSize: 12,
+    color: 'rgba(0, 0, 0, 0.6)',
+    textAlign: 'center',
+    marginTop: -12,
+    marginBottom: 20,
+  },
   modelOption: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -746,6 +800,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 2,
     borderColor: 'transparent',
+  },
+  modelOptionDisabled: {
+    opacity: 0.45,
   },
   modelOptionSelected: {
     backgroundColor: 'rgba(255, 193, 7, 0.1)',
@@ -759,6 +816,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'rgba(0, 0, 0, 0.8)',
     marginBottom: 4,
+  },
+  modelOptionTitleDisabled: {
+    color: 'rgba(0, 0, 0, 0.6)',
   },
   modelOptionTitleSelected: {
     color: 'rgba(0, 0, 0, 0.9)',

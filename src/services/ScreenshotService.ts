@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ScreenshotLogger as log } from '../utils/Logger';
 
 /**
  * Service for managing screenshots - simplified to remove external capture methods
@@ -18,8 +19,8 @@ export class ScreenshotService {
     viewRef: any,
     appId: string
   ): Promise<string | null> {
-    console.warn('⚠️ [Screenshot] External capture method deprecated - use WebViewScreenshotService.generateScreenshotScript() instead');
-    console.log('� [Screenshot] Redirecting to WebView-based screenshot for app:', appId);
+    log.warn('External capture method deprecated - use WebViewScreenshotService.generateScreenshotScript() instead');
+    log.debug('Redirecting to WebView-based screenshot for app:', appId);
     return null;
   }
 
@@ -28,7 +29,7 @@ export class ScreenshotService {
    */
   static async createFallbackScreenshot(appId: string, appTitle: string, appStyle?: string): Promise<string | null> {
     try {
-      console.log('🎨 [Screenshot] Creating fallback screenshot for app:', appId);
+      log.debug('Creating fallback screenshot for app:', appId);
       
       // Generate a consistent color based on app title
       const colors = this.generateAppColors(appTitle);
@@ -72,10 +73,10 @@ export class ScreenshotService {
       const key = this.SCREENSHOT_PREFIX + appId;
       await AsyncStorage.setItem(key, JSON.stringify(fallbackData));
       
-      console.log('✅ [Screenshot] Fallback screenshot created for app:', appId);
+      log.debug('Fallback screenshot created for app:', appId);
       return dataUri;
     } catch (error) {
-      console.error('💥 [Screenshot] Fallback creation failed:', error);
+      log.error('Fallback creation failed:', error);
       return null;
     }
   }
@@ -100,7 +101,7 @@ export class ScreenshotService {
     const primary = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
     const secondary = `hsl(${(hue + 30) % 360}, ${saturation - 20}%, ${lightness + 20}%)`;
     
-    console.log(`🎨 [Screenshot] Generated colors for "${appTitle}": ${primary}, ${secondary}`);
+    log.verbose(`Generated colors for "${appTitle}": ${primary}, ${secondary}`);
     
     return { primary, secondary };
   }
@@ -125,7 +126,7 @@ export class ScreenshotService {
     const g = Math.abs(hash >> 8) % 156 + 100;
     const b = Math.abs(hash >> 16) % 156 + 100;
     
-    console.log(`🎨 [Screenshot] Generated color for ${appTitle}: rgb(${r}, ${g}, ${b})`);
+    log.verbose(`Generated color for ${appTitle}: rgb(${r}, ${g}, ${b})`);
     
     // Return a minimal base64 encoded image (this is a placeholder - ideally we'd generate an actual image)
     // For now, return empty string - the display will handle missing screenshots gracefully
@@ -141,7 +142,7 @@ export class ScreenshotService {
       const data = await AsyncStorage.getItem(key);
       
       if (!data) {
-        console.log('📷 [Screenshot] No screenshot found for app:', appId);
+        log.verbose('No screenshot found for app:', appId);
         return null;
       }
 
@@ -156,7 +157,7 @@ export class ScreenshotService {
       }
 
     } catch (error) {
-      console.error('💥 [Screenshot] Error retrieving screenshot:', error);
+      log.error('Error retrieving screenshot:', error);
       return null;
     }
   }
@@ -168,9 +169,9 @@ export class ScreenshotService {
     try {
       const key = this.SCREENSHOT_PREFIX + appId;
       await AsyncStorage.removeItem(key);
-      console.log('🗑️ [Screenshot] Deleted screenshot for app:', appId);
+      log.debug('Deleted screenshot for app:', appId);
     } catch (error) {
-      console.error('💥 [Screenshot] Error deleting screenshot:', error);
+      log.error('Error deleting screenshot:', error);
     }
   }
 
@@ -199,7 +200,7 @@ export class ScreenshotService {
               };
             }
           } catch (error) {
-            console.warn('Failed to parse screenshot data for key:', key);
+            log.warn('Failed to parse screenshot data for key:', key);
           }
           return null;
         })
@@ -212,7 +213,7 @@ export class ScreenshotService {
       }>;
 
     } catch (error) {
-      console.error('💥 [Screenshot] Error getting all screenshots:', error);
+      log.error('Error getting all screenshots:', error);
       return [];
     }
   }
@@ -239,10 +240,10 @@ export class ScreenshotService {
         toDelete.map(screenshot => this.deleteScreenshot(screenshot.appId))
       );
 
-      console.log('🧹 [Screenshot] Cleaned up', toDelete.length, 'old screenshots');
+      log.info('Cleaned up', toDelete.length, 'old screenshots');
 
     } catch (error) {
-      console.error('💥 [Screenshot] Error during cleanup:', error);
+      log.error('Error during cleanup:', error);
     }
   }
 
@@ -274,7 +275,7 @@ export class ScreenshotService {
       };
 
     } catch (error) {
-      console.error('💥 [Screenshot] Error getting storage stats:', error);
+      log.error('Error getting storage stats:', error);
       return { totalScreenshots: 0, estimatedSizeKB: 0 };
     }
   }

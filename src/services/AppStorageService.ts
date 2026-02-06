@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PromptHistory, GeneratedAppConcept } from '../types/PromptHistory';
 import { AppGenerationRequest } from './PromptGenerator';
+import { StorageLogger as log } from '../utils/Logger';
 
 const APPS_STORAGE_KEY = 'generated_apps';
 const APP_COUNTER_KEY = 'app_counter';
@@ -32,7 +33,7 @@ export class AppStorageService {
     claudeTitle: string,
     fallbackCategory: string
   ): { title: string; category: string } {
-    console.log('🔍 [AppStorage] Parsing title and category from:', claudeTitle);
+    log.verbose('Parsing title and category from:', claudeTitle);
     
     // Check if title contains category separator
     if (claudeTitle.includes(' | ')) {
@@ -50,12 +51,12 @@ export class AppStorageService {
         
         const finalCategory = validCategories.includes(category) ? category : fallbackCategory;
         
-        console.log('✅ [AppStorage] Parsed - Title:', title, 'Category:', finalCategory);
+        log.debug('Parsed - Title:', title, 'Category:', finalCategory);
         return { title, category: finalCategory };
       }
     }
     
-    console.log('⚠️ [AppStorage] No category found, using fallback:', fallbackCategory);
+    log.debug('No category found, using fallback:', fallbackCategory);
     return { title: claudeTitle, category: fallbackCategory };
   }
 
@@ -70,7 +71,7 @@ export class AppStorageService {
       await AsyncStorage.setItem(APP_COUNTER_KEY, newCounter.toString());
       return `app_${newCounter}_${Date.now()}`;
     } catch (error) {
-      console.error('Error generating app ID:', error);
+      log.error('Error generating app ID:', error);
       return `app_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
   }
@@ -84,18 +85,18 @@ export class AppStorageService {
     html?: string,
     model?: string
   ): Promise<StoredApp> {
-    console.log('💾 [AppStorage] Starting saveApp process');
-    console.log('📝 [AppStorage] Request:', request);
-    console.log('🤖 [AppStorage] Model:', model);
-    console.log('🎯 [AppStorage] Has concept:', !!generatedConcept);
-    console.log('📄 [AppStorage] Has custom HTML:', !!html);
+    log.debug('Starting saveApp process');
+    log.verbose('Request:', request);
+    log.verbose('Model:', model);
+    log.verbose('Has concept:', !!generatedConcept);
+    log.verbose('Has custom HTML:', !!html);
     
     try {
       const appId = await this.generateAppId();
-      console.log('🆔 [AppStorage] Generated app ID:', appId);
+      log.debug('Generated app ID:', appId);
       
       const baseUrl = `https://sandbox/${appId}/`;
-      console.log('🌐 [AppStorage] Generated baseUrl:', baseUrl);
+      log.verbose('Generated baseUrl:', baseUrl);
       
       // Parse title and category from Claude's response (format: "Title | Category")
       const { title, category } = this.parseTitleAndCategory(
@@ -121,7 +122,7 @@ export class AppStorageService {
         model: model || 'unknown'
       };
       
-      console.log('📦 [AppStorage] Created app object:', {
+      log.verbose('Created app object:', {
         id: newApp.id,
         title: newApp.title,
         status: newApp.status,
@@ -130,22 +131,22 @@ export class AppStorageService {
       });
 
       // Get existing apps
-      console.log('📚 [AppStorage] Fetching existing apps...');
+      log.verbose('Fetching existing apps...');
       const existingApps = await this.getAllApps();
-      console.log('📊 [AppStorage] Found', existingApps.length, 'existing apps');
+      log.verbose('Found', existingApps.length, 'existing apps');
       
       // Add new app to the beginning
       const updatedApps = [newApp, ...existingApps];
-      console.log('📈 [AppStorage] Total apps after addition:', updatedApps.length);
+      log.verbose('Total apps after addition:', updatedApps.length);
       
       // Save to storage
-      console.log('💾 [AppStorage] Saving to AsyncStorage...');
+      log.debug('Saving to AsyncStorage...');
       await AsyncStorage.setItem(APPS_STORAGE_KEY, JSON.stringify(updatedApps));
-      console.log('✅ [AppStorage] Successfully saved to storage');
+      log.debug('Successfully saved to storage');
       
       return newApp;
     } catch (error: any) {
-      console.error('💥 [AppStorage] Error saving app:', {
+      log.error('Error saving app:', {
         error: error?.message || error,
         stack: error?.stack,
         request
@@ -281,7 +282,7 @@ export class AppStorageService {
       const apps = await this.getAllApps();
       return apps.find(app => app.id === appId) || null;
     } catch (error) {
-      console.error('Error getting app:', error);
+      log.error('Error getting app:', error);
       return null;
     }
   }
@@ -303,7 +304,7 @@ export class AppStorageService {
         timestamp: new Date(app.timestamp)
       }));
     } catch (error) {
-      console.error('Error getting apps:', error);
+      log.error('Error getting apps:', error);
       return [];
     }
   }
@@ -316,7 +317,7 @@ export class AppStorageService {
       const apps = await this.getAllApps();
       return apps.find(app => app.id === appId) || null;
     } catch (error) {
-      console.error('Error getting app by ID:', error);
+      log.error('Error getting app by ID:', error);
       return null;
     }
   }
@@ -338,7 +339,7 @@ export class AppStorageService {
       
       return true;
     } catch (error) {
-      console.error('Error updating app:', error);
+      log.error('Error updating app:', error);
       return false;
     }
   }
@@ -354,7 +355,7 @@ export class AppStorageService {
       await AsyncStorage.setItem(APPS_STORAGE_KEY, JSON.stringify(filteredApps));
       return true;
     } catch (error) {
-      console.error('Error deleting app:', error);
+      log.error('Error deleting app:', error);
       return false;
     }
   }
@@ -372,7 +373,7 @@ export class AppStorageService {
         await AsyncStorage.setItem(APPS_STORAGE_KEY, JSON.stringify(apps));
       }
     } catch (error) {
-      console.error('Error incrementing access count:', error);
+      log.error('Error incrementing access count:', error);
     }
   }
 
@@ -393,7 +394,7 @@ export class AppStorageService {
       
       return apps[appIndex].favorite;
     } catch (error) {
-      console.error('Error toggling favorite:', error);
+      log.error('Error toggling favorite:', error);
       return false;
     }
   }
@@ -402,11 +403,11 @@ export class AppStorageService {
    * Update app HTML after generation
    */
   static async updateAppHTML(appId: string, html: string, concept?: GeneratedAppConcept, model?: string): Promise<boolean> {
-    console.log('🔄 [AppStorage] Starting updateAppHTML process');
-    console.log('🆔 [AppStorage] App ID:', appId);
-    console.log('📄 [AppStorage] HTML length:', html?.length || 0);
-    console.log('🎯 [AppStorage] Has concept:', !!concept);
-    console.log('🤖 [AppStorage] Model:', model);
+    log.debug('Starting updateAppHTML process');
+    log.verbose('App ID:', appId);
+    log.verbose('HTML length:', html?.length || 0);
+    log.verbose('Has concept:', !!concept);
+    log.verbose('Model:', model);
     
     try {
       const updateData: Partial<StoredApp> = {
@@ -419,7 +420,7 @@ export class AppStorageService {
         updateData.model = model;
       }
       
-      console.log('📦 [AppStorage] Update data prepared:', {
+      log.verbose('Update data prepared:', {
         hasHtml: !!updateData.html,
         hasGeneratedConcept: !!updateData.generatedConcept,
         status: updateData.status,
@@ -427,11 +428,11 @@ export class AppStorageService {
       });
       
       const result = await this.updateApp(appId, updateData);
-      console.log('✅ [AppStorage] Update app result:', result);
+      log.debug('Update app result:', result);
       
       return result;
     } catch (error: any) {
-      console.error('💥 [AppStorage] Error updating app HTML:', {
+      log.error('Error updating app HTML:', {
         error: error?.message || error,
         appId,
         htmlLength: html?.length || 0
@@ -461,7 +462,7 @@ export class AppStorageService {
         recentlyCreated: apps.filter(app => new Date(app.timestamp) > dayAgo).length
       };
     } catch (error) {
-      console.error('Error getting stats:', error);
+      log.error('Error getting stats:', error);
       return { total: 0, favorites: 0, totalAccess: 0, recentlyCreated: 0 };
     }
   }

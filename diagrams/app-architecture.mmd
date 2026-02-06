@@ -1,0 +1,44 @@
+graph TD
+    App["App.tsx<br/>Root Entry Point"]
+    
+    App --> RootLayout["RootLayout<br/>Initialize APIs & Services"]
+    
+    RootLayout --> Navigation["Navigation Router<br/>expo-router"]
+    
+    Navigation -->|Welcome Screen| Welcome["Welcome Screen<br/>API Setup"]
+    Navigation -->|Main App| TabLayout["Tab Layout<br/>Navigation"]
+    
+    TabLayout -->|Tab 1| MyApps["My Apps Screen<br/>Browse Apps"]
+    TabLayout -->|Tab 2| Create["Create Screen<br/>Build Apps"]
+    TabLayout -->|Tab 3| Settings["Settings Screen<br/>Configuration"]
+    
+    MyApps --> Components1["Components<br/>FavoriteAppCard<br/>MostUsedAppCard<br/>SearchBarWithFavorites<br/>Scrollable3DStack<br/>ThreeDImageCard"]
+    
+    Create --> Components2["Components<br/>SearchBar<br/>3D Stack"]
+    
+    Settings --> Components3["Settings UI<br/>Configuration"]
+    
+    Components1 --> Services["Core Services"]
+    Create --> Services
+    Settings --> Services
+    
+    Services --> StorageService["AppStorageService<br/>AsyncStorageService"]
+    Services --> SecureService["SecureStorageService<br/>API Key Management"]
+    Services --> ClaudeAPI["ClaudeApiService<br/>AI Integration"]
+    Services --> ScreenshotSerivce["ScreenshotService<br/>WebViewScreenshotService"]
+    Services --> PromptService["PromptGenerator<br/>TokenTrackingService"]
+    Services --> SeedService["SeedService<br/>Sample Data"]
+    
+    StorageService --> Data["Data Layer<br/>Local Storage"]
+    SecureService --> Secure["Secure Storage<br/>Credentials"]
+    ClaudeAPI --> External["External APIs<br/>Claude AI"]
+    
+    style App fill:#667eea
+    style RootLayout fill:#764ba2
+    style TabLayout fill:#f093fb
+    style MyApps fill:#4facfe
+    style Create fill:#00f2fe
+    style Settings fill:#43e97b
+    style Services fill:#fa7e1e
+    style Data fill:#d4a5ff
+    style External fill:#ffa500

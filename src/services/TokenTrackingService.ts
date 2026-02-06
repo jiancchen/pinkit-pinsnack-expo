@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { estimateCost as calculateCost } from '../types/ClaudeApi';
+import { TokenLogger as log } from '../utils/Logger';
 
 export interface TokenUsage {
   input_tokens: number;
@@ -52,7 +53,7 @@ export class TokenTrackingService {
         appId
       };
 
-      console.log('📊 [TokenTracking] Recording token usage:', {
+      log.verbose('Recording token usage:', {
         input: inputTokens,
         output: outputTokens,
         total: inputTokens + outputTokens,
@@ -72,9 +73,9 @@ export class TokenTrackingService {
       // Save back to storage
       await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(trimmedHistory));
       
-      console.log('✅ [TokenTracking] Token usage saved successfully');
+      log.debug('Token usage saved successfully');
     } catch (error) {
-      console.error('❌ [TokenTracking] Failed to track token usage:', error);
+      log.error('Failed to track token usage:', error);
     }
   }
 
@@ -91,7 +92,7 @@ export class TokenTrackingService {
       const history = JSON.parse(historyJson) as TokenUsage[];
       return Array.isArray(history) ? history : [];
     } catch (error) {
-      console.error('❌ [TokenTracking] Failed to get token history:', error);
+      log.error('Failed to get token history:', error);
       return [];
     }
   }
@@ -145,7 +146,7 @@ export class TokenTrackingService {
 
       stats.totalTokens = stats.totalInputTokens + stats.totalOutputTokens;
       
-      console.log('📈 [TokenTracking] Generated stats:', {
+      log.verbose('Generated stats:', {
         totalTokens: stats.totalTokens,
         totalRequests: stats.totalRequests,
         modelCount: Object.keys(stats.usageByModel).length
@@ -153,7 +154,7 @@ export class TokenTrackingService {
 
       return stats;
     } catch (error) {
-      console.error('❌ [TokenTracking] Failed to get token stats:', error);
+      log.error('Failed to get token stats:', error);
       return {
         totalInputTokens: 0,
         totalOutputTokens: 0,
@@ -174,7 +175,7 @@ export class TokenTrackingService {
       const history = await this.getTokenHistory();
       return history.filter(usage => usage.appId === appId);
     } catch (error) {
-      console.error('❌ [TokenTracking] Failed to get app token usage:', error);
+      log.error('Failed to get app token usage:', error);
       return [];
     }
   }
@@ -185,9 +186,9 @@ export class TokenTrackingService {
   static async clearTokenHistory(): Promise<void> {
     try {
       await AsyncStorage.removeItem(this.STORAGE_KEY);
-      console.log('🧹 [TokenTracking] Token history cleared');
+      log.info('Token history cleared');
     } catch (error) {
-      console.error('❌ [TokenTracking] Failed to clear token history:', error);
+      log.error('Failed to clear token history:', error);
     }
   }
 
@@ -215,7 +216,7 @@ export class TokenTrackingService {
 
       return totalCost;
     } catch (error) {
-      console.error('❌ [TokenTracking] Failed to calculate total cost:', error);
+      log.error('Failed to calculate total cost:', error);
       return 0;
     }
   }

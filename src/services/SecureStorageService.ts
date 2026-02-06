@@ -1,5 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
-import { ClaudeApiConfig, DEFAULT_CONFIG } from '../types/ClaudeApi';
+import { ClaudeApiConfig, DEFAULT_CONFIG, resolveSupportedClaudeModel } from '../types/ClaudeApi';
 
 const API_KEY_STORAGE_KEY = 'claude_api_key';
 const CONFIG_STORAGE_KEY = 'claude_api_config';
@@ -74,7 +74,12 @@ export class SecureStorageService {
     try {
       const configString = await SecureStore.getItemAsync(CONFIG_STORAGE_KEY);
       if (configString) {
-        return JSON.parse(configString);
+        const parsed = JSON.parse(configString) as Partial<Omit<ClaudeApiConfig, 'apiKey'>>;
+        const model = resolveSupportedClaudeModel(typeof parsed.model === 'string' ? parsed.model : undefined);
+        const maxTokens = typeof parsed.maxTokens === 'number' ? parsed.maxTokens : DEFAULT_CONFIG.maxTokens;
+        const temperature = typeof parsed.temperature === 'number' ? parsed.temperature : DEFAULT_CONFIG.temperature;
+
+        return { model, maxTokens, temperature };
       }
       return DEFAULT_CONFIG;
     } catch (error) {

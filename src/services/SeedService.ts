@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppStorageService, StoredApp } from './AppStorageService';
 import { Asset } from 'expo-asset';
+import { SeedLogger as log } from '../utils/Logger';
 
 // Import the chess HTML file
 const chessHtmlAsset = require('../../assets/sample-apps/chess.html');
@@ -18,7 +19,7 @@ async function loadChessHtml(): Promise<string> {
     
     return htmlContent;
   } catch (error) {
-    console.error('Failed to load chess.html:', error);
+    log.error('Failed to load chess.html:', error);
     return '<html><body><h1>Error loading chess game</h1></body></html>';
   }
 }
@@ -82,7 +83,7 @@ export class SeedService {
       const currentVersion = parseInt(storedVersion || '0', 10);
       
       if (currentVersion < this.CURRENT_SEED_VERSION) {
-        console.log('🌱 [SeedService] Seeding needed - version update');
+        log.info('Seeding needed - version update');
         return true;
       }
       
@@ -91,14 +92,14 @@ export class SeedService {
       const sampleApps = existingApps.filter(app => app.isSample);
       
       if (sampleApps.length === 0) {
-        console.log('🌱 [SeedService] Seeding needed - no sample apps found');
+        log.info('Seeding needed - no sample apps found');
         return true;
       }
       
-      console.log('✅ [SeedService] Seeding not needed');
+      log.debug('Seeding not needed');
       return false;
     } catch (error) {
-      console.error('❌ [SeedService] Error checking seed status:', error);
+      log.error('Error checking seed status:', error);
       return true; // Seed on error to be safe
     }
   }
@@ -107,7 +108,7 @@ export class SeedService {
    * Seed the app with sample apps
    */
   static async seedSampleApps(): Promise<void> {
-    console.log('🌱 [SeedService] Starting sample app seeding...');
+    log.info('Starting sample app seeding...');
     
     try {
       // Remove existing sample apps first (in case of re-seeding)
@@ -117,16 +118,16 @@ export class SeedService {
       const createdApps: StoredApp[] = [];
       
       for (const sampleApp of this.SAMPLE_APPS) {
-        console.log(`🌱 [SeedService] Creating sample app: ${sampleApp.title}`);
+        log.debug(`Creating sample app: ${sampleApp.title}`);
         
         // Load HTML content from assets if htmlFile is specified
         let htmlContent = sampleApp.html;
         if (sampleApp.htmlFile) {
           try {
             htmlContent = await loadChessHtml();
-            console.log(`📄 [SeedService] Loaded HTML from ${sampleApp.htmlFile}`);
+            log.verbose(`Loaded HTML from ${sampleApp.htmlFile}`);
           } catch (error) {
-            console.error(`❌ [SeedService] Failed to load ${sampleApp.htmlFile}:`, error);
+            log.error(`Failed to load ${sampleApp.htmlFile}:`, error);
             htmlContent = `<html><body><h1>Error loading ${sampleApp.htmlFile}</h1></body></html>`;
           }
         }
@@ -167,9 +168,9 @@ export class SeedService {
       // Update seed version
       await AsyncStorage.setItem(this.SEED_VERSION_KEY, this.CURRENT_SEED_VERSION.toString());
       
-      console.log(`✅ [SeedService] Successfully seeded ${createdApps.length} sample apps`);
+      log.info(`Successfully seeded ${createdApps.length} sample apps`);
     } catch (error) {
-      console.error('❌ [SeedService] Error seeding sample apps:', error);
+      log.error('Error seeding sample apps:', error);
       throw new Error('Failed to seed sample apps');
     }
   }
@@ -179,16 +180,16 @@ export class SeedService {
    */
   static async removeSampleApps(): Promise<void> {
     try {
-      console.log('🧹 [SeedService] Removing existing sample apps...');
+      log.debug('Removing existing sample apps...');
       
       const existingApps = await AppStorageService.getAllApps();
       const nonSampleApps = existingApps.filter(app => !app.isSample);
       
       await AsyncStorage.setItem('generated_apps', JSON.stringify(nonSampleApps));
       
-      console.log(`🧹 [SeedService] Removed ${existingApps.length - nonSampleApps.length} sample apps`);
+      log.info(`Removed ${existingApps.length - nonSampleApps.length} sample apps`);
     } catch (error) {
-      console.error('❌ [SeedService] Error removing sample apps:', error);
+      log.error('Error removing sample apps:', error);
     }
   }
 
@@ -196,7 +197,7 @@ export class SeedService {
    * Re-seed sample apps (useful for updates or user request)
    */
   static async reseedSampleApps(): Promise<void> {
-    console.log('🔄 [SeedService] Re-seeding sample apps...');
+    log.info('Re-seeding sample apps...');
     
     // Reset seed version to force re-seeding
     await AsyncStorage.removeItem(this.SEED_VERSION_KEY);
@@ -227,19 +228,19 @@ export class SeedService {
    * Initialize seeding on app startup
    */
   static async initializeSeeding(): Promise<void> {
-    console.log('🚀 [SeedService] Initializing seeding...');
+    log.debug('Initializing seeding...');
     
     try {
       const needsSeeding = await this.shouldSeed();
       
       if (needsSeeding) {
         await this.seedSampleApps();
-        console.log('✅ [SeedService] Seeding completed successfully');
+        log.info('Seeding completed successfully');
       } else {
-        console.log('✅ [SeedService] Seeding not needed');
+        log.debug('Seeding not needed');
       }
     } catch (error) {
-      console.error('❌ [SeedService] Failed to initialize seeding:', error);
+      log.error('Failed to initialize seeding:', error);
       // Don't throw - app should still work without sample apps
     }
   }
