@@ -16,6 +16,32 @@ export class ClaudeApiService {
   private axiosInstance: AxiosInstance;
   private config: ClaudeApiConfig | null = null;
 
+  private normalizeHtmlResponse(raw: string): string {
+    let content = raw.trim();
+
+    // If Claude wraps HTML in Markdown code fences, strip them.
+    if (content.startsWith('```')) {
+      content = content.replace(/^```[a-zA-Z0-9_-]*\s*\n/, '').trim();
+      content = content.replace(/```[\s]*$/, '').trim();
+    }
+
+    const lower = content.toLowerCase();
+    const doctypeIndex = lower.indexOf('<!doctype html');
+    const htmlIndex = lower.indexOf('<html');
+    const startIndex = doctypeIndex !== -1 ? doctypeIndex : htmlIndex;
+
+    if (startIndex > 0) {
+      content = content.slice(startIndex).trim();
+    }
+
+    const endIndex = content.toLowerCase().lastIndexOf('</html>');
+    if (endIndex !== -1) {
+      content = content.slice(0, endIndex + '</html>'.length).trim();
+    }
+
+    return content;
+  }
+
   private constructor() {
     this.axiosInstance = axios.create({
       baseURL: 'https://api.anthropic.com/v1',
@@ -193,11 +219,14 @@ export class ClaudeApiService {
       });
       
       if (response.content && response.content.length > 0) {
-        const content = response.content;
-        log.verbose('Raw response content:', content.substring(0, 500) + '...');
+        const rawContent = response.content;
+        const content = this.normalizeHtmlResponse(rawContent);
+        log.verbose('Response content preview:', content.substring(0, 500) + '...');
         
         // Check if this looks like HTML
-        if (content.trim().startsWith('<!DOCTYPE html>') || content.trim().startsWith('<html')) {
+        const trimmed = content.trim();
+        const trimmedLower = trimmed.toLowerCase();
+        if (trimmedLower.startsWith('<!doctype html>') || trimmedLower.startsWith('<html')) {
           log.debug('Received HTML response');
           
           // Extract app title and category from data-app-title attribute (format: "Title | Category")
@@ -262,7 +291,8 @@ export class ClaudeApiService {
         
         // If we get here, it's not valid HTML
         log.error('Response is not valid HTML');
-        log.debug('Full response for debugging:', content);
+        log.debug('Full response for debugging (raw):', rawContent);
+        log.debug('Full response for debugging (normalized):', content);
         throw new Error('Claude API did not return valid HTML.');
       } else {
         throw new Error('Claude API returned an empty response.');

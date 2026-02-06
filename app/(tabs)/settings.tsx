@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -514,49 +514,53 @@ export default function SettingsPage() {
         animationType="slide"
         onRequestClose={() => setShowModelSelector(false)}
       >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowModelSelector(false)}
-        >
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowModelSelector(false)} />
+
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Select Claude Model</Text>
             <Text style={styles.modalSubtitle}>Prices as of {PRICING_AS_OF_DISPLAY} (USD per MTok)</Text>
-            
-            {CLAUDE_MODEL_PICKER_OPTIONS.map((modelId) => {
-              const modelInfo = MODEL_INFO[modelId];
-              const isRetired = modelInfo?.status === 'retired';
 
-              return (
-                <TouchableOpacity
-                  key={modelId}
-                  style={[
-                    styles.modelOption,
-                    isRetired && styles.modelOptionDisabled,
-                    selectedModel === modelId && styles.modelOptionSelected
-                  ]}
-                  disabled={isRetired}
-                  onPress={() => handleModelSelect(modelId)}
-                >
-                  <View style={styles.modelOptionContent}>
-                    <Text style={[
-                      styles.modelOptionTitle,
-                      isRetired && styles.modelOptionTitleDisabled,
-                      selectedModel === modelId && styles.modelOptionTitleSelected
-                    ]}>
-                      {getModelDisplayName(modelId)}
-                    </Text>
-                    <Text style={styles.modelOptionPricing}>
-                      {formatModelPricingFull(modelId) || 'Pricing unavailable'}
-                    </Text>
-                  </View>
-                  {selectedModel === modelId && (
-                    <Ionicons name="checkmark-circle" size={24} color={AppColors.FABMain} />
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-            
+            <ScrollView
+              style={styles.modelOptionsScroll}
+              contentContainerStyle={styles.modelOptionsScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {CLAUDE_MODEL_PICKER_OPTIONS.map((modelId) => {
+                const modelInfo = MODEL_INFO[modelId];
+                const isRetired = modelInfo?.status === 'retired';
+
+                return (
+                  <TouchableOpacity
+                    key={modelId}
+                    style={[
+                      styles.modelOption,
+                      isRetired && styles.modelOptionDisabled,
+                      selectedModel === modelId && styles.modelOptionSelected
+                    ]}
+                    disabled={isRetired}
+                    onPress={() => handleModelSelect(modelId)}
+                  >
+                    <View style={styles.modelOptionContent}>
+                      <Text style={[
+                        styles.modelOptionTitle,
+                        isRetired && styles.modelOptionTitleDisabled,
+                        selectedModel === modelId && styles.modelOptionTitleSelected
+                      ]}>
+                        {getModelDisplayName(modelId)}
+                      </Text>
+                      <Text style={styles.modelOptionPricing}>
+                        {formatModelPricingFull(modelId) || 'Pricing unavailable'}
+                      </Text>
+                    </View>
+                    {selectedModel === modelId && (
+                      <Ionicons name="checkmark-circle" size={24} color={AppColors.FABMain} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
             <TouchableOpacity 
               style={styles.modalCancelButton}
               onPress={() => setShowModelSelector(false)}
@@ -564,7 +568,7 @@ export default function SettingsPage() {
               <Text style={styles.modalCancelButtonText}>Cancel</Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -774,7 +778,8 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 24,
+    height: '80%',
   },
   modalTitle: {
     fontSize: 20,
@@ -789,6 +794,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: -12,
     marginBottom: 20,
+  },
+  modelOptionsScroll: {
+    flex: 1,
+    marginBottom: 12,
+  },
+  modelOptionsScrollContent: {
+    paddingBottom: 4,
   },
   modelOption: {
     flexDirection: 'row',
