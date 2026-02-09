@@ -152,17 +152,23 @@ export default function CreatePage() {
       const currentConfig = claudeService.getCurrentConfig();
       const modelUsed = currentConfig?.model || 'unknown';
       log.info('Using model:', modelUsed);
-      
-      // First, save the app with placeholder content
-      log.debug('Saving app with placeholder content...');
-      const savedApp = await AppStorageService.saveApp(request, undefined, undefined, modelUsed);
-      log.debug('App saved with ID:', savedApp.id);
 
-      // Generate the prompt
+      // Generate the prompt (and store it for debugging/export)
       log.debug('Generating prompt...');
       const generatedPrompt = PromptGenerator.generatePrompt(request);
       log.debug('Generated prompt length:', generatedPrompt.length);
       log.verbose('Generated prompt preview:', generatedPrompt.substring(0, 200) + '...');
+      
+      // First, save the app with placeholder content
+      log.debug('Saving app with placeholder content...');
+      const savedApp = await AppStorageService.saveApp(
+        request,
+        undefined,
+        undefined,
+        modelUsed,
+        generatedPrompt
+      );
+      log.debug('App saved with ID:', savedApp.id);
       
       // Call Claude API
       log.debug('Calling Claude API...');

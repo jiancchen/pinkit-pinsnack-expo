@@ -1,9 +1,6 @@
-import React from 'react';
-import { StyleSheet, Platform, TouchableOpacity, Keyboard } from 'react-native';
+import React, { useEffect, useMemo } from 'react';
+import { StyleSheet, Platform, TouchableOpacity, Keyboard, View, useWindowDimensions } from 'react-native';
 import { BlurView } from 'expo-blur';
-import {
-  GestureHandlerRootView,
-} from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   withSpring,
@@ -12,12 +9,122 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { useEffect } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { TabBarVariant, useUISettingsStore } from '../stores/UISettingsStore';
 
 interface LiquidGlassTabBarProps extends BottomTabBarProps {}
 
-export default function LiquidGlassTabBar({ state, descriptors, navigation }: LiquidGlassTabBarProps) {
+const PILL_HEIGHT = 60;
+const PILL_PADDING = 6;
+
+function hexToRgb(hexColor: string): { r: number; g: number; b: number } | null {
+  const normalized = hexColor.trim().replace('#', '');
+  const hex = normalized.length === 3
+    ? normalized.split('').map((c) => c + c).join('')
+    : normalized;
+
+  if (!/^[0-9a-fA-F]{6}$/.test(hex)) return null;
+
+  const int = parseInt(hex, 16);
+  return {
+    r: (int >> 16) & 255,
+    g: (int >> 8) & 255,
+    b: int & 255,
+  };
+}
+
+function rgba(hexColor: string, alpha: number): string {
+  const rgb = hexToRgb(hexColor);
+  if (!rgb) return `rgba(124, 58, 237, ${alpha})`;
+  const clamped = Math.max(0, Math.min(1, alpha));
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${clamped})`;
+}
+
+function getTabBarColors(variant: TabBarVariant, tintColor: string) {
+  const overlayAlphaA = variant === 'tinted' ? 0.18 : 0.08;
+  const overlayAlphaB = variant === 'tinted' ? 0.10 : 0.04;
+  const indicatorAlphaA = variant === 'tinted' ? 0.24 : 0.16;
+  const indicatorAlphaB = variant === 'tinted' ? 0.12 : 0.08;
+  const borderAlpha = variant === 'tinted' ? 0.20 : 0.22;
+
+  return {
+    overlayGradient: [rgba(tintColor, overlayAlphaA), rgba(tintColor, overlayAlphaB)] as const,
+    highlightGradient: ['rgba(255, 255, 255, 0.55)', 'rgba(255, 255, 255, 0)'] as const,
+    indicatorGradient: [rgba(tintColor, indicatorAlphaA), rgba(tintColor, indicatorAlphaB)] as const,
+    borderColor: rgba(tintColor, borderAlpha),
+    baseFallback: variant === 'tinted' ? 'rgba(255, 255, 255, 0.55)' : 'rgba(255, 255, 255, 0.35)',
+  };
+}
+
+interface TabButtonProps {
+  routeName: string;
+  isFocused: boolean;
+  onPress: () => void;
+  onLongPress: () => void;
+}
+
+function TabButton({ routeName, isFocused, onPress, onLongPress }: TabButtonProps) {
+  const focus = useSharedValue(isFocused ? 1 : 0);
+
+  useEffect(() => {
+    focus.value = withSpring(isFocused ? 1 : 0, { damping: 18, stiffness: 180 });
+  }, [isFocused]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: 0.75 + focus.value * 0.25,
+      transform: [{ scale: 1 + focus.value * 0.08 }],
+    };
+  });
+
+  const iconName = useMemo(() => {
+    switch (routeName) {
+      case 'index':
+        return isFocused ? 'home' : 'home-outline';
+      case 'create':
+        return isFocused ? 'add-circle' : 'add-circle-outline';
+      case 'settings':
+        return isFocused ? 'settings' : 'settings-outline';
+      default:
+        return 'ellipse-outline';
+    }
+  }, [routeName, isFocused]);
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onLongPress={onLongPress}
+      style={styles.tabItem}
+      accessibilityRole="button"
+    >
+      <Animated.View style={[styles.tabItemInner, animatedStyle]}>
+        <Ionicons
+          name={iconName as any}
+          size={24}
+          color={isFocused ? 'rgba(0, 0, 0, 0.92)' : 'rgba(0, 0, 0, 0.62)'}
+          style={styles.iconShadow}
+        />
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
+
+export default function LiquidGlassTabBar({ state, navigation }: LiquidGlassTabBarProps) {
+  const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+
+  const tabBarVariant = useUISettingsStore((s) => s.tabBar.variant);
+  const tabBarTintColor = useUISettingsStore((s) => s.tabBar.tintColor);
+  const tabBarBlurIntensity = useUISettingsStore((s) => s.tabBar.blurIntensity);
+
   const tabBarOffset = useSharedValue(0);
+  const activeIndex = useSharedValue(state.index);
+  const pillWidth = useSharedValue(0);
+  const routesCount = state.routes.length;
+
+  useEffect(() => {
+    activeIndex.value = withSpring(state.index, { damping: 18, stiffness: 180 });
+  }, [state.index]);
 
   useEffect(() => {
     // Hide tab bar when keyboard appears on Android
@@ -42,85 +149,113 @@ export default function LiquidGlassTabBar({ state, descriptors, navigation }: Li
     };
   });
 
+  const indicatorAnimatedStyle = useAnimatedStyle(() => {
+    if (pillWidth.value <= 0) {
+      return { opacity: 0 };
+    }
+
+    const innerWidth = pillWidth.value - PILL_PADDING * 2;
+    const tabWidth = innerWidth / Math.max(1, routesCount);
+
+    return {
+      opacity: 1,
+      width: tabWidth,
+      transform: [{ translateX: activeIndex.value * tabWidth }],
+    };
+  });
+
+  const horizontalMargin = Math.max(18, Math.min(60, Math.round(screenWidth * 0.18)));
+  const bottomOffset = (Platform.OS === 'ios' ? 10 : 12) + insets.bottom;
+  const containerHeight = bottomOffset + PILL_HEIGHT + 14;
+
+  const colors = useMemo(
+    () => getTabBarColors(tabBarVariant, tabBarTintColor),
+    [tabBarVariant, tabBarTintColor]
+  );
+
   return (
-    <Animated.View style={[styles.container, { height: Platform.OS === 'ios' ? 100 : 80 }, containerAnimatedStyle]}>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        {/* Blur background layer */}
-        <BlurView 
-          intensity={80} 
-          tint="dark"
-          style={styles.blurContainer}
-        >
-        {/* Static gradient overlay */}
+    <Animated.View style={[styles.container, { height: containerHeight }, containerAnimatedStyle]}>
+      <BlurView
+        intensity={tabBarBlurIntensity}
+        tint="light"
+        style={[
+          styles.pill,
+          {
+            left: horizontalMargin,
+            right: horizontalMargin,
+            bottom: bottomOffset,
+            backgroundColor: colors.baseFallback,
+            borderColor: colors.borderColor,
+          }
+        ]}
+        onLayout={(event) => {
+          pillWidth.value = event.nativeEvent.layout.width;
+        }}
+      >
+        {/* Subtle tint overlay */}
         <LinearGradient
-          colors={[
-            'rgba(95, 42, 194, 0.48)',
-            'rgba(180, 41, 255, 0.4)'
-          ]}
+          colors={colors.overlayGradient}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.gradient}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
         />
-      </BlurView>
 
-      {/* Tab items overlay */}
-      <Animated.View style={styles.tabContainer}>
-        {state.routes.map((route, index) => {
-          const { options } = descriptors[route.key];
-          const isFocused = state.index === index;
+        {/* Glass highlight sheen */}
+        <LinearGradient
+          colors={colors.highlightGradient}
+          start={{ x: 0.2, y: 0 }}
+          end={{ x: 0.8, y: 1 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
 
-          const onPress = () => {
-            const event = navigation.emit({
-              type: 'tabPress',
-              target: route.key,
-              canPreventDefault: true,
-            });
+        {/* Animated active pill */}
+        <Animated.View style={[styles.activeIndicator, indicatorAnimatedStyle]} pointerEvents="none">
+          <LinearGradient
+            colors={colors.indicatorGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.activeIndicatorBorder} />
+        </Animated.View>
 
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
+        <View style={styles.tabRow}>
+          {state.routes.map((route, index) => {
+            const isFocused = state.index === index;
 
-          const getIconName = (routeName: string, focused: boolean) => {
-            switch (routeName) {
-              case 'index':
-                return focused ? 'home' : 'home-outline';
-              case 'create':
-                return focused ? 'add-circle' : 'add-circle-outline';
-              case 'settings':
-                return focused ? 'settings' : 'settings-outline';
-              default:
-                return 'ellipse-outline';
-            }
-          };
+            const onPress = () => {
+              const event = navigation.emit({
+                type: 'tabPress',
+                target: route.key,
+                canPreventDefault: true,
+              });
 
-          return (
-            <TouchableOpacity
-              key={route.key}
-              onPress={onPress}
-              style={[
-                styles.tabItem,
-                { 
-                  opacity: isFocused ? 1 : 0.7,
-                  transform: [{ scale: isFocused ? 1.1 : 1 }]
-                }
-              ]}
-            >
-              <Ionicons
-                name={getIconName(route.name, isFocused) as any}
-                size={24}
-                color={isFocused ? '#FFFFFF' : '#E0E0E0'}
-                style={{
-                  textShadowColor: 'rgba(0, 0, 0, 0.8)',
-                  textShadowOffset: { width: 0, height: 1 },
-                  textShadowRadius: 3,
-                }}
+              if (!isFocused && !event.defaultPrevented) {
+                navigation.navigate(route.name);
+              }
+            };
+
+            const onLongPress = () => {
+              navigation.emit({
+                type: 'tabLongPress',
+                target: route.key,
+              });
+            };
+
+            return (
+              <TabButton
+                key={route.key}
+                routeName={route.name}
+                isFocused={isFocused}
+                onPress={onPress}
+                onLongPress={onLongPress}
               />
-            </TouchableOpacity>
-          );
-        })}
-      </Animated.View>
-      </GestureHandlerRootView>
+            );
+          })}
+        </View>
+      </BlurView>
     </Animated.View>
   );
 }
@@ -134,44 +269,54 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     zIndex: 100,
   },
-  blurContainer: {
+  pill: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 30 : 20,
-    left: 60,
-    right: 60,
-    height: 60,
-    borderRadius: 30,
+    height: PILL_HEIGHT,
+    borderRadius: PILL_HEIGHT / 2,
+    overflow: 'hidden',
+    padding: PILL_PADDING,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 10,
+  },
+  activeIndicator: {
+    position: 'absolute',
+    top: PILL_PADDING,
+    bottom: PILL_PADDING,
+    left: PILL_PADDING,
+    borderRadius: (PILL_HEIGHT - PILL_PADDING * 2) / 2,
     overflow: 'hidden',
   },
-  gradient: {
-    flex: 1,
-    borderRadius: 30,
+  activeIndicatorBorder: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: (PILL_HEIGHT - PILL_PADDING * 2) / 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.55)',
   },
-  tabContainer: {
-    position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 30 : 20,
-    left: 60,
-    right: 60,
-    height: 60,
+  tabRow: {
+    flex: 1,
     flexDirection: 'row',
-    justifyContent: 'space-around',
     alignItems: 'center',
-    borderRadius: 30,
-    paddingHorizontal: 20,
-    backgroundColor: 'transparent',
+    justifyContent: 'space-between',
   },
   tabItem: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    minWidth: 60,
   },
-  tabLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 4,
-    textAlign: 'center',
+  tabItemInner: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconShadow: {
+    textShadowColor: 'rgba(255, 255, 255, 0.35)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
 });

@@ -12,6 +12,7 @@ export interface StoredApp {
   description: string;
   html: string;
   prompt: string;
+  generatedPrompt?: string;
   timestamp: Date;
   style: string;
   category: string;
@@ -83,7 +84,8 @@ export class AppStorageService {
     request: AppGenerationRequest,
     generatedConcept?: GeneratedAppConcept,
     html?: string,
-    model?: string
+    model?: string,
+    generatedPrompt?: string
   ): Promise<StoredApp> {
     log.debug('Starting saveApp process');
     log.verbose('Request:', request);
@@ -110,6 +112,7 @@ export class AppStorageService {
         description: request.description,
         html: html || this.generatePlaceholderHTML(request, generatedConcept),
         prompt: request.description,
+        generatedPrompt,
         timestamp: new Date(),
         style: request.style,
         category,

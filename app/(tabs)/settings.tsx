@@ -19,8 +19,18 @@ import {
   PRICING_AS_OF_DISPLAY
 } from '../../src/types/ClaudeApi';
 import { createLogger } from '../../src/utils/Logger';
+import { TabBarVariant, useUISettingsStore } from '../../src/stores/UISettingsStore';
 
 const log = createLogger('Settings');
+
+const TAB_BAR_TINT_OPTIONS: Array<{ label: string; color: string }> = [
+  { label: 'Purple', color: '#7C3AED' },
+  { label: 'Blue', color: '#2563EB' },
+  { label: 'Teal', color: '#14B8A6' },
+  { label: 'Green', color: '#22C55E' },
+  { label: 'Orange', color: '#F97316' },
+  { label: 'Pink', color: '#EC4899' },
+];
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -34,6 +44,13 @@ export default function SettingsPage() {
   const [tokenStats, setTokenStats] = useState<TokenStats | null>(null);
   const [isLoadingTokenStats, setIsLoadingTokenStats] = useState(true);
   const [showModelSelector, setShowModelSelector] = useState(false);
+
+  const tabBarVariant = useUISettingsStore((s) => s.tabBar.variant);
+  const tabBarTintColor = useUISettingsStore((s) => s.tabBar.tintColor);
+  const tabBarBlurIntensity = useUISettingsStore((s) => s.tabBar.blurIntensity);
+  const setTabBarVariant = useUISettingsStore((s) => s.setTabBarVariant);
+  const setTabBarTintColor = useUISettingsStore((s) => s.setTabBarTintColor);
+  const setTabBarBlurIntensity = useUISettingsStore((s) => s.setTabBarBlurIntensity);
 
   useEffect(() => {
     checkApiKeyStatus();
@@ -233,6 +250,10 @@ export default function SettingsPage() {
     Alert.alert('Terms of Service', 'Read our terms and conditions', [{ text: 'OK' }]);
   };
 
+  const selectTabBarVariant = (variant: TabBarVariant) => {
+    setTabBarVariant(variant);
+  };
+
   const getModelDisplayName = (model: string): string => {
     const modelInfo = MODEL_INFO[model];
     if (!modelInfo) return model;
@@ -342,6 +363,119 @@ export default function SettingsPage() {
               </View>
               <Text style={styles.helperText}>
                 Lower values make responses more focused, higher values more creative
+              </Text>
+            </View>
+          </SettingsCard>
+        </View>
+
+        {/* Appearance Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Appearance</Text>
+
+          <SettingsCard>
+            <View style={styles.settingGroup}>
+              <Text style={styles.settingLabel}>Tab Bar Style</Text>
+              <View style={styles.segmentedControl}>
+                <TouchableOpacity
+                  style={[
+                    styles.segmentButton,
+                    tabBarVariant === 'tinted' && styles.segmentButtonSelected
+                  ]}
+                  onPress={() => selectTabBarVariant('tinted')}
+                >
+                  <Text
+                    style={[
+                      styles.segmentButtonText,
+                      tabBarVariant === 'tinted' && styles.segmentButtonTextSelected
+                    ]}
+                  >
+                    Tinted Glass
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.segmentButton,
+                    tabBarVariant === 'clear' && styles.segmentButtonSelected
+                  ]}
+                  onPress={() => selectTabBarVariant('clear')}
+                >
+                  <Text
+                    style={[
+                      styles.segmentButtonText,
+                      tabBarVariant === 'clear' && styles.segmentButtonTextSelected
+                    ]}
+                  >
+                    Clear Glass
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.helperText}>
+                Clear keeps the pill more transparent; tint controls the glow and active highlight.
+              </Text>
+            </View>
+
+            <View style={styles.separator} />
+
+            <View style={styles.settingGroup}>
+              <Text style={styles.settingLabel}>Tab Bar Tint</Text>
+              <View style={styles.colorSwatchRow}>
+                {TAB_BAR_TINT_OPTIONS.map((option) => {
+                  const isSelected = tabBarTintColor.toUpperCase() === option.color.toUpperCase();
+                  return (
+                    <TouchableOpacity
+                      key={option.color}
+                      style={[
+                        styles.colorSwatch,
+                        { backgroundColor: option.color },
+                        isSelected && styles.colorSwatchSelected
+                      ]}
+                      onPress={() => setTabBarTintColor(option.color)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Set tab bar tint to ${option.label}`}
+                    >
+                      {isSelected && <Ionicons name="checkmark" size={16} color="white" />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={styles.helperText}>Current tint: {tabBarTintColor}</Text>
+            </View>
+
+            <View style={styles.separator} />
+
+            <View style={styles.settingGroup}>
+              <Text style={styles.settingLabel}>Blur Intensity</Text>
+              <View style={styles.segmentedControl}>
+                {[
+                  { label: 'Low', value: 60 },
+                  { label: 'Med', value: 80 },
+                  { label: 'High', value: 100 }
+                ].map((opt) => {
+                  const isSelected = tabBarBlurIntensity === opt.value;
+                  return (
+                    <TouchableOpacity
+                      key={opt.value}
+                      style={[
+                        styles.segmentButton,
+                        isSelected && styles.segmentButtonSelected
+                      ]}
+                      onPress={() => setTabBarBlurIntensity(opt.value)}
+                    >
+                      <Text
+                        style={[
+                          styles.segmentButtonText,
+                          isSelected && styles.segmentButtonTextSelected
+                        ]}
+                      >
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={styles.helperText}>
+                Higher blur looks more iOS-like (Android uses a best-effort blur fallback).
               </Text>
             </View>
           </SettingsCard>
@@ -720,6 +854,50 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     marginTop: 4,
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.12)',
+    overflow: 'hidden',
+  },
+  segmentButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+  },
+  segmentButtonSelected: {
+    backgroundColor: 'rgba(95, 15, 64, 0.12)',
+  },
+  segmentButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(0, 0, 0, 0.65)',
+  },
+  segmentButtonTextSelected: {
+    color: 'rgba(0, 0, 0, 0.9)',
+  },
+  colorSwatchRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 6,
+  },
+  colorSwatch: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 2,
+    borderColor: 'rgba(0, 0, 0, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  colorSwatchSelected: {
+    borderColor: 'rgba(0, 0, 0, 0.65)',
+    transform: [{ scale: 1.05 }],
   },
   sliderContainer: {
     marginVertical: 8,

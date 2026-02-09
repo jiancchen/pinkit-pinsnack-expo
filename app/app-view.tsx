@@ -20,6 +20,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import { AppColors } from '../src/constants/AppColors';
 import { AppStorageService, StoredApp } from '../src/services/AppStorageService';
 import { AsyncStorageService } from '../src/services/AsyncStorageService';
+import { ExportService } from '../src/services/ExportService';
 import { ScreenshotService } from '../src/services/ScreenshotService';
 import { WebViewScreenshotService } from '../src/services/WebViewScreenshotService';
 import { emitScreenshotCaptured, emitScreenshotError, emitScreenshotLoading } from '../src/stores/ScreenshotStore';
@@ -45,6 +46,7 @@ export default function AppViewPage() {
   const [newTitle, setNewTitle] = useState('');
   const [newPrompt, setNewPrompt] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
   
   const webViewRef = useRef<WebView>(null);
   const webViewContainerRef = useRef<View>(null);
@@ -375,13 +377,32 @@ export default function AppViewPage() {
     webViewRef.current?.reload();
   };
 
+  const exportDebugBundle = async () => {
+    if (!app || isExporting) return;
+    
+    try {
+      setIsExporting(true);
+      await ExportService.exportDebugBundle(app, {
+        injectedHtml: injectAppId(app.html, app.id),
+      });
+    } catch (error) {
+      log.error('Export debug bundle failed:', error);
+      Alert.alert(
+        'Export Failed',
+        error instanceof Error ? error.message : 'Failed to export debug bundle'
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const shareApp = () => {
     Alert.alert(
       'Share App',
       `Share "${app?.title}" with others`,
       [
         { text: 'Copy Link', onPress: () => {} },
-        { text: 'Export HTML', onPress: () => {} },
+        { text: 'Export HTML + Prompt', onPress: exportDebugBundle },
         { text: 'Cancel', style: 'cancel' }
       ]
     );
@@ -853,12 +874,12 @@ export default function AppViewPage() {
         transparent={true}
         animationType="slide"
         onRequestClose={() => setShowEditPromptModal(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowEditPromptModal(false)}
-        >
+	      >
+	        <TouchableOpacity 
+	          style={styles.modalOverlay}
+	          activeOpacity={1}
+	          onPress={() => setShowEditPromptModal(false)}
+	        >
           <View style={styles.menuModal}>
             <Text style={styles.menuTitle}>Update Prompt & Recreate</Text>
             <Text style={styles.menuSubtitle}>
@@ -914,11 +935,20 @@ export default function AppViewPage() {
               </TouchableOpacity>
             </View>
           </View>
-        </TouchableOpacity>
-      </Modal>
-    </View>
-  );
-}
+	        </TouchableOpacity>
+	      </Modal>
+
+	      {isExporting && (
+	        <View style={styles.exportOverlay} pointerEvents="auto">
+	          <View style={styles.exportOverlayCard}>
+	            <ActivityIndicator size="small" color={AppColors.FABMain} />
+	            <Text style={styles.exportOverlayText}>Preparing export…</Text>
+	          </View>
+	        </View>
+	      )}
+	    </View>
+	  );
+	}
 
 const styles = StyleSheet.create({
   container: {
@@ -1122,6 +1152,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: 'rgba(0, 0, 0, 0.6)',
     textAlign: 'center',
+  },
+  exportOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  exportOverlayCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  exportOverlayText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(0, 0, 0, 0.8)',
   },
   textInput: {
     borderWidth: 1,
