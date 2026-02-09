@@ -13,8 +13,11 @@ import { TokenTrackingService, TokenStats } from '../../src/services/TokenTracki
 import {
   CLAUDE_MODELS,
   CLAUDE_MODEL_PICKER_OPTIONS,
+  DEFAULT_CONFIG,
+  clampMaxOutputTokens,
   formatModelPricingFull,
   formatModelPricingShort,
+  getModelMaxOutputTokens,
   MODEL_INFO,
   PRICING_AS_OF_DISPLAY
 } from '../../src/types/ClaudeApi';
@@ -22,6 +25,14 @@ import { createLogger } from '../../src/utils/Logger';
 import { TabBarVariant, useUISettingsStore } from '../../src/stores/UISettingsStore';
 
 const log = createLogger('Settings');
+
+const MAX_OUTPUT_TOKEN_PRESETS = [4_000, 8_000, 16_000, 32_000, 64_000] as const;
+
+const TEMPERATURE_PRESETS: Array<{ label: string; value: number; helper: string }> = [
+  { label: 'Focused', value: 0.2, helper: 'More deterministic' },
+  { label: 'Balanced', value: 0.3, helper: 'Good default' },
+  { label: 'Creative', value: 0.7, helper: 'More variety' },
+];
 
 const TAB_BAR_TINT_OPTIONS: Array<{ label: string; color: string }> = [
   { label: 'Purple', color: '#7C3AED' },
@@ -35,6 +46,7 @@ const TAB_BAR_TINT_OPTIONS: Array<{ label: string; color: string }> = [
 export default function SettingsPage() {
   const router = useRouter();
   const [temperature, setTemperature] = useState(0.3);
+  const [maxTokens, setMaxTokens] = useState(DEFAULT_CONFIG.maxTokens);
   const [selectedModel, setSelectedModel] = useState<string>(CLAUDE_MODELS.HAIKU_4_5);
   const [selectedLanguage, setSelectedLanguage] = useState('English');
   const [hasApiKey, setHasApiKey] = useState(false);
@@ -84,6 +96,7 @@ export default function SettingsPage() {
     try {
       const config = await SecureStorageService.getConfig();
       setSelectedModel(config.model);
+      setMaxTokens(config.maxTokens);
       setTemperature(config.temperature);
     } catch (error) {
       log.error('Error loading Claude config:', error);
@@ -250,6 +263,25 @@ export default function SettingsPage() {
     Alert.alert('Terms of Service', 'Read our terms and conditions', [{ text: 'OK' }]);
   };
 
+  const persistClaudeDefaults = async (
+    nextConfig: { model: string; maxTokens: number; temperature: number }
+  ): Promise<boolean> => {
+    try {
+      const apiKey = await SecureStorageService.getApiKey();
+      if (apiKey) {
+        const claudeService = ClaudeApiService.getInstance();
+        await claudeService.updateConfig(apiKey, nextConfig);
+      } else {
+        await SecureStorageService.storeConfig(nextConfig);
+      }
+      return true;
+    } catch (error) {
+      log.error('Error updating Claude defaults:', error);
+      Alert.alert('Error', 'Failed to update Claude settings');
+      return false;
+    }
+  };
+
   const selectTabBarVariant = (variant: TabBarVariant) => {
     setTabBarVariant(variant);
   };
@@ -273,20 +305,31 @@ export default function SettingsPage() {
         return;
       }
 
+      const clampedMaxTokens = clampMaxOutputTokens(model, maxTokens);
+
       setSelectedModel(model);
+      setMaxTokens(clampedMaxTokens);
       setShowModelSelector(false);
       
-      // Update the Claude API service configuration
-      const claudeService = ClaudeApiService.getInstance();
-      const apiKey = await SecureStorageService.getApiKey();
-      if (apiKey) {
-        await claudeService.updateConfig(apiKey, { model, maxTokens: 4000, temperature });
+      const ok = await persistClaudeDefaults({ model, maxTokens: clampedMaxTokens, temperature });
+      if (ok) {
         Alert.alert('Success', `Model updated to ${getModelDisplayName(model)}`);
       }
     } catch (error) {
       log.error('Error updating model:', error);
       Alert.alert('Error', 'Failed to update model');
     }
+  };
+
+  const handleMaxTokensSelect = async (requestedMaxTokens: number) => {
+    const clampedMaxTokens = clampMaxOutputTokens(selectedModel, requestedMaxTokens);
+    setMaxTokens(clampedMaxTokens);
+    await persistClaudeDefaults({ model: selectedModel, maxTokens: clampedMaxTokens, temperature });
+  };
+
+  const handleTemperatureSelect = async (nextTemperature: number) => {
+    setTemperature(nextTemperature);
+    await persistClaudeDefaults({ model: selectedModel, maxTokens, temperature: nextTemperature });
   };
 
   return (
@@ -350,19 +393,53 @@ export default function SettingsPage() {
             <View style={styles.separator} />
 
             <View style={styles.settingGroup}>
-              <Text style={styles.settingLabel}>Temperature: {temperature.toFixed(1)}</Text>
-              <View style={styles.sliderContainer}>
-                <View style={styles.sliderTrack}>
-                  <View 
-                    style={[
-                      styles.sliderThumb, 
-                      { left: `${temperature * 100}%` }
-                    ]} 
-                  />
-                </View>
+              <Text style={styles.settingLabel}>
+                Max Output Tokens: {maxTokens.toLocaleString()}
+              </Text>
+              <View style={styles.chipRow}>
+                {MAX_OUTPUT_TOKEN_PRESETS.filter((preset) => preset <= getModelMaxOutputTokens(selectedModel)).map((preset) => {
+                  const isSelected = maxTokens === preset;
+                  return (
+                    <TouchableOpacity
+                      key={preset}
+                      style={[styles.chip, isSelected && styles.chipSelected]}
+                      onPress={() => handleMaxTokensSelect(preset)}
+                    >
+                      <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                        {preset >= 1000 ? `${preset / 1000}K` : `${preset}`}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
               <Text style={styles.helperText}>
-                Lower values make responses more focused, higher values more creative
+                Larger values reduce truncation but increase cost. Model max: {getModelMaxOutputTokens(selectedModel).toLocaleString()} tokens.
+              </Text>
+            </View>
+
+            <View style={styles.separator} />
+
+            <View style={styles.settingGroup}>
+              <Text style={styles.settingLabel}>Temperature: {temperature.toFixed(1)}</Text>
+              <View style={styles.chipRow}>
+                {TEMPERATURE_PRESETS.map((preset) => {
+                  const isSelected = Math.abs(temperature - preset.value) < 0.0001;
+                  return (
+                    <TouchableOpacity
+                      key={preset.label}
+                      style={[styles.chip, isSelected && styles.chipSelected]}
+                      onPress={() => handleTemperatureSelect(preset.value)}
+                    >
+                      <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                        {preset.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={styles.helperText}>
+                {TEMPERATURE_PRESETS.find((p) => Math.abs(p.value - temperature) < 0.0001)?.helper ||
+                  'Lower values are more focused; higher values are more creative.'}
               </Text>
             </View>
           </SettingsCard>
@@ -854,6 +931,32 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     marginTop: 4,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  chip: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+  },
+  chipSelected: {
+    backgroundColor: 'rgba(95, 15, 64, 0.12)',
+    borderColor: 'rgba(0, 0, 0, 0.2)',
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(0, 0, 0, 0.65)',
+  },
+  chipTextSelected: {
+    color: 'rgba(0, 0, 0, 0.9)',
   },
   segmentedControl: {
     flexDirection: 'row',

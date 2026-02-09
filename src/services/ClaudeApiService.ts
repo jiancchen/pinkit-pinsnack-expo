@@ -4,7 +4,10 @@ import {
   ClaudeResponse, 
   ClaudeApiConfig, 
   ApiError,
-  ClaudeMessage 
+  ClaudeMessage,
+  clampMaxOutputTokens,
+  clampTemperature,
+  resolveSupportedClaudeModel,
 } from '../types/ClaudeApi';
 import { SecureStorageService } from './SecureStorageService';
 import { GeneratedAppConcept } from '../types/PromptHistory';
@@ -111,8 +114,11 @@ export class ClaudeApiService {
       // Store additional config if provided
       if (config) {
         const currentConfig = await SecureStorageService.getConfig();
-        const newConfig = { ...currentConfig, ...config };
-        await SecureStorageService.storeConfig(newConfig);
+        const merged = { ...currentConfig, ...config };
+        const model = resolveSupportedClaudeModel(typeof merged.model === 'string' ? merged.model : undefined);
+        const maxTokens = clampMaxOutputTokens(model, merged.maxTokens as number);
+        const temperature = clampTemperature(merged.temperature as number);
+        await SecureStorageService.storeConfig({ model, maxTokens, temperature });
       }
 
       // Reinitialize with new config
@@ -129,8 +135,9 @@ export class ClaudeApiService {
   private async sendMessage(
     messages: ClaudeMessage[],
     options: {
-      maxTokens: number;
-      temperature: number;
+      maxTokens?: number;
+      temperature?: number;
+      model?: string;
       operation?: string;
       appId?: string;
     }
@@ -144,10 +151,14 @@ export class ClaudeApiService {
       throw new Error('API not configured');
     }
 
+    const resolvedModel = resolveSupportedClaudeModel(options.model || this.config.model);
+    const resolvedMaxTokens = clampMaxOutputTokens(resolvedModel, options.maxTokens ?? this.config.maxTokens);
+    const resolvedTemperature = clampTemperature(options.temperature ?? this.config.temperature);
+
     const requestBody: ClaudeRequest = {
-      model: this.config.model,
-      max_tokens: options.maxTokens,
-      temperature: options.temperature,
+      model: resolvedModel,
+      max_tokens: resolvedMaxTokens,
+      temperature: resolvedTemperature,
       messages
     };
     
@@ -177,7 +188,7 @@ export class ClaudeApiService {
           await TokenTrackingService.trackTokenUsage(
             response.data.usage.input_tokens,
             response.data.usage.output_tokens,
-            this.config.model,
+            resolvedModel,
             options.operation || 'api_call',
             options.appId
           ).catch(err => log.warn('Failed to track tokens:', err));
@@ -203,7 +214,16 @@ export class ClaudeApiService {
   /**
    * Generate an app concept using Claude API
    */
-  async generateAppConcept(prompt: string): Promise<any> {
+  async generateAppConcept(
+    prompt: string,
+    options?: {
+      model?: string;
+      maxTokens?: number;
+      temperature?: number;
+      operation?: string;
+      appId?: string;
+    }
+  ): Promise<any> {
     const messages: ClaudeMessage[] = [
       {
         role: 'user',
@@ -213,9 +233,11 @@ export class ClaudeApiService {
 
     try {
       const response = await this.sendMessage(messages, {
-        maxTokens: this.config!.maxTokens,
-        temperature: this.config!.temperature,
-        operation: 'app_generation'
+        model: options?.model,
+        maxTokens: options?.maxTokens,
+        temperature: options?.temperature,
+        operation: options?.operation || 'app_generation',
+        appId: options?.appId
       });
       
       if (response.content && response.content.length > 0) {

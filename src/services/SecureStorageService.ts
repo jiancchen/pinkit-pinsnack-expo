@@ -1,5 +1,11 @@
 import * as SecureStore from 'expo-secure-store';
-import { ClaudeApiConfig, DEFAULT_CONFIG, resolveSupportedClaudeModel } from '../types/ClaudeApi';
+import {
+  ClaudeApiConfig,
+  DEFAULT_CONFIG,
+  clampMaxOutputTokens,
+  clampTemperature,
+  resolveSupportedClaudeModel,
+} from '../types/ClaudeApi';
 import { createLogger } from '../utils/Logger';
 
 const log = createLogger('SecureStorage');
@@ -79,8 +85,11 @@ export class SecureStorageService {
       if (configString) {
         const parsed = JSON.parse(configString) as Partial<Omit<ClaudeApiConfig, 'apiKey'>>;
         const model = resolveSupportedClaudeModel(typeof parsed.model === 'string' ? parsed.model : undefined);
-        const maxTokens = typeof parsed.maxTokens === 'number' ? parsed.maxTokens : DEFAULT_CONFIG.maxTokens;
-        const temperature = typeof parsed.temperature === 'number' ? parsed.temperature : DEFAULT_CONFIG.temperature;
+        const maxTokensRaw = typeof parsed.maxTokens === 'number' ? parsed.maxTokens : DEFAULT_CONFIG.maxTokens;
+        const temperatureRaw = typeof parsed.temperature === 'number' ? parsed.temperature : DEFAULT_CONFIG.temperature;
+
+        const maxTokens = clampMaxOutputTokens(model, maxTokensRaw);
+        const temperature = clampTemperature(temperatureRaw);
 
         return { model, maxTokens, temperature };
       }

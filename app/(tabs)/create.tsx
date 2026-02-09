@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, StatusBar } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, StatusBar, Modal, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,9 +8,29 @@ import { PromptGenerator, AppStyle, AppCategory, AppGenerationRequest } from '..
 import { ClaudeApiService } from '../../src/services/ClaudeApiService';
 import { AppStorageService } from '../../src/services/AppStorageService';
 import { SecureStorageService } from '../../src/services/SecureStorageService';
+import {
+  CLAUDE_MODEL_PICKER_OPTIONS,
+  DEFAULT_CONFIG,
+  MODEL_INFO,
+  PRICING_AS_OF_DISPLAY,
+  clampMaxOutputTokens,
+  clampTemperature,
+  estimateCost,
+  estimateTokensFromText,
+  formatModelPricingShort,
+  getModelMaxOutputTokens,
+} from '../../src/types/ClaudeApi';
 import { createLogger } from '../../src/utils/Logger';
 
 const log = createLogger('CreateApp');
+
+const MAX_OUTPUT_TOKEN_PRESETS = [4_000, 8_000, 16_000, 32_000, 64_000] as const;
+
+const TEMPERATURE_PRESETS: Array<{ label: string; value: number }> = [
+  { label: 'Focused', value: 0.2 },
+  { label: 'Balanced', value: 0.3 },
+  { label: 'Creative', value: 0.7 },
+];
 
 const styles = {
   minimalist: { name: 'Minimalist', emoji: '🎨' },
@@ -71,11 +91,24 @@ export default function CreatePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
   const [isCheckingApiKey, setIsCheckingApiKey] = useState(true);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showModelSelector, setShowModelSelector] = useState(false);
+  const [defaultsConfig, setDefaultsConfig] = useState(DEFAULT_CONFIG);
+  const [generationModel, setGenerationModel] = useState<string>(DEFAULT_CONFIG.model);
+  const [generationMaxTokens, setGenerationMaxTokens] = useState<number>(DEFAULT_CONFIG.maxTokens);
+  const [generationTemperature, setGenerationTemperature] = useState<number>(DEFAULT_CONFIG.temperature);
 
   const checkApiKeyStatus = async () => {
     try {
-      const hasKey = await SecureStorageService.hasApiKey();
+      const [hasKey, config] = await Promise.all([
+        SecureStorageService.hasApiKey(),
+        SecureStorageService.getConfig(),
+      ]);
       setHasApiKey(hasKey);
+      setDefaultsConfig(config);
+      setGenerationModel(config.model);
+      setGenerationMaxTokens(config.maxTokens);
+      setGenerationTemperature(config.temperature);
     } catch (error) {
       log.error('Error checking API key status:', error);
       setHasApiKey(false);
@@ -89,6 +122,65 @@ export default function CreatePage() {
       checkApiKeyStatus();
     }, [])
   );
+
+  const getModelDisplayName = (model: string): string => {
+    const modelInfo = MODEL_INFO[model];
+    if (!modelInfo) return model;
+    if (modelInfo.status === 'deprecated') return `${modelInfo.name} (deprecated)`;
+    if (modelInfo.status === 'retired') return `${modelInfo.name} (retired)`;
+    return modelInfo.name;
+  };
+
+  const formatUsd = (value: number): string => {
+    if (!Number.isFinite(value)) return '$—';
+    if (value <= 0) return '$0.00';
+    if (value < 0.01) return `$${value.toFixed(4)}`;
+    if (value < 1) return `$${value.toFixed(3)}`;
+    return `$${value.toFixed(2)}`;
+  };
+
+  const effectiveMaxTokens = clampMaxOutputTokens(generationModel, generationMaxTokens);
+  const effectiveTemperature = clampTemperature(generationTemperature);
+
+  const runEstimate = useMemo(() => {
+    const description = prompt.trim();
+    if (!description) return null;
+
+    const requestForPrompt: AppGenerationRequest = {
+      description,
+      style: selectedStyle,
+      platform: 'mobile',
+    };
+
+    const generatedPrompt = PromptGenerator.generatePrompt(requestForPrompt, {
+      maxOutputTokens: effectiveMaxTokens,
+    });
+
+    const estimatedInputTokens = estimateTokensFromText(generatedPrompt);
+    const estimatedMaxCost = estimateCost(estimatedInputTokens, effectiveMaxTokens, generationModel);
+
+    return {
+      estimatedInputTokens,
+      effectiveMaxTokens,
+      estimatedMaxCost,
+    };
+  }, [prompt, selectedStyle, generationModel, effectiveMaxTokens]);
+
+  const handleAdvancedModelSelect = (modelId: string) => {
+    const modelInfo = MODEL_INFO[modelId];
+    if (modelInfo?.status === 'retired') return;
+
+    const clampedMaxTokens = clampMaxOutputTokens(modelId, generationMaxTokens);
+    setGenerationModel(modelId);
+    setGenerationMaxTokens(clampedMaxTokens);
+    setShowModelSelector(false);
+  };
+
+  const resetAdvancedToDefaults = () => {
+    setGenerationModel(defaultsConfig.model);
+    setGenerationMaxTokens(defaultsConfig.maxTokens);
+    setGenerationTemperature(defaultsConfig.temperature);
+  };
 
   const handleSubmit = async () => {
     log.debug('Starting app generation process');
@@ -148,14 +240,16 @@ export default function CreatePage() {
       
       log.debug('Claude service configured');
 
-      // Get the current model being used
-      const currentConfig = claudeService.getCurrentConfig();
-      const modelUsed = currentConfig?.model || 'unknown';
+      const modelUsed = generationModel;
+      const maxTokensUsed = clampMaxOutputTokens(modelUsed, generationMaxTokens);
+      const temperatureUsed = clampTemperature(generationTemperature);
       log.info('Using model:', modelUsed);
+      log.info('Max output tokens:', maxTokensUsed);
+      log.info('Temperature:', temperatureUsed);
 
       // Generate the prompt (and store it for debugging/export)
       log.debug('Generating prompt...');
-      const generatedPrompt = PromptGenerator.generatePrompt(request);
+      const generatedPrompt = PromptGenerator.generatePrompt(request, { maxOutputTokens: maxTokensUsed });
       log.debug('Generated prompt length:', generatedPrompt.length);
       log.verbose('Generated prompt preview:', generatedPrompt.substring(0, 200) + '...');
       
@@ -172,7 +266,13 @@ export default function CreatePage() {
       
       // Call Claude API
       log.debug('Calling Claude API...');
-      const generatedResponse = await claudeService.generateAppConcept(generatedPrompt);
+      const generatedResponse = await claudeService.generateAppConcept(generatedPrompt, {
+        model: modelUsed,
+        maxTokens: maxTokensUsed,
+        temperature: temperatureUsed,
+        operation: 'app_generation',
+        appId: savedApp.id,
+      });
       log.debug('Received response from Claude API');
       log.verbose('Generated response:', {
         name: generatedResponse.name,
@@ -239,15 +339,24 @@ export default function CreatePage() {
       <StatusBar translucent backgroundColor="transparent" />
       
       {/* Header */}
-      <View style={styleSheet.header}>
-        <TouchableOpacity
-          style={styleSheet.backButton}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="arrow-back" size={24} color="rgba(0, 0, 0, 0.8)" />
-        </TouchableOpacity>
-        <Text style={styleSheet.headerTitle}>Create New App</Text>
-      </View>
+	      <View style={styleSheet.header}>
+	        <TouchableOpacity
+	          style={styleSheet.backButton}
+	          onPress={() => router.back()}
+	        >
+	          <Ionicons name="arrow-back" size={24} color="rgba(0, 0, 0, 0.8)" />
+	        </TouchableOpacity>
+	        <Text style={styleSheet.headerTitle}>Create New App</Text>
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity
+            style={styleSheet.headerIconButton}
+            onPress={() => setShowAdvanced(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Open advanced settings"
+          >
+            <Ionicons name="options-outline" size={22} color="rgba(0, 0, 0, 0.8)" />
+          </TouchableOpacity>
+	      </View>
 
       <ScrollView 
         style={styleSheet.scrollView}
@@ -300,8 +409,8 @@ export default function CreatePage() {
           </View>
         </View>
 
-        {/* Generate Button Section */}
-        <View style={styleSheet.section}>
+	        {/* Generate Button Section */}
+	        <View style={styleSheet.section}>
           {!hasApiKey && !isCheckingApiKey && (
             <View style={styleSheet.warningCard}>
               <Ionicons name="warning" size={20} color="#F59E0B" />
@@ -317,14 +426,14 @@ export default function CreatePage() {
             </View>
           )}
           
-          <TouchableOpacity
-            style={[
-              styleSheet.generateButton,
-              { opacity: (!prompt.trim() || isLoading || !hasApiKey) ? 0.6 : 1 }
-            ]}
-            onPress={handleSubmit}
-            disabled={!prompt.trim() || isLoading || !hasApiKey}
-          >
+	          <TouchableOpacity
+	            style={[
+	              styleSheet.generateButton,
+	              { opacity: (!prompt.trim() || isLoading || !hasApiKey) ? 0.6 : 1 }
+	            ]}
+	            onPress={handleSubmit}
+	            disabled={!prompt.trim() || isLoading || !hasApiKey}
+	          >
             {isLoading ? (
               <View style={styleSheet.loadingContainer}>
                 <Text style={styleSheet.generateButtonText}>Generating with Claude AI...</Text>
@@ -337,8 +446,14 @@ export default function CreatePage() {
                 </Text>
               </View>
             )}
-          </TouchableOpacity>
-        </View>
+	          </TouchableOpacity>
+
+            {runEstimate && (
+              <Text style={styleSheet.costEstimateText}>
+                Est. max cost {formatUsd(runEstimate.estimatedMaxCost)} • Input ~{runEstimate.estimatedInputTokens.toLocaleString()} • Output up to {runEstimate.effectiveMaxTokens.toLocaleString()} ({getModelDisplayName(generationModel)})
+              </Text>
+            )}
+	        </View>
 
         {/* Templates Section */}
         {!isLoading && (
@@ -358,10 +473,199 @@ export default function CreatePage() {
             ))}
           </View>
         )}
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
+	      </ScrollView>
+
+        {/* Advanced Settings Modal */}
+        <Modal
+          visible={showAdvanced}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowAdvanced(false)}
+        >
+          <View style={styleSheet.modalOverlay}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowAdvanced(false)} />
+
+            <View style={styleSheet.modalContent}>
+              <Text style={styleSheet.modalTitle}>Advanced</Text>
+              <Text style={styleSheet.modalSubtitle}>
+                Tune model, token budget, and creativity for this run.
+              </Text>
+
+              <View style={styleSheet.settingGroup}>
+                <Text style={styleSheet.settingLabel}>Model</Text>
+                <TouchableOpacity style={styleSheet.dropdown} onPress={() => setShowModelSelector(true)}>
+                  <Text style={styleSheet.dropdownText}>{getModelDisplayName(generationModel)}</Text>
+                  <Ionicons name="chevron-down" size={18} color="#666" />
+                </TouchableOpacity>
+                <Text style={styleSheet.helperText}>
+                  {formatModelPricingShort(generationModel) || 'Pricing unavailable'} (as of {PRICING_AS_OF_DISPLAY})
+                </Text>
+              </View>
+
+              <View style={styleSheet.separator} />
+
+              <View style={styleSheet.settingGroup}>
+                <Text style={styleSheet.settingLabel}>Max Output Tokens: {effectiveMaxTokens.toLocaleString()}</Text>
+                <View style={styleSheet.stepperRow}>
+                  <TouchableOpacity
+                    style={styleSheet.stepperButton}
+                    onPress={() => setGenerationMaxTokens((value) => clampMaxOutputTokens(generationModel, value - 1_000))}
+                  >
+                    <Ionicons name="remove" size={18} color="rgba(0, 0, 0, 0.8)" />
+                  </TouchableOpacity>
+                  <Text style={styleSheet.stepperValue}>{effectiveMaxTokens.toLocaleString()}</Text>
+                  <TouchableOpacity
+                    style={styleSheet.stepperButton}
+                    onPress={() => setGenerationMaxTokens((value) => clampMaxOutputTokens(generationModel, value + 1_000))}
+                  >
+                    <Ionicons name="add" size={18} color="rgba(0, 0, 0, 0.8)" />
+                  </TouchableOpacity>
+                </View>
+                <View style={styleSheet.chipRow}>
+                  {MAX_OUTPUT_TOKEN_PRESETS.filter((preset) => preset <= getModelMaxOutputTokens(generationModel)).map((preset) => {
+                    const isSelected = effectiveMaxTokens === preset;
+                    return (
+                      <TouchableOpacity
+                        key={preset}
+                        style={[styleSheet.chip, isSelected && styleSheet.chipSelected]}
+                        onPress={() => setGenerationMaxTokens(clampMaxOutputTokens(generationModel, preset))}
+                      >
+                        <Text style={[styleSheet.chipText, isSelected && styleSheet.chipTextSelected]}>
+                          {preset >= 1000 ? `${preset / 1000}K` : `${preset}`}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text style={styleSheet.helperText}>
+                  Model max: {getModelMaxOutputTokens(generationModel).toLocaleString()} tokens
+                </Text>
+              </View>
+
+              <View style={styleSheet.separator} />
+
+              <View style={styleSheet.settingGroup}>
+                <Text style={styleSheet.settingLabel}>Temperature: {effectiveTemperature.toFixed(1)}</Text>
+                <View style={styleSheet.chipRow}>
+                  {TEMPERATURE_PRESETS.map((preset) => {
+                    const isSelected = Math.abs(effectiveTemperature - preset.value) < 0.0001;
+                    return (
+                      <TouchableOpacity
+                        key={preset.label}
+                        style={[styleSheet.chip, isSelected && styleSheet.chipSelected]}
+                        onPress={() => setGenerationTemperature(preset.value)}
+                      >
+                        <Text style={[styleSheet.chipText, isSelected && styleSheet.chipTextSelected]}>
+                          {preset.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text style={styleSheet.helperText}>
+                  Lower = more focused, higher = more creative.
+                </Text>
+              </View>
+
+              <View style={styleSheet.separator} />
+
+              <View style={styleSheet.settingGroup}>
+                <Text style={styleSheet.settingLabel}>Estimate</Text>
+                {runEstimate ? (
+                  <Text style={styleSheet.helperText}>
+                    Est. max cost {formatUsd(runEstimate.estimatedMaxCost)} • Input ~{runEstimate.estimatedInputTokens.toLocaleString()} • Output up to {runEstimate.effectiveMaxTokens.toLocaleString()}
+                  </Text>
+                ) : (
+                  <Text style={styleSheet.helperText}>Enter a prompt to see an estimate.</Text>
+                )}
+              </View>
+
+              <View style={styleSheet.modalButtonRow}>
+                <TouchableOpacity
+                  style={[styleSheet.modalButton, { backgroundColor: '#f0f0f0' }]}
+                  onPress={resetAdvancedToDefaults}
+                >
+                  <Text style={[styleSheet.modalButtonText, { color: 'rgba(0, 0, 0, 0.7)' }]}>
+                    Reset
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styleSheet.modalButton} onPress={() => setShowAdvanced(false)}>
+                  <Text style={styleSheet.modalButtonText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Model Picker Modal (Advanced) */}
+        <Modal
+          visible={showModelSelector}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowModelSelector(false)}
+        >
+          <View style={styleSheet.modalOverlay}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowModelSelector(false)} />
+
+            <View style={styleSheet.modelPickerContent}>
+              <Text style={styleSheet.modalTitle}>Select Claude Model</Text>
+              <Text style={styleSheet.modalSubtitle}>Prices as of {PRICING_AS_OF_DISPLAY} (USD per MTok)</Text>
+
+              <ScrollView
+                style={styleSheet.modelOptionsScroll}
+                contentContainerStyle={styleSheet.modelOptionsScrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {CLAUDE_MODEL_PICKER_OPTIONS.map((modelId) => {
+                  const modelInfo = MODEL_INFO[modelId];
+                  const isRetired = modelInfo?.status === 'retired';
+                  const isSelected = generationModel === modelId;
+
+                  return (
+                    <TouchableOpacity
+                      key={modelId}
+                      style={[
+                        styleSheet.modelOption,
+                        isRetired && styleSheet.modelOptionDisabled,
+                        isSelected && styleSheet.modelOptionSelected
+                      ]}
+                      disabled={isRetired}
+                      onPress={() => handleAdvancedModelSelect(modelId)}
+                    >
+                      <View style={styleSheet.modelOptionContent}>
+                        <Text style={[
+                          styleSheet.modelOptionTitle,
+                          isRetired && styleSheet.modelOptionTitleDisabled,
+                          isSelected && styleSheet.modelOptionTitleSelected
+                        ]}>
+                          {getModelDisplayName(modelId)}
+                        </Text>
+                        <Text style={styleSheet.modelOptionPricing}>
+                          {formatModelPricingShort(modelId) || 'Pricing unavailable'}
+                          {'\n'}
+                          Max output: {getModelMaxOutputTokens(modelId).toLocaleString()} tokens
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <Ionicons name="checkmark-circle" size={22} color={AppColors.FABMain} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              <TouchableOpacity
+                style={styleSheet.modalCancelButton}
+                onPress={() => setShowModelSelector(false)}
+              >
+                <Text style={styleSheet.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+	    </SafeAreaView>
+	  );
+	}
 
 interface OptionCardProps {
   id: string;
@@ -608,5 +912,205 @@ const styleSheet = StyleSheet.create({
   templateDescription: {
     fontSize: 12,
     color: 'rgba(0, 0, 0, 0.6)',
+  },
+  headerIconButton: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+  },
+  costEstimateText: {
+    marginTop: 10,
+    fontSize: 12,
+    color: 'rgba(0, 0, 0, 0.65)',
+    textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+  },
+  modalContent: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+  },
+  modelPickerContent: {
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '85%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: 'rgba(0, 0, 0, 0.85)',
+  },
+  modalSubtitle: {
+    marginTop: 6,
+    fontSize: 12,
+    color: 'rgba(0, 0, 0, 0.6)',
+    lineHeight: 16,
+  },
+  settingGroup: {
+    marginTop: 16,
+  },
+  settingLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: 'rgba(0, 0, 0, 0.8)',
+    marginBottom: 8,
+  },
+  dropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(128, 128, 128, 0.35)',
+    borderRadius: 12,
+    backgroundColor: '#fff',
+  },
+  dropdownText: {
+    fontSize: 14,
+    color: 'rgba(0, 0, 0, 0.85)',
+    fontWeight: '700',
+  },
+  helperText: {
+    fontSize: 12,
+    color: 'rgba(0, 0, 0, 0.6)',
+    marginTop: 6,
+    lineHeight: 16,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    marginTop: 16,
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 10,
+  },
+  stepperButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
+  },
+  stepperValue: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '800',
+    color: 'rgba(0, 0, 0, 0.85)',
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+  },
+  chipSelected: {
+    backgroundColor: 'rgba(95, 15, 64, 0.12)',
+    borderColor: 'rgba(0, 0, 0, 0.2)',
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: 'rgba(0, 0, 0, 0.65)',
+  },
+  chipTextSelected: {
+    color: 'rgba(0, 0, 0, 0.9)',
+  },
+  modalButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 18,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: AppColors.FABMain,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: 'white',
+  },
+  modelOptionsScroll: {
+    marginTop: 14,
+  },
+  modelOptionsScrollContent: {
+    paddingBottom: 10,
+  },
+  modelOption: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modelOptionDisabled: {
+    opacity: 0.45,
+  },
+  modelOptionSelected: {
+    borderColor: AppColors.FABMain,
+    backgroundColor: 'rgba(255, 243, 196, 0.7)',
+  },
+  modelOptionContent: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  modelOptionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: 'rgba(0, 0, 0, 0.85)',
+    marginBottom: 4,
+  },
+  modelOptionTitleDisabled: {
+    color: 'rgba(0, 0, 0, 0.5)',
+  },
+  modelOptionTitleSelected: {
+    color: 'rgba(0, 0, 0, 0.9)',
+  },
+  modelOptionPricing: {
+    fontSize: 12,
+    color: 'rgba(0, 0, 0, 0.6)',
+    lineHeight: 16,
+  },
+  modalCancelButton: {
+    marginTop: 10,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: 'rgba(0, 0, 0, 0.75)',
   },
 });

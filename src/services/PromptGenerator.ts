@@ -169,7 +169,12 @@ Note: localStorage is ALLOWED for data persistence within the app. Use it for sa
   /**
    * Generate a comprehensive prompt for Claude API based on user requirements
    */
-  static generatePrompt(request: AppGenerationRequest): string {
+  static generatePrompt(
+    request: AppGenerationRequest,
+    options?: {
+      maxOutputTokens?: number;
+    }
+  ): string {
     log.debug('Starting prompt generation for request:', request);
     
     const { description, style, features } = request;
@@ -201,11 +206,24 @@ Note: localStorage is ALLOWED for data persistence within the app. Use it for sa
       featuresContext = `\n<required_features>\n${features.map(f => `- ${f}`).join('\n')}\n</required_features>`;
     }
 
+    // Output token budget guidance (helps avoid truncated HTML)
+    let outputBudgetContext = '';
+    if (typeof options?.maxOutputTokens === 'number' && Number.isFinite(options.maxOutputTokens)) {
+      const maxOutputTokens = Math.max(1, Math.round(options.maxOutputTokens));
+      outputBudgetContext =
+        `\n<output_budget>\n` +
+        `Max output tokens available: ${maxOutputTokens}\n` +
+        `- Keep the response within this budget and still end with </html>\n` +
+        `- If space is tight, simplify styling/animations and reduce scope before cutting off\n` +
+        `</output_budget>`;
+    }
+
     // Build the complete prompt
     const fullPrompt = this.CORE_PROMPT_TEMPLATE + 
       description + 
       styleGuidance + 
       featuresContext + 
+      outputBudgetContext +
       '\n</user_request>\n\nGenerate the complete HTML application now:';
     
     log.debug('Generated prompt length:', fullPrompt.length);

@@ -109,6 +109,7 @@ export interface ModelInfo {
   name: string;
   status: ModelStatus;
   retiresOn?: string; // YYYY-MM-DD
+  maxOutputTokens: number;
   tokenPricesPerMTok: ModelTokenPricesPerMTok;
 }
 
@@ -150,6 +151,7 @@ export const MODEL_INFO: Record<string, ModelInfo> = {
     id: CLAUDE_MODELS.OPUS_4_5,
     name: 'Claude Opus 4.5',
     status: 'active',
+    maxOutputTokens: 64_000,
     tokenPricesPerMTok: {
       baseInput: 5,
       cacheWrite5m: 6.25,
@@ -162,6 +164,7 @@ export const MODEL_INFO: Record<string, ModelInfo> = {
     id: CLAUDE_MODELS.OPUS_4_1,
     name: 'Claude Opus 4.1',
     status: 'active',
+    maxOutputTokens: 32_000,
     tokenPricesPerMTok: {
       baseInput: 15,
       cacheWrite5m: 18.75,
@@ -174,6 +177,7 @@ export const MODEL_INFO: Record<string, ModelInfo> = {
     id: CLAUDE_MODELS.OPUS_4,
     name: 'Claude Opus 4',
     status: 'active',
+    maxOutputTokens: 32_000,
     tokenPricesPerMTok: {
       baseInput: 15,
       cacheWrite5m: 18.75,
@@ -186,6 +190,7 @@ export const MODEL_INFO: Record<string, ModelInfo> = {
     id: CLAUDE_MODELS.SONNET_4_5,
     name: 'Claude Sonnet 4.5',
     status: 'active',
+    maxOutputTokens: 64_000,
     tokenPricesPerMTok: {
       baseInput: 3,
       cacheWrite5m: 3.75,
@@ -198,6 +203,7 @@ export const MODEL_INFO: Record<string, ModelInfo> = {
     id: CLAUDE_MODELS.SONNET_4,
     name: 'Claude Sonnet 4',
     status: 'active',
+    maxOutputTokens: 64_000,
     tokenPricesPerMTok: {
       baseInput: 3,
       cacheWrite5m: 3.75,
@@ -211,6 +217,7 @@ export const MODEL_INFO: Record<string, ModelInfo> = {
     name: 'Claude Sonnet 3.7',
     status: 'deprecated',
     retiresOn: '2026-02-19',
+    maxOutputTokens: 64_000,
     tokenPricesPerMTok: {
       baseInput: 3,
       cacheWrite5m: 3.75,
@@ -223,6 +230,7 @@ export const MODEL_INFO: Record<string, ModelInfo> = {
     id: CLAUDE_MODELS.HAIKU_4_5,
     name: 'Claude Haiku 4.5',
     status: 'active',
+    maxOutputTokens: 64_000,
     tokenPricesPerMTok: {
       baseInput: 1,
       cacheWrite5m: 1.25,
@@ -236,6 +244,7 @@ export const MODEL_INFO: Record<string, ModelInfo> = {
     name: 'Claude Haiku 3.5',
     status: 'deprecated',
     retiresOn: '2026-02-19',
+    maxOutputTokens: 4_000,
     tokenPricesPerMTok: {
       baseInput: 0.8,
       cacheWrite5m: 1,
@@ -249,6 +258,7 @@ export const MODEL_INFO: Record<string, ModelInfo> = {
     name: 'Claude Opus 3',
     status: 'retired',
     retiresOn: '2026-01-05',
+    maxOutputTokens: 4_000,
     tokenPricesPerMTok: {
       baseInput: 15,
       cacheWrite5m: 18.75,
@@ -261,6 +271,7 @@ export const MODEL_INFO: Record<string, ModelInfo> = {
     id: CLAUDE_MODELS.HAIKU_3,
     name: 'Claude Haiku 3',
     status: 'active',
+    maxOutputTokens: 4_000,
     tokenPricesPerMTok: {
       baseInput: 0.25,
       cacheWrite5m: 0.3,
@@ -270,6 +281,29 @@ export const MODEL_INFO: Record<string, ModelInfo> = {
     }
   }
 };
+
+const FALLBACK_MAX_OUTPUT_TOKENS = 4_000;
+const MIN_OUTPUT_TOKENS = 256;
+
+export function getModelMaxOutputTokens(model: string): number {
+  return MODEL_INFO[model]?.maxOutputTokens ?? FALLBACK_MAX_OUTPUT_TOKENS;
+}
+
+export function clampMaxOutputTokens(model: string, requestedMaxTokens: number): number {
+  const maxForModel = getModelMaxOutputTokens(model);
+  if (!Number.isFinite(requestedMaxTokens)) return Math.min(DEFAULT_CONFIG.maxTokens, maxForModel);
+  return Math.max(MIN_OUTPUT_TOKENS, Math.min(maxForModel, Math.round(requestedMaxTokens)));
+}
+
+export function clampTemperature(requestedTemperature: number): number {
+  if (!Number.isFinite(requestedTemperature)) return DEFAULT_CONFIG.temperature;
+  return Math.max(0, Math.min(1, requestedTemperature));
+}
+
+export function estimateTokensFromText(text: string): number {
+  if (!text) return 0;
+  return Math.ceil(text.length / 4);
+}
 
 /**
  * Estimate the cost of API usage based on token counts
@@ -289,6 +323,6 @@ export function estimateCost(inputTokens: number, outputTokens: number, model: s
 
 export const DEFAULT_CONFIG: Omit<ClaudeApiConfig, 'apiKey'> = {
   model: CLAUDE_MODELS.HAIKU_4_5,
-  maxTokens: 4000,
+  maxTokens: 16_000,
   temperature: 0.3
 };
