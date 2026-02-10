@@ -8,6 +8,8 @@ import { useEffect, useState } from 'react';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { SecureStorageService } from '../src/services/SecureStorageService';
 import { ClaudeApiService } from '../src/services/ClaudeApiService';
+import { GenerationQueueService } from '../src/services/GenerationQueueService';
+import { NotificationService } from '../src/services/NotificationService';
 import { SeedService } from '../src/services/SeedService';
 import { AppColors } from '../src/constants/AppColors';
 import { createLogger } from '../src/utils/Logger';
@@ -21,6 +23,7 @@ export default function RootLayout() {
   const FORCE_MAIN_APP = true;
 
   useEffect(() => {
+    NotificationService.configureForegroundBehavior();
     checkApiKeyStatus();
     
     // Initialize sample apps seeding
@@ -42,6 +45,7 @@ export default function RootLayout() {
         // Initialize Claude API service if API key exists
         const claudeService = ClaudeApiService.getInstance();
         await claudeService.initialize();
+        void GenerationQueueService.startWorker();
       }
       setHasApiKey(hasKey);
     } catch (error) {

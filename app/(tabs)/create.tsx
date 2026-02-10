@@ -5,8 +5,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../../src/constants/AppColors';
 import { PromptGenerator, AppStyle, AppCategory, AppGenerationRequest } from '../../src/services/PromptGenerator';
-import { ClaudeApiService } from '../../src/services/ClaudeApiService';
-import { AppStorageService } from '../../src/services/AppStorageService';
+import { GenerationQueueService } from '../../src/services/GenerationQueueService';
 import { SecureStorageService } from '../../src/services/SecureStorageService';
 import {
   CLAUDE_MODEL_PICKER_OPTIONS,
@@ -176,6 +175,15 @@ export default function CreatePage() {
     setShowModelSelector(false);
   };
 
+  const closeAdvanced = () => {
+    setShowModelSelector(false);
+    setShowAdvanced(false);
+  };
+
+  const closeModelSelector = () => {
+    setShowModelSelector(false);
+  };
+
   const resetAdvancedToDefaults = () => {
     setGenerationModel(defaultsConfig.model);
     setGenerationMaxTokens(defaultsConfig.maxTokens);
@@ -225,21 +233,6 @@ export default function CreatePage() {
     setIsLoading(true);
     
     try {
-      log.debug('Initializing Claude service...');
-      const claudeService = ClaudeApiService.getInstance();
-      
-      if (!claudeService.isConfigured()) {
-        log.warn('Claude service not configured');
-        Alert.alert(
-          'Configuration Error',
-          'There was an issue with your API configuration. Please check your settings.',
-          [{ text: 'Check Settings', onPress: () => router.push('/(tabs)/settings') }]
-        );
-        return;
-      }
-      
-      log.debug('Claude service configured');
-
       const modelUsed = generationModel;
       const maxTokensUsed = clampMaxOutputTokens(modelUsed, generationMaxTokens);
       const temperatureUsed = clampTemperature(generationTemperature);
@@ -247,60 +240,17 @@ export default function CreatePage() {
       log.info('Max output tokens:', maxTokensUsed);
       log.info('Temperature:', temperatureUsed);
 
-      // Generate the prompt (and store it for debugging/export)
-      log.debug('Generating prompt...');
-      const generatedPrompt = PromptGenerator.generatePrompt(request, { maxOutputTokens: maxTokensUsed });
-      log.debug('Generated prompt length:', generatedPrompt.length);
-      log.verbose('Generated prompt preview:', generatedPrompt.substring(0, 200) + '...');
-      
-      // First, save the app with placeholder content
-      log.debug('Saving app with placeholder content...');
-      const savedApp = await AppStorageService.saveApp(
-        request,
-        undefined,
-        undefined,
-        modelUsed,
-        generatedPrompt
-      );
-      log.debug('App saved with ID:', savedApp.id);
-      
-      // Call Claude API
-      log.debug('Calling Claude API...');
-      const generatedResponse = await claudeService.generateAppConcept(generatedPrompt, {
+      log.debug('Queuing generation job...');
+      const job = await GenerationQueueService.enqueue(request, {
         model: modelUsed,
         maxTokens: maxTokensUsed,
         temperature: temperatureUsed,
-        operation: 'app_generation',
-        appId: savedApp.id,
       });
-      log.debug('Received response from Claude API');
-      log.verbose('Generated response:', {
-        name: generatedResponse.name,
-        category: generatedResponse.category,
-        htmlLength: generatedResponse.html?.length || 0,
-        externalLibs: generatedResponse.external_libs_used || []
-      });
-      
-      // Update the app with the generated content
-      log.debug('Updating app with generated content...');
-      const updateResult = await AppStorageService.updateAppHTML(
-        savedApp.id,
-        generatedResponse.html, // Use the actual generated HTML
-        {
-          title: generatedResponse.name,
-          description: `Generated ${selectedStyle} app`,
-          features: generatedResponse.external_libs_used || [],
-          userInterface: { screens: [], navigation: '', colorScheme: '', typography: '' },
-          technicalSpecs: { architecture: '', dataStorage: '', integrations: generatedResponse.external_libs_used || [], platforms: ['mobile'] },
-          marketingCopy: { tagline: '', elevator_pitch: '', key_benefits: [] }
-        },
-        modelUsed
-      );
-      log.debug('App update result:', updateResult);
-      
+      log.info('Queued generation job:', { jobId: job.id, appId: job.appId });
+
       Alert.alert(
-        'App Generated Successfully!',
-        `"${generatedResponse.name}" has been created and is ready to use!`,
+        'Generation queued',
+        'Your app is generating in the background. You can leave this screen — you’ll get a notification when it’s ready.',
         [
           {
             text: 'View Apps',
@@ -436,7 +386,7 @@ export default function CreatePage() {
 	          >
             {isLoading ? (
               <View style={styleSheet.loadingContainer}>
-                <Text style={styleSheet.generateButtonText}>Generating with Claude AI...</Text>
+                <Text style={styleSheet.generateButtonText}>Queuing…</Text>
               </View>
             ) : (
               <View style={styleSheet.buttonContent}>
@@ -480,10 +430,11 @@ export default function CreatePage() {
           visible={showAdvanced}
           transparent={true}
           animationType="slide"
-          onRequestClose={() => setShowAdvanced(false)}
+          onRequestClose={closeAdvanced}
+          onDismiss={closeAdvanced}
         >
           <View style={styleSheet.modalOverlay}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowAdvanced(false)} />
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeAdvanced} />
 
             <View style={styleSheet.modalContent}>
               <Text style={styleSheet.modalTitle}>Advanced</Text>
@@ -589,7 +540,7 @@ export default function CreatePage() {
                     Reset
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styleSheet.modalButton} onPress={() => setShowAdvanced(false)}>
+                <TouchableOpacity style={styleSheet.modalButton} onPress={closeAdvanced}>
                   <Text style={styleSheet.modalButtonText}>Done</Text>
                 </TouchableOpacity>
               </View>
@@ -599,13 +550,14 @@ export default function CreatePage() {
 
         {/* Model Picker Modal (Advanced) */}
         <Modal
-          visible={showModelSelector}
+          visible={showAdvanced && showModelSelector}
           transparent={true}
           animationType="slide"
-          onRequestClose={() => setShowModelSelector(false)}
+          onRequestClose={closeModelSelector}
+          onDismiss={closeModelSelector}
         >
           <View style={styleSheet.modalOverlay}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowModelSelector(false)} />
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeModelSelector} />
 
             <View style={styleSheet.modelPickerContent}>
               <Text style={styleSheet.modalTitle}>Select Claude Model</Text>
@@ -656,7 +608,7 @@ export default function CreatePage() {
 
               <TouchableOpacity
                 style={styleSheet.modalCancelButton}
-                onPress={() => setShowModelSelector(false)}
+                onPress={closeModelSelector}
               >
                 <Text style={styleSheet.modalCancelButtonText}>Cancel</Text>
               </TouchableOpacity>

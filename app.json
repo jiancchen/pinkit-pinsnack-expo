@@ -1,13 +1,13 @@
 {
   "expo": {
-    "name": "MyApp",
-    "slug": "MyApp",
+    "name": "PinSnacks",
+    "slug": "pinsnacks",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "scheme": "myapp",
+    "scheme": "pinsnacks",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -40,7 +40,7 @@
         "ACCESS_NETWORK_STATE"
       ],
       "usesCleartextTraffic": false,
-      "package": "com.jcchen13.MyApp"
+      "package": "com.zigzura.pinsnacks"
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -61,7 +61,8 @@
           }
         }
       ],
-      "expo-mail-composer"
+      "expo-mail-composer",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true

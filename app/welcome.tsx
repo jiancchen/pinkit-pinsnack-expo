@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { AppColors } from '../src/constants/AppColors';
 import { SecureStorageService } from '../src/services/SecureStorageService';
 import { ClaudeApiService } from '../src/services/ClaudeApiService';
+import { GenerationQueueService } from '../src/services/GenerationQueueService';
 import { createLogger } from '../src/utils/Logger';
 
 const log = createLogger('Welcome');
@@ -51,6 +52,7 @@ export default function WelcomePage() {
       const testResult = await claudeService.testConnection();
 
       if (testResult.success) {
+        void GenerationQueueService.startWorker();
         Alert.alert(
           'Success!',
           'Your Claude API key has been saved and verified. You can now start generating apps!',
