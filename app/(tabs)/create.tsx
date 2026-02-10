@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, StatusBar, Modal, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../../src/constants/AppColors';
+import { getLiquidGlassTabBarContentPaddingBottom } from '../../src/constants/LiquidGlassTabBarLayout';
 import { PromptGenerator, AppStyle, AppCategory, AppGenerationRequest } from '../../src/services/PromptGenerator';
 import { GenerationQueueService } from '../../src/services/GenerationQueueService';
 import { SecureStorageService } from '../../src/services/SecureStorageService';
@@ -85,6 +86,7 @@ const templates = [
 
 export default function CreatePage() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [prompt, setPrompt] = useState('');
   const [selectedStyle, setSelectedStyle] = useState<AppStyle>('modern');
   const [isLoading, setIsLoading] = useState(false);
@@ -96,6 +98,8 @@ export default function CreatePage() {
   const [generationModel, setGenerationModel] = useState<string>(DEFAULT_CONFIG.model);
   const [generationMaxTokens, setGenerationMaxTokens] = useState<number>(DEFAULT_CONFIG.maxTokens);
   const [generationTemperature, setGenerationTemperature] = useState<number>(DEFAULT_CONFIG.temperature);
+
+  const scrollContentPaddingBottom = getLiquidGlassTabBarContentPaddingBottom(insets.bottom, 32);
 
   const checkApiKeyStatus = async () => {
     try {
@@ -310,7 +314,7 @@ export default function CreatePage() {
 
       <ScrollView 
         style={styleSheet.scrollView}
-        contentContainerStyle={styleSheet.scrollContent}
+        contentContainerStyle={[styleSheet.scrollContent, { paddingBottom: scrollContentPaddingBottom }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Main Input Section */}

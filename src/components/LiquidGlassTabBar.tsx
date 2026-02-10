@@ -11,11 +11,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TabBarVariant, useUISettingsStore } from '../stores/UISettingsStore';
+import {
+  getLiquidGlassTabBarBottomOffset,
+  getLiquidGlassTabBarContainerHeight,
+  LIQUID_GLASS_TAB_BAR_PILL_HEIGHT,
+  LIQUID_GLASS_TAB_BAR_PILL_PADDING,
+} from '../constants/LiquidGlassTabBarLayout';
 
 interface LiquidGlassTabBarProps extends BottomTabBarProps {}
-
-const PILL_HEIGHT = 60;
-const PILL_PADDING = 6;
 
 function hexToRgb(hexColor: string): { r: number; g: number; b: number } | null {
   const normalized = hexColor.trim().replace('#', '');
@@ -154,7 +157,7 @@ export default function LiquidGlassTabBar({ state, navigation }: LiquidGlassTabB
       return { opacity: 0 };
     }
 
-    const innerWidth = pillWidth.value - PILL_PADDING * 2;
+    const innerWidth = pillWidth.value - LIQUID_GLASS_TAB_BAR_PILL_PADDING * 2;
     const tabWidth = innerWidth / Math.max(1, routesCount);
 
     return {
@@ -165,8 +168,8 @@ export default function LiquidGlassTabBar({ state, navigation }: LiquidGlassTabB
   });
 
   const horizontalMargin = Math.max(18, Math.min(60, Math.round(screenWidth * 0.18)));
-  const bottomOffset = (Platform.OS === 'ios' ? 10 : 12) + insets.bottom;
-  const containerHeight = bottomOffset + PILL_HEIGHT + 14;
+  const bottomOffset = getLiquidGlassTabBarBottomOffset(insets.bottom);
+  const containerHeight = getLiquidGlassTabBarContainerHeight(insets.bottom);
 
   const colors = useMemo(
     () => getTabBarColors(tabBarVariant, tabBarTintColor),
@@ -271,10 +274,10 @@ const styles = StyleSheet.create({
   },
   pill: {
     position: 'absolute',
-    height: PILL_HEIGHT,
-    borderRadius: PILL_HEIGHT / 2,
+    height: LIQUID_GLASS_TAB_BAR_PILL_HEIGHT,
+    borderRadius: LIQUID_GLASS_TAB_BAR_PILL_HEIGHT / 2,
     overflow: 'hidden',
-    padding: PILL_PADDING,
+    padding: LIQUID_GLASS_TAB_BAR_PILL_PADDING,
     borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
@@ -284,15 +287,15 @@ const styles = StyleSheet.create({
   },
   activeIndicator: {
     position: 'absolute',
-    top: PILL_PADDING,
-    bottom: PILL_PADDING,
-    left: PILL_PADDING,
-    borderRadius: (PILL_HEIGHT - PILL_PADDING * 2) / 2,
+    top: LIQUID_GLASS_TAB_BAR_PILL_PADDING,
+    bottom: LIQUID_GLASS_TAB_BAR_PILL_PADDING,
+    left: LIQUID_GLASS_TAB_BAR_PILL_PADDING,
+    borderRadius: (LIQUID_GLASS_TAB_BAR_PILL_HEIGHT - LIQUID_GLASS_TAB_BAR_PILL_PADDING * 2) / 2,
     overflow: 'hidden',
   },
   activeIndicatorBorder: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: (PILL_HEIGHT - PILL_PADDING * 2) / 2,
+    borderRadius: (LIQUID_GLASS_TAB_BAR_PILL_HEIGHT - LIQUID_GLASS_TAB_BAR_PILL_PADDING * 2) / 2,
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.55)',
   },

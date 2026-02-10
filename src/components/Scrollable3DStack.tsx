@@ -7,9 +7,11 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ThreeDImageCard from './ThreeDImageCard';
 import { PromptHistory } from '../types/PromptHistory';
 import { AppColors } from '../constants/AppColors';
+import { getLiquidGlassTabBarOverlapHeight } from '../constants/LiquidGlassTabBarLayout';
 
 const { height: screenHeight } = Dimensions.get('window');
 
@@ -34,6 +36,8 @@ export default function Scrollable3DStack({
 }: Scrollable3DStackProps) {
   const scrollViewRef = useRef<ScrollView>(null);
   const [scrollY, setScrollY] = useState(0);
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(100, getLiquidGlassTabBarOverlapHeight(insets.bottom) + 40);
 
   // Calculate 3D transforms based on scroll position
   const calculateCardTransform = useCallback((index: number): CardTransform => {
@@ -75,7 +79,7 @@ export default function Scrollable3DStack({
       <ScrollView
         ref={scrollViewRef}
         style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: bottomPadding }]}
         onScroll={handleScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}

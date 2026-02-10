@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert, Modal, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../../src/constants/AppColors';
+import { getLiquidGlassTabBarContentPaddingBottom } from '../../src/constants/LiquidGlassTabBarLayout';
 import { samplePromptHistory } from '../../src/types/Samples';
 import { SecureStorageService } from '../../src/services/SecureStorageService';
 import { ClaudeApiService } from '../../src/services/ClaudeApiService';
@@ -45,6 +46,7 @@ const TAB_BAR_TINT_OPTIONS: Array<{ label: string; color: string }> = [
 
 export default function SettingsPage() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [temperature, setTemperature] = useState(0.3);
   const [maxTokens, setMaxTokens] = useState(DEFAULT_CONFIG.maxTokens);
   const [selectedModel, setSelectedModel] = useState<string>(CLAUDE_MODELS.HAIKU_4_5);
@@ -63,6 +65,8 @@ export default function SettingsPage() {
   const setTabBarVariant = useUISettingsStore((s) => s.setTabBarVariant);
   const setTabBarTintColor = useUISettingsStore((s) => s.setTabBarTintColor);
   const setTabBarBlurIntensity = useUISettingsStore((s) => s.setTabBarBlurIntensity);
+
+  const scrollContentPaddingBottom = getLiquidGlassTabBarContentPaddingBottom(insets.bottom, 32);
 
   useEffect(() => {
     checkApiKeyStatus();
@@ -343,7 +347,7 @@ export default function SettingsPage() {
 
       <ScrollView 
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollContentPaddingBottom }]}
         showsVerticalScrollIndicator={false}
       >
         {/* API Configuration Section */}
