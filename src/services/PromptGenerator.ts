@@ -135,7 +135,7 @@ Key principle: Either full-height OR auto-height, never dynamic growing containe
 	- Do NOT send updates more often than once every ~5 seconds.
 	- Prefer using the native-rendered timer Live Activity instead of updating every second.
 	- The app MUST still work if Live Activities are unavailable or disabled by the user.
-	- If the app is a timer/counter app, include an in-app toggle like "Show on Lock Screen / Dynamic Island" (default OFF) and wire it to these APIs.
+	- If the app is a timer/counter app, include an in-app toggle like "Show in notification" (default OFF) and wire it to these APIs.
 	</native_live_activities>
 
 	<local_storage>
