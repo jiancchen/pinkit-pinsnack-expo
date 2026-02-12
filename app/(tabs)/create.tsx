@@ -254,7 +254,7 @@ export default function CreatePage() {
 
       Alert.alert(
         'Generation queued',
-        'Your app is generating in the background. You can leave this screen — you’ll get a notification when it’s ready.',
+        'Your app is generating. You can navigate around Droplets, but please keep the app open — backgrounding may pause generation. You’ll get a notification when it’s ready.',
         [
           {
             text: 'View Apps',

@@ -14,7 +14,9 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
+      "bundleIdentifier": "com.zigzura.pinsnacks",
       "supportsTablet": true,
+      "deploymentTarget": "17.0",
       "statusBarStyle": "light"
     },
     "android": {
@@ -53,6 +55,13 @@
       "expo-navigation-bar",
       "expo-router",
       [
+        "expo-dev-client",
+        {
+          "launchMode": "most-recent"
+        }
+      ],
+      "voltra",
+      [
         "react-native-edge-to-edge",
         {
           "android": {
@@ -62,7 +71,15 @@
         }
       ],
       "expo-mail-composer",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "17.0"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

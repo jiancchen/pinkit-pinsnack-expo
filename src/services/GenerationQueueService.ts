@@ -11,6 +11,7 @@ import {
   resolveSupportedClaudeModel,
 } from '../types/ClaudeApi';
 import { NotificationService } from './NotificationService';
+import { emitGenerationQueueUpdated } from '../stores/GenerationStatusStore';
 
 const log = createLogger('GenerationQueue');
 
@@ -116,7 +117,9 @@ export class GenerationQueueService {
 
     await this.withWriteLock(async () => {
       const queue = await this.readQueue();
-      await this.writeQueue([job, ...queue]);
+      const nextQueue = [job, ...queue];
+      await this.writeQueue(nextQueue);
+      emitGenerationQueueUpdated(nextQueue);
     });
 
     log.info('Enqueued job', { jobId: job.id, appId: job.appId, model, maxTokens });
@@ -132,6 +135,9 @@ export class GenerationQueueService {
     this.workerRunning = true;
 
     try {
+      // Keep the UI in sync with any persisted queue on app start.
+      emitGenerationQueueUpdated(await this.readQueue());
+
       // Recover jobs left in "running" (e.g., app killed mid-generation).
       await this.withWriteLock(async () => {
         const queue = await this.readQueue();
@@ -142,6 +148,7 @@ export class GenerationQueueService {
           j.status === 'running' ? { ...j, status: 'queued' as const, updatedAt: Date.now() } : j
         );
         await this.writeQueue(recoveredQueue);
+        emitGenerationQueueUpdated(recoveredQueue);
       });
 
       while (true) {
@@ -160,6 +167,7 @@ export class GenerationQueueService {
             j.id === job.id ? { ...j, status: 'running' as GenerationJobStatus, updatedAt: Date.now() } : j
           );
           await this.writeQueue(updatedQueue);
+          emitGenerationQueueUpdated(updatedQueue);
           return { ...job, status: 'running' as const, updatedAt: Date.now() };
         });
 
@@ -179,6 +187,7 @@ export class GenerationQueueService {
       const queue = await this.readQueue();
       const updated = queue.map((j) => (j.id === jobId ? { ...j, ...patch, updatedAt: Date.now() } : j));
       await this.writeQueue(updated);
+      emitGenerationQueueUpdated(updated);
     });
   }
 
