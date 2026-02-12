@@ -24,6 +24,7 @@ import { ExportService } from '../src/services/ExportService';
 import { ScreenshotService } from '../src/services/ScreenshotService';
 import { WebViewScreenshotService } from '../src/services/WebViewScreenshotService';
 import { emitScreenshotCaptured, emitScreenshotError, emitScreenshotLoading } from '../src/stores/ScreenshotStore';
+import { handleWebViewLiveActivityMessage } from '../src/services/WebViewLiveActivityBridge';
 import { createLogger } from '../src/utils/Logger';
 
 const log = createLogger('AppView');
@@ -654,6 +655,21 @@ export default function AppViewPage() {
                 log.verbose('WebView message:', message);
                 
                 switch (messageType) {
+                  case 'live_activity_start_timer':
+                  case 'live_activity_start_counter':
+                  case 'live_activity_update_counter':
+                  case 'live_activity_stop':
+                  case 'live_activity_is_active': {
+                    if (!app) return;
+                    void handleWebViewLiveActivityMessage({
+                      appId: app.id,
+                      rawMessage: message,
+                      sendToWebView: (payload) =>
+                        webViewRef.current?.postMessage(JSON.stringify(payload)),
+                    });
+                    break;
+                  }
+
                   case 'storage_set': {
                     const key = message.key;
                     const value = message.value;

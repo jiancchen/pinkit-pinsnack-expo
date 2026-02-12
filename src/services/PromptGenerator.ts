@@ -81,17 +81,54 @@ Dynamic apps (todos, notes, trackers): Use min-height: calc(100vh - 80px) with o
 Key principle: Either full-height OR auto-height, never dynamic growing containers
 </layout_strategy>
 
-<react_native_features>
-Available features (use if relevant):
-- Storage: window.ReactNativeWebView.postMessage(JSON.stringify({type:'saveData',key,value}))
-- Load: window.ReactNativeWebView.postMessage(JSON.stringify({type:'loadData',key}))
-- Reminders: window.ReactNativeWebView.postMessage(JSON.stringify({type:'setReminder',id,milliseconds,title,message}))
+	<react_native_features>
+	When running inside the Droplets app WebView (React Native), you can optionally call native features via:
+	- window.ReactNativeWebView.postMessage(JSON.stringify({...}))
+	Always guard with: if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage)
 
-Pattern: Always check if(window.ReactNativeWebView) before using
+	<native_live_activities>
+	Live Activities / Dynamic Island (iOS only, requires a development build, iOS 16.2+):
+	- Start a timer Live Activity:
+	  window.ReactNativeWebView.postMessage(JSON.stringify({
+	    type:'live_activity_start_timer',
+	    activityKey:'main',
+	    title:'Focus Timer',
+	    subtitle:'Tap to open',
+	    endAtMs: Date.now() + 25*60*1000,
+	    tintColor:'#7C3AED'
+	  }))
+	- Start a counter Live Activity:
+	  window.ReactNativeWebView.postMessage(JSON.stringify({
+	    type:'live_activity_start_counter',
+	    activityKey:'main',
+	    title:'Counter',
+	    subtitle:'Tap to open',
+	    count: 0,
+	    unit: 'items'
+	  }))
+	- Update a counter Live Activity (ONLY when value changes; do not spam updates):
+	  window.ReactNativeWebView.postMessage(JSON.stringify({
+	    type:'live_activity_update_counter',
+	    activityKey:'main',
+	    count: 123
+	  }))
+	- Stop:
+	  window.ReactNativeWebView.postMessage(JSON.stringify({
+	    type:'live_activity_stop',
+	    activityKey:'main',
+	    dismissalPolicy:'immediate'
+	  }))
 
-<local_storage>
-localStorage is AVAILABLE and RECOMMENDED for data persistence:
-- Use localStorage.setItem(key, JSON.stringify(data)) to save
+	Notes:
+	- Do NOT send updates more often than once every ~5 seconds.
+	- Prefer using the native-rendered timer Live Activity instead of updating every second.
+	- The app MUST still work if Live Activities are unavailable or disabled by the user.
+	- If the app is a timer/counter app, include an in-app toggle like "Show on Lock Screen / Dynamic Island" (default OFF) and wire it to these APIs.
+	</native_live_activities>
+
+	<local_storage>
+	localStorage is AVAILABLE and RECOMMENDED for data persistence:
+	- Use localStorage.setItem(key, JSON.stringify(data)) to save
 - Use JSON.parse(localStorage.getItem(key) || '[]') to load
 - Always provide fallback values for missing data
 - Wrap JSON operations in try-catch for error handling

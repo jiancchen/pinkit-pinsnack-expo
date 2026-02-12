@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { Platform } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AppState, Platform, type AppStateStatus } from 'react-native';
 import { useGenerationStatusStore } from '../stores/GenerationStatusStore';
 import { useUISettingsStore } from '../stores/UISettingsStore';
 import { buildGenerationLiveActivityVariants } from '../liveActivities/GenerationLiveActivity';
@@ -13,6 +13,10 @@ const DEEP_LINK_URL = '/(tabs)';
 export default function GenerationLiveActivityController() {
   const queue = useGenerationStatusStore((s) => s.queue);
   const tintColor = useUISettingsStore((s) => s.tabBar.tintColor);
+  const [isInForeground, setIsInForeground] = useState<boolean>(() => {
+    if (Platform.OS !== 'ios') return true;
+    return AppState.currentState !== 'background';
+  });
 
   const pendingJobs = useMemo(
     () => queue.filter((j) => j.status === 'queued' || j.status === 'running'),
@@ -42,11 +46,22 @@ export default function GenerationLiveActivityController() {
     tintColor,
     phase,
     lastUpdatedJobStatus,
+    isInForeground,
   });
 
   useEffect(() => {
-    latestRef.current = { pendingCount, queuedCount, tintColor, phase, lastUpdatedJobStatus };
-  }, [pendingCount, queuedCount, tintColor, phase, lastUpdatedJobStatus]);
+    latestRef.current = { pendingCount, queuedCount, tintColor, phase, lastUpdatedJobStatus, isInForeground };
+  }, [pendingCount, queuedCount, tintColor, phase, lastUpdatedJobStatus, isInForeground]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+
+    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      setIsInForeground(nextState !== 'background');
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     if (Platform.OS !== 'ios') return;
@@ -77,6 +92,13 @@ export default function GenerationLiveActivityController() {
 
       try {
         const latest = latestRef.current;
+
+        if (!latest.isInForeground) {
+          if (isLiveActivityActive(ACTIVITY_ID)) {
+            await stopLiveActivity(ACTIVITY_ID, { dismissalPolicy: 'immediate' });
+          }
+          return;
+        }
 
         if (latest.pendingCount > 0) {
           const variants = await buildGenerationLiveActivityVariants({
@@ -117,7 +139,7 @@ export default function GenerationLiveActivityController() {
           if (!variants) return;
 
           await updateLiveActivity(ACTIVITY_ID, variants, { relevanceScore: 0.2 });
-          await stopLiveActivity(ACTIVITY_ID, { dismissalPolicy: { after: Date.now() + 2000 } });
+          await stopLiveActivity(ACTIVITY_ID, { dismissalPolicy: 'immediate' });
         } else {
           await stopLiveActivity(ACTIVITY_ID, { dismissalPolicy: 'immediate' });
         }
@@ -125,7 +147,7 @@ export default function GenerationLiveActivityController() {
         log.warn('Live Activity sync failed:', error);
       }
     });
-  }, [pendingCount, queuedCount, phase, tintColor, lastUpdatedJobStatus]);
+  }, [pendingCount, queuedCount, phase, tintColor, lastUpdatedJobStatus, isInForeground]);
 
   return null;
 }
