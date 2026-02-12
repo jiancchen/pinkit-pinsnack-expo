@@ -24,6 +24,24 @@ export interface StoredApp {
   baseUrl: string; // For WebView persistence
   model?: string; // Claude model used for generation
   isSample?: boolean; // Mark as sample app for seeding
+  lastRevision?: {
+    at: number;
+    model: string;
+    updatedPrompt: string;
+    userNotes: string;
+    fixSummary?: string[];
+  };
+  revisions?: Array<{
+    id: string;
+    at: number;
+    operation: 'create' | 'app_revision';
+    status: 'generating' | 'completed' | 'error';
+    model: string;
+    updatedPrompt: string;
+    userNotes: string;
+    fixSummary?: string[];
+    errorMessage?: string;
+  }>;
 }
 
 export class AppStorageService {

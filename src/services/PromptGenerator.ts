@@ -406,4 +406,68 @@ Note: localStorage is ALLOWED for data persistence within the app. Use it for sa
 
     return { isValid: true };
   }
+
+  /**
+   * Generate a prompt for revising an existing HTML app.
+   * The model must return a full HTML document and preserve the data-app-title attribute.
+   */
+  static generateHtmlRevisionPrompt(args: {
+    originalPrompt: string;
+    updatedPrompt: string;
+    userNotes: string;
+    originalHtml: string;
+  }): string {
+    const originalPrompt = args.originalPrompt?.trim() || '';
+    const updatedPrompt = args.updatedPrompt?.trim() || originalPrompt;
+    const userNotes = args.userNotes?.trim() || '';
+    const originalHtml = args.originalHtml || '';
+
+    return `<role>
+You are an expert HTML/CSS/JavaScript developer specializing in mobile web apps for WebView environments.
+</role>
+
+<task>
+Revise the existing HTML app to match the updated prompt and address the user notes. Keep the app fully offline and functional inside a React Native WebView.
+</task>
+
+<requirements>
+- Keep functionality the same unless the user notes require a clear bug fix.
+- Fix layout issues (overflow, spacing, touch targets) and obvious bugs.
+- Do NOT add network features: fetch(), XMLHttpRequest, WebSocket.
+- Do NOT use camera, microphone, geolocation, filesystem.
+- Preserve the existing <html ... data-app-title="..."> attribute value exactly.
+- The output MUST be a complete HTML document (<!DOCTYPE html> ... </html>).
+</requirements>
+
+<debug>
+Include a debug block in the output HTML:
+- Add a <script id="droplets_debug" type="application/json"> in <head>
+- It must include JSON with keys: updatedPrompt, userNotes, fixSummary
+- Keep fixSummary concise (1-6 bullet strings).
+</debug>
+
+<inputs>
+<original_prompt>
+${originalPrompt}
+</original_prompt>
+
+<updated_prompt>
+${updatedPrompt}
+</updated_prompt>
+
+<user_notes>
+${userNotes}
+</user_notes>
+
+<original_html>
+${originalHtml}
+</original_html>
+</inputs>
+
+<output_format>
+Respond with ONLY the complete HTML code. No explanations, markdown blocks, or commentary.
+- Start with <!DOCTYPE html>
+- End with </html>
+</output_format>`;
+  }
 }

@@ -477,113 +477,184 @@ export default function CreatePage() {
             <Pressable style={StyleSheet.absoluteFill} onPress={closeAdvanced} />
 
             <View style={styleSheet.modalContent}>
-              <Text style={styleSheet.modalTitle}>Advanced</Text>
-              <Text style={styleSheet.modalSubtitle}>
-                Tune model, token budget, and creativity for this run.
-              </Text>
+              {showModelSelector ? (
+                <>
+                  <View style={styleSheet.modelPickerHeaderRow}>
+                    <TouchableOpacity
+                      style={styleSheet.modelPickerBackButton}
+                      onPress={closeModelSelector}
+                      accessibilityRole="button"
+                      accessibilityLabel="Back to advanced settings"
+                    >
+                      <Ionicons name="chevron-back" size={20} color="rgba(0, 0, 0, 0.8)" />
+                    </TouchableOpacity>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styleSheet.modalTitle}>Select Claude Model</Text>
+                      <Text style={styleSheet.modalSubtitle}>Prices as of {PRICING_AS_OF_DISPLAY} (USD per MTok)</Text>
+                    </View>
+                  </View>
 
-              <View style={styleSheet.settingGroup}>
-                <Text style={styleSheet.settingLabel}>Model</Text>
-                <TouchableOpacity style={styleSheet.dropdown} onPress={() => setShowModelSelector(true)}>
-                  <Text style={styleSheet.dropdownText}>{getModelDisplayName(generationModel)}</Text>
-                  <Ionicons name="chevron-down" size={18} color="#666" />
-                </TouchableOpacity>
-                <Text style={styleSheet.helperText}>
-                  {formatModelPricingShort(generationModel) || 'Pricing unavailable'} (as of {PRICING_AS_OF_DISPLAY})
-                </Text>
-              </View>
-
-              <View style={styleSheet.separator} />
-
-              <View style={styleSheet.settingGroup}>
-                <Text style={styleSheet.settingLabel}>Max Output Tokens: {effectiveMaxTokens.toLocaleString()}</Text>
-                <View style={styleSheet.stepperRow}>
-                  <TouchableOpacity
-                    style={styleSheet.stepperButton}
-                    onPress={() => setGenerationMaxTokens((value) => clampMaxOutputTokens(generationModel, value - 1_000))}
+                  <ScrollView
+                    style={styleSheet.modelOptionsScroll}
+                    contentContainerStyle={styleSheet.modelOptionsScrollContent}
+                    showsVerticalScrollIndicator={false}
                   >
-                    <Ionicons name="remove" size={18} color="rgba(0, 0, 0, 0.8)" />
-                  </TouchableOpacity>
-                  <Text style={styleSheet.stepperValue}>{effectiveMaxTokens.toLocaleString()}</Text>
+                    {CLAUDE_MODEL_PICKER_OPTIONS.map((modelId) => {
+                      const modelInfo = MODEL_INFO[modelId];
+                      const isRetired = modelInfo?.status === 'retired';
+                      const isSelected = generationModel === modelId;
+
+                      return (
+                        <TouchableOpacity
+                          key={modelId}
+                          style={[
+                            styleSheet.modelOption,
+                            isRetired && styleSheet.modelOptionDisabled,
+                            isSelected && styleSheet.modelOptionSelected
+                          ]}
+                          disabled={isRetired}
+                          onPress={() => handleAdvancedModelSelect(modelId)}
+                        >
+                          <View style={styleSheet.modelOptionContent}>
+                            <Text style={[
+                              styleSheet.modelOptionTitle,
+                              isRetired && styleSheet.modelOptionTitleDisabled,
+                              isSelected && styleSheet.modelOptionTitleSelected
+                            ]}>
+                              {getModelDisplayName(modelId)}
+                            </Text>
+                            <Text style={styleSheet.modelOptionPricing}>
+                              {formatModelPricingShort(modelId) || 'Pricing unavailable'}
+                              {'\n'}
+                              Max output: {getModelMaxOutputTokens(modelId).toLocaleString()} tokens
+                            </Text>
+                          </View>
+                          {isSelected && (
+                            <Ionicons name="checkmark-circle" size={22} color={AppColors.FABMain} />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+
                   <TouchableOpacity
-                    style={styleSheet.stepperButton}
-                    onPress={() => setGenerationMaxTokens((value) => clampMaxOutputTokens(generationModel, value + 1_000))}
+                    style={styleSheet.modalCancelButton}
+                    onPress={closeModelSelector}
                   >
-                    <Ionicons name="add" size={18} color="rgba(0, 0, 0, 0.8)" />
+                    <Text style={styleSheet.modalCancelButtonText}>Done</Text>
                   </TouchableOpacity>
-                </View>
-                <View style={styleSheet.chipRow}>
-                  {MAX_OUTPUT_TOKEN_PRESETS.filter((preset) => preset <= getModelMaxOutputTokens(generationModel)).map((preset) => {
-                    const isSelected = effectiveMaxTokens === preset;
-                    return (
-                      <TouchableOpacity
-                        key={preset}
-                        style={[styleSheet.chip, isSelected && styleSheet.chipSelected]}
-                        onPress={() => setGenerationMaxTokens(clampMaxOutputTokens(generationModel, preset))}
-                      >
-                        <Text style={[styleSheet.chipText, isSelected && styleSheet.chipTextSelected]}>
-                          {preset >= 1000 ? `${preset / 1000}K` : `${preset}`}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                <Text style={styleSheet.helperText}>
-                  Model max: {getModelMaxOutputTokens(generationModel).toLocaleString()} tokens
-                </Text>
-              </View>
-
-              <View style={styleSheet.separator} />
-
-              <View style={styleSheet.settingGroup}>
-                <Text style={styleSheet.settingLabel}>Temperature: {effectiveTemperature.toFixed(1)}</Text>
-                <View style={styleSheet.chipRow}>
-                  {TEMPERATURE_PRESETS.map((preset) => {
-                    const isSelected = Math.abs(effectiveTemperature - preset.value) < 0.0001;
-                    return (
-                      <TouchableOpacity
-                        key={preset.label}
-                        style={[styleSheet.chip, isSelected && styleSheet.chipSelected]}
-                        onPress={() => setGenerationTemperature(preset.value)}
-                      >
-                        <Text style={[styleSheet.chipText, isSelected && styleSheet.chipTextSelected]}>
-                          {preset.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                <Text style={styleSheet.helperText}>
-                  Lower = more focused, higher = more creative.
-                </Text>
-              </View>
-
-              <View style={styleSheet.separator} />
-
-              <View style={styleSheet.settingGroup}>
-                <Text style={styleSheet.settingLabel}>Estimate</Text>
-                {runEstimate ? (
-                  <Text style={styleSheet.helperText}>
-                    Est. max cost {formatUsd(runEstimate.estimatedMaxCost)} • Input ~{runEstimate.estimatedInputTokens.toLocaleString()} • Output up to {runEstimate.effectiveMaxTokens.toLocaleString()}
+                </>
+              ) : (
+                <>
+                  <Text style={styleSheet.modalTitle}>Advanced</Text>
+                  <Text style={styleSheet.modalSubtitle}>
+                    Tune model, token budget, and creativity for this run.
                   </Text>
-                ) : (
-                  <Text style={styleSheet.helperText}>Enter a prompt to see an estimate.</Text>
-                )}
-              </View>
 
-              <View style={styleSheet.modalButtonRow}>
-                <TouchableOpacity
-                  style={[styleSheet.modalButton, { backgroundColor: '#f0f0f0' }]}
-                  onPress={resetAdvancedToDefaults}
-                >
-                  <Text style={[styleSheet.modalButtonText, { color: 'rgba(0, 0, 0, 0.7)' }]}>
-                    Reset
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styleSheet.modalButton} onPress={closeAdvanced}>
-                  <Text style={styleSheet.modalButtonText}>Done</Text>
-                </TouchableOpacity>
-              </View>
+                  <View style={styleSheet.settingGroup}>
+                    <Text style={styleSheet.settingLabel}>Model</Text>
+                    <TouchableOpacity style={styleSheet.dropdown} onPress={() => setShowModelSelector(true)}>
+                      <Text style={styleSheet.dropdownText}>{getModelDisplayName(generationModel)}</Text>
+                      <Ionicons name="chevron-forward" size={18} color="#666" />
+                    </TouchableOpacity>
+                    <Text style={styleSheet.helperText}>
+                      {formatModelPricingShort(generationModel) || 'Pricing unavailable'} (as of {PRICING_AS_OF_DISPLAY})
+                    </Text>
+                  </View>
+
+                  <View style={styleSheet.separator} />
+
+                  <View style={styleSheet.settingGroup}>
+                    <Text style={styleSheet.settingLabel}>Max Output Tokens: {effectiveMaxTokens.toLocaleString()}</Text>
+                    <View style={styleSheet.stepperRow}>
+                      <TouchableOpacity
+                        style={styleSheet.stepperButton}
+                        onPress={() => setGenerationMaxTokens((value) => clampMaxOutputTokens(generationModel, value - 1_000))}
+                      >
+                        <Ionicons name="remove" size={18} color="rgba(0, 0, 0, 0.8)" />
+                      </TouchableOpacity>
+                      <Text style={styleSheet.stepperValue}>{effectiveMaxTokens.toLocaleString()}</Text>
+                      <TouchableOpacity
+                        style={styleSheet.stepperButton}
+                        onPress={() => setGenerationMaxTokens((value) => clampMaxOutputTokens(generationModel, value + 1_000))}
+                      >
+                        <Ionicons name="add" size={18} color="rgba(0, 0, 0, 0.8)" />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styleSheet.chipRow}>
+                      {MAX_OUTPUT_TOKEN_PRESETS.filter((preset) => preset <= getModelMaxOutputTokens(generationModel)).map((preset) => {
+                        const isSelected = effectiveMaxTokens === preset;
+                        return (
+                          <TouchableOpacity
+                            key={preset}
+                            style={[styleSheet.chip, isSelected && styleSheet.chipSelected]}
+                            onPress={() => setGenerationMaxTokens(clampMaxOutputTokens(generationModel, preset))}
+                          >
+                            <Text style={[styleSheet.chipText, isSelected && styleSheet.chipTextSelected]}>
+                              {preset >= 1000 ? `${preset / 1000}K` : `${preset}`}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    <Text style={styleSheet.helperText}>
+                      Model max: {getModelMaxOutputTokens(generationModel).toLocaleString()} tokens
+                    </Text>
+                  </View>
+
+                  <View style={styleSheet.separator} />
+
+                  <View style={styleSheet.settingGroup}>
+                    <Text style={styleSheet.settingLabel}>Temperature: {effectiveTemperature.toFixed(1)}</Text>
+                    <View style={styleSheet.chipRow}>
+                      {TEMPERATURE_PRESETS.map((preset) => {
+                        const isSelected = Math.abs(effectiveTemperature - preset.value) < 0.0001;
+                        return (
+                          <TouchableOpacity
+                            key={preset.label}
+                            style={[styleSheet.chip, isSelected && styleSheet.chipSelected]}
+                            onPress={() => setGenerationTemperature(preset.value)}
+                          >
+                            <Text style={[styleSheet.chipText, isSelected && styleSheet.chipTextSelected]}>
+                              {preset.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    <Text style={styleSheet.helperText}>
+                      Lower = more focused, higher = more creative.
+                    </Text>
+                  </View>
+
+                  <View style={styleSheet.separator} />
+
+                  <View style={styleSheet.settingGroup}>
+                    <Text style={styleSheet.settingLabel}>Estimate</Text>
+                    {runEstimate ? (
+                      <Text style={styleSheet.helperText}>
+                        Est. max cost {formatUsd(runEstimate.estimatedMaxCost)} • Input ~{runEstimate.estimatedInputTokens.toLocaleString()} • Output up to {runEstimate.effectiveMaxTokens.toLocaleString()}
+                      </Text>
+                    ) : (
+                      <Text style={styleSheet.helperText}>Enter a prompt to see an estimate.</Text>
+                    )}
+                  </View>
+
+                  <View style={styleSheet.modalButtonRow}>
+                    <TouchableOpacity
+                      style={[styleSheet.modalButton, { backgroundColor: '#f0f0f0' }]}
+                      onPress={resetAdvancedToDefaults}
+                    >
+                      <Text style={[styleSheet.modalButtonText, { color: 'rgba(0, 0, 0, 0.7)' }]}>
+                        Reset
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styleSheet.modalButton} onPress={closeAdvanced}>
+                      <Text style={styleSheet.modalButtonText}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
             </View>
           </View>
         </Modal>
@@ -686,73 +757,6 @@ export default function CreatePage() {
           </View>
         </Modal>
 
-        {/* Model Picker Modal (Advanced) */}
-        <Modal
-          visible={showAdvanced && showModelSelector}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={closeModelSelector}
-          onDismiss={closeModelSelector}
-        >
-          <View style={styleSheet.modalOverlay}>
-            <Pressable style={StyleSheet.absoluteFill} onPress={closeModelSelector} />
-
-            <View style={styleSheet.modelPickerContent}>
-              <Text style={styleSheet.modalTitle}>Select Claude Model</Text>
-              <Text style={styleSheet.modalSubtitle}>Prices as of {PRICING_AS_OF_DISPLAY} (USD per MTok)</Text>
-
-              <ScrollView
-                style={styleSheet.modelOptionsScroll}
-                contentContainerStyle={styleSheet.modelOptionsScrollContent}
-                showsVerticalScrollIndicator={false}
-              >
-                {CLAUDE_MODEL_PICKER_OPTIONS.map((modelId) => {
-                  const modelInfo = MODEL_INFO[modelId];
-                  const isRetired = modelInfo?.status === 'retired';
-                  const isSelected = generationModel === modelId;
-
-                  return (
-                    <TouchableOpacity
-                      key={modelId}
-                      style={[
-                        styleSheet.modelOption,
-                        isRetired && styleSheet.modelOptionDisabled,
-                        isSelected && styleSheet.modelOptionSelected
-                      ]}
-                      disabled={isRetired}
-                      onPress={() => handleAdvancedModelSelect(modelId)}
-                    >
-                      <View style={styleSheet.modelOptionContent}>
-                        <Text style={[
-                          styleSheet.modelOptionTitle,
-                          isRetired && styleSheet.modelOptionTitleDisabled,
-                          isSelected && styleSheet.modelOptionTitleSelected
-                        ]}>
-                          {getModelDisplayName(modelId)}
-                        </Text>
-                        <Text style={styleSheet.modelOptionPricing}>
-                          {formatModelPricingShort(modelId) || 'Pricing unavailable'}
-                          {'\n'}
-                          Max output: {getModelMaxOutputTokens(modelId).toLocaleString()} tokens
-                        </Text>
-                      </View>
-                      {isSelected && (
-                        <Ionicons name="checkmark-circle" size={22} color={AppColors.FABMain} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-
-              <TouchableOpacity
-                style={styleSheet.modalCancelButton}
-                onPress={closeModelSelector}
-              >
-                <Text style={styleSheet.modalCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
 	    </SafeAreaView>
 	  );
 	}
@@ -1034,6 +1038,21 @@ const styleSheet = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
+  },
+  modelPickerHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modelPickerBackButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.08)',
   },
   modelPickerContent: {
     backgroundColor: 'rgba(255, 255, 255, 0.98)',
