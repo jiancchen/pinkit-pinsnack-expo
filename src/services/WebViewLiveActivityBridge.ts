@@ -8,6 +8,7 @@ type LiveActivityDismissalPolicy = 'immediate' | { afterMs: number };
 
 const observedActivityKeysByAppId = new Map<string, Set<string>>();
 const liveActivityQueueByName = new Map<string, Promise<void>>();
+const lastTimerPayloadByName = new Map<string, { at: number; signature: string }>();
 
 type WebViewLiveActivityBaseMessage = {
   activityKey?: string;
@@ -110,6 +111,46 @@ function buildActivityName(appId: string, activityKey: string): string {
 
 function buildDeepLinkUrl(appId: string): string {
   return `/app-view?appId=${encodeURIComponent(appId)}`;
+}
+
+function normalizeEpochMs(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isFinite(value)) return undefined;
+  if (value <= 0) return undefined;
+
+  // Likely epoch milliseconds (>= ~2001-09-09).
+  if (value >= 1_000_000_000_000) return value;
+
+  // Likely epoch seconds (>= 2001-09-09 in seconds ~= 1e9).
+  if (value >= 1_000_000_000) return value * 1000;
+
+  return undefined;
+}
+
+function normalizeDurationMs(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isFinite(value)) return undefined;
+  if (value <= 0) return undefined;
+
+  // Heuristic: very small durations are commonly sent in seconds.
+  if (value < 10_000 && Number.isInteger(value)) {
+    return value * 1000;
+  }
+
+  return value;
+}
+
+function normalizeEndAtMs(value: number | undefined, nowMs: number): { endAtMs?: number; inferredFromOffset: boolean } {
+  if (value === undefined) return { endAtMs: undefined, inferredFromOffset: false };
+  if (!Number.isFinite(value)) return { endAtMs: undefined, inferredFromOffset: false };
+  if (value <= 0) return { endAtMs: undefined, inferredFromOffset: false };
+
+  const epoch = normalizeEpochMs(value);
+  if (epoch !== undefined) return { endAtMs: epoch, inferredFromOffset: false };
+
+  // If it doesn't look like an epoch timestamp, treat it as an offset/duration.
+  const offsetMs = normalizeDurationMs(value) ?? value;
+  return { endAtMs: nowMs + offsetMs, inferredFromOffset: true };
 }
 
 function enqueueLiveActivityOperation(activityName: string, operation: () => Promise<void>): Promise<void> {
@@ -327,13 +368,49 @@ export async function handleWebViewLiveActivityMessage(args: {
           return 'down';
         })();
 
+        const nowMs = Date.now();
+        const normalizedStartAtMs = normalizeEpochMs(message.startAtMs) ?? nowMs;
+        const normalizedDurationMs = normalizeDurationMs(message.durationMs);
+        const normalizedEnd = normalizeEndAtMs(message.endAtMs, nowMs);
+
+        // Prefer absolute end timestamps so the Live Activity can tick natively without JS updates.
+        const effectiveEndAtMs =
+          normalizedEnd.endAtMs ??
+          (normalizedDurationMs !== undefined ? normalizedStartAtMs + normalizedDurationMs : undefined);
+
+        // If we still don't have an end time, provide a safe default "horizon" for count-up timers.
+        const fallbackDurationMs = 24 * 60 * 60 * 1000; // 24h
+        const finalEndAtMs =
+          effectiveEndAtMs ??
+          (inferredDirection === 'up' ? normalizedStartAtMs + fallbackDurationMs : undefined);
+
+        const timerSignature = JSON.stringify({
+          activityKey,
+          title: message.title ?? '',
+          subtitle: message.subtitle ?? '',
+          tintColor: message.tintColor ?? '',
+          direction: inferredDirection,
+          startAtMs: normalizedStartAtMs,
+          endAtMs: finalEndAtMs ?? null,
+          showHours: message.showHours ?? true,
+          textStyle: message.textStyle ?? 'timer',
+          autoHideOnEnd: message.autoHideOnEnd ?? false,
+        });
+
+        const previousTimer = lastTimerPayloadByName.get(activityName);
+        if (previousTimer && previousTimer.signature === timerSignature && nowMs - previousTimer.at < 2500) {
+          // Drop rapid duplicates; timers should not be updated every second from JS.
+          return;
+        }
+        lastTimerPayloadByName.set(activityName, { at: nowMs, signature: timerSignature });
+
         const variants = await buildTimerLiveActivityVariants({
           title: message.title,
           subtitle: message.subtitle,
           tintColor: message.tintColor,
-          startAtMs: message.startAtMs,
-          endAtMs: message.endAtMs,
-          durationMs: message.durationMs,
+          startAtMs: normalizedStartAtMs,
+          endAtMs: finalEndAtMs,
+          durationMs: undefined,
           direction: inferredDirection,
           showHours: message.showHours,
           textStyle: message.textStyle,
@@ -342,9 +419,7 @@ export async function handleWebViewLiveActivityMessage(args: {
         if (!variants) return;
 
         // For timers, default staleDate to the computed end time when available.
-        const computedEndAtMs =
-          message.endAtMs ??
-          (message.durationMs !== undefined ? (message.startAtMs ?? Date.now()) + message.durationMs : undefined);
+        const computedEndAtMs = finalEndAtMs;
         const staleDate =
           message.staleDateMs ?? (computedEndAtMs && computedEndAtMs > Date.now() ? computedEndAtMs : undefined);
 
