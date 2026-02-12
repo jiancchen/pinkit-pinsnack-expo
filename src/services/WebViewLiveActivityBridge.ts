@@ -6,6 +6,9 @@ const log = createLogger('WebViewLiveActivity');
 
 type LiveActivityDismissalPolicy = 'immediate' | { afterMs: number };
 
+const observedActivityKeysByAppId = new Map<string, Set<string>>();
+const liveActivityQueueByName = new Map<string, Promise<void>>();
+
 type WebViewLiveActivityBaseMessage = {
   activityKey?: string;
   tintColor?: string;
@@ -109,6 +112,23 @@ function buildDeepLinkUrl(appId: string): string {
   return `/app-view?appId=${encodeURIComponent(appId)}`;
 }
 
+function enqueueLiveActivityOperation(activityName: string, operation: () => Promise<void>): Promise<void> {
+  const previous = liveActivityQueueByName.get(activityName) ?? Promise.resolve();
+  let current: Promise<void>;
+
+  current = previous
+    .catch(() => undefined)
+    .then(operation)
+    .finally(() => {
+      if (liveActivityQueueByName.get(activityName) === current) {
+        liveActivityQueueByName.delete(activityName);
+      }
+    });
+
+  liveActivityQueueByName.set(activityName, current);
+  return current;
+}
+
 async function loadVoltraClient(): Promise<any | null> {
   try {
     return await import('voltra/client');
@@ -199,6 +219,59 @@ function parseMessage(raw: Record<string, unknown>): WebViewLiveActivityMessage 
   return null;
 }
 
+function rememberActivityKey(appId: string, activityKey: string): void {
+  const existing = observedActivityKeysByAppId.get(appId);
+  if (existing) {
+    existing.add(activityKey);
+    return;
+  }
+  observedActivityKeysByAppId.set(appId, new Set([activityKey]));
+}
+
+function forgetActivityKey(appId: string, activityKey: string): void {
+  const existing = observedActivityKeysByAppId.get(appId);
+  if (!existing) return;
+  existing.delete(activityKey);
+  if (existing.size === 0) {
+    observedActivityKeysByAppId.delete(appId);
+  }
+}
+
+export async function stopWebViewLiveActivitiesForApp(appId: string): Promise<void> {
+  if (Platform.OS !== 'ios') return;
+
+  const client = await loadVoltraClient();
+  if (!client) return;
+
+  const { stopLiveActivity } = client as {
+    stopLiveActivity: (targetId: string, options?: any) => Promise<void>;
+  };
+
+  const keys = new Set<string>(['main']);
+  const observed = observedActivityKeysByAppId.get(appId);
+  if (observed) {
+    for (const key of observed) keys.add(key);
+  }
+
+  await Promise.all(
+    Array.from(keys).map(async (activityKey) => {
+      const activityName = buildActivityName(appId, activityKey);
+      try {
+        await stopLiveActivity(activityName, { dismissalPolicy: 'immediate' });
+      } catch {
+        // Ignore "not found" and other end errors for best-effort cleanup.
+      }
+    })
+  );
+
+  observedActivityKeysByAppId.delete(appId);
+}
+
+export async function stopAllWebViewLiveActivities(): Promise<void> {
+  const appIds = Array.from(observedActivityKeysByAppId.keys());
+  await Promise.all(appIds.map((appId) => stopWebViewLiveActivitiesForApp(appId)));
+}
+
 export async function handleWebViewLiveActivityMessage(args: {
   appId: string;
   rawMessage: Record<string, unknown>;
@@ -223,98 +296,111 @@ export async function handleWebViewLiveActivityMessage(args: {
     stopLiveActivity: (targetId: string, options?: any) => Promise<void>;
   };
 
-  try {
-    if (message.type === 'live_activity_is_active') {
-      args.sendToWebView?.({
-        type: 'live_activity_is_active_response',
-        activityKey,
-        isActive: isLiveActivityActive(activityName),
-      });
-      return;
-    }
-
-    if (message.type === 'live_activity_stop') {
-      const dismissalPolicy = normalizeDismissalPolicy(message.dismissalPolicy) ?? { dismissalPolicy: 'immediate' };
-      if (isLiveActivityActive(activityName)) {
-        await stopLiveActivity(activityName, dismissalPolicy);
-      }
-      return;
-    }
-
-    if (message.type === 'live_activity_start_timer') {
-      const variants = await buildTimerLiveActivityVariants({
-        title: message.title,
-        subtitle: message.subtitle,
-        tintColor: message.tintColor,
-        startAtMs: message.startAtMs,
-        endAtMs: message.endAtMs,
-        durationMs: message.durationMs,
-        direction: message.direction,
-        showHours: message.showHours,
-        textStyle: message.textStyle,
-        autoHideOnEnd: message.autoHideOnEnd,
-      });
-      if (!variants) return;
-
-      // For timers, default staleDate to the computed end time when available.
-      const computedEndAtMs =
-        message.endAtMs ??
-        (message.durationMs !== undefined
-          ? (message.startAtMs ?? Date.now()) + message.durationMs
-          : undefined);
-      const staleDate = message.staleDateMs ?? (computedEndAtMs && computedEndAtMs > Date.now() ? computedEndAtMs : undefined);
-
-      const sharedOptions = {
-        relevanceScore: message.relevanceScore,
-        staleDate,
-      };
-
-      if (!isLiveActivityActive(activityName)) {
-        await startLiveActivity(variants, {
-          activityName,
-          deepLinkUrl,
-          ...sharedOptions,
-        });
-      } else {
-        await updateLiveActivity(activityName, variants, sharedOptions);
-      }
-
-      return;
-    }
-
-    if (message.type === 'live_activity_start_counter' || message.type === 'live_activity_update_counter') {
-      const variants = await buildCounterLiveActivityVariants({
-        title: message.title,
-        subtitle: message.subtitle,
-        tintColor: message.tintColor,
-        count: message.count,
-        unit: message.unit,
-      });
-      if (!variants) return;
-
-      const sharedOptions = {
-        relevanceScore: message.relevanceScore,
-        staleDate: message.staleDateMs,
-      };
-
-      if (!isLiveActivityActive(activityName)) {
-        await startLiveActivity(variants, {
-          activityName,
-          deepLinkUrl,
-          ...sharedOptions,
-        });
-      } else {
-        await updateLiveActivity(activityName, variants, sharedOptions);
-      }
-
-      return;
-    }
-  } catch (error: any) {
-    log.warn('Live Activity bridge failed:', error);
+  if (message.type === 'live_activity_is_active') {
     args.sendToWebView?.({
-      type: 'live_activity_error',
+      type: 'live_activity_is_active_response',
       activityKey,
-      message: error?.message || String(error),
+      isActive: isLiveActivityActive(activityName),
     });
+    return;
   }
+
+  await enqueueLiveActivityOperation(activityName, async () => {
+    try {
+      if (message.type === 'live_activity_stop') {
+        const dismissalPolicy = normalizeDismissalPolicy(message.dismissalPolicy) ?? { dismissalPolicy: 'immediate' };
+        if (isLiveActivityActive(activityName)) {
+          await stopLiveActivity(activityName, dismissalPolicy);
+        }
+        forgetActivityKey(args.appId, activityKey);
+        return;
+      }
+
+      if (message.type === 'live_activity_start_timer') {
+        rememberActivityKey(args.appId, activityKey);
+
+        const inferredDirection: 'up' | 'down' = (() => {
+          if (message.direction === 'up' || message.direction === 'down') return message.direction;
+          const key = activityKey.toLowerCase();
+          const title = (message.title ?? '').toLowerCase();
+          if (key.includes('stopwatch') || title.includes('stopwatch')) return 'up';
+          return 'down';
+        })();
+
+        const variants = await buildTimerLiveActivityVariants({
+          title: message.title,
+          subtitle: message.subtitle,
+          tintColor: message.tintColor,
+          startAtMs: message.startAtMs,
+          endAtMs: message.endAtMs,
+          durationMs: message.durationMs,
+          direction: inferredDirection,
+          showHours: message.showHours,
+          textStyle: message.textStyle,
+          autoHideOnEnd: message.autoHideOnEnd,
+        });
+        if (!variants) return;
+
+        // For timers, default staleDate to the computed end time when available.
+        const computedEndAtMs =
+          message.endAtMs ??
+          (message.durationMs !== undefined ? (message.startAtMs ?? Date.now()) + message.durationMs : undefined);
+        const staleDate =
+          message.staleDateMs ?? (computedEndAtMs && computedEndAtMs > Date.now() ? computedEndAtMs : undefined);
+
+        const sharedOptions = {
+          relevanceScore: message.relevanceScore,
+          staleDate,
+        };
+
+        if (!isLiveActivityActive(activityName)) {
+          await startLiveActivity(variants, {
+            activityName,
+            deepLinkUrl,
+            ...sharedOptions,
+          });
+        } else {
+          await updateLiveActivity(activityName, variants, sharedOptions);
+        }
+
+        return;
+      }
+
+      if (message.type === 'live_activity_start_counter' || message.type === 'live_activity_update_counter') {
+        rememberActivityKey(args.appId, activityKey);
+        const variants = await buildCounterLiveActivityVariants({
+          title: message.title,
+          subtitle: message.subtitle,
+          tintColor: message.tintColor,
+          count: message.count,
+          unit: message.unit,
+        });
+        if (!variants) return;
+
+        const sharedOptions = {
+          relevanceScore: message.relevanceScore,
+          staleDate: message.staleDateMs,
+        };
+
+        if (!isLiveActivityActive(activityName)) {
+          await startLiveActivity(variants, {
+            activityName,
+            deepLinkUrl,
+            ...sharedOptions,
+          });
+        } else {
+          await updateLiveActivity(activityName, variants, sharedOptions);
+        }
+
+        return;
+      }
+    } catch (error: any) {
+      log.warn('Live Activity bridge failed:', error);
+      args.sendToWebView?.({
+        type: 'live_activity_error',
+        activityKey,
+        message: error?.message || String(error),
+      });
+    }
+  });
 }

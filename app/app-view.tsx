@@ -24,7 +24,7 @@ import { ExportService } from '../src/services/ExportService';
 import { ScreenshotService } from '../src/services/ScreenshotService';
 import { WebViewScreenshotService } from '../src/services/WebViewScreenshotService';
 import { emitScreenshotCaptured, emitScreenshotError, emitScreenshotLoading } from '../src/stores/ScreenshotStore';
-import { handleWebViewLiveActivityMessage } from '../src/services/WebViewLiveActivityBridge';
+import { handleWebViewLiveActivityMessage, stopWebViewLiveActivitiesForApp } from '../src/services/WebViewLiveActivityBridge';
 import { createLogger } from '../src/utils/Logger';
 
 const log = createLogger('AppView');
@@ -32,6 +32,15 @@ const log = createLogger('AppView');
 export default function AppViewPage() {
   const router = useRouter();
   const { appId } = useLocalSearchParams<{ appId: string }>();
+
+  const safeGoBack = () => {
+    const canGoBack = (router as any)?.canGoBack?.();
+    if (canGoBack) {
+      router.back();
+      return;
+    }
+    router.replace('/(tabs)');
+  };
   
   const [app, setApp] = useState<StoredApp | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -300,13 +309,13 @@ export default function AppViewPage() {
         await AppStorageService.incrementAccessCount(id);
       } else {
         Alert.alert('Error', 'App not found', [
-          { text: 'OK', onPress: () => router.back() }
+          { text: 'OK', onPress: safeGoBack }
         ]);
       }
     } catch (error) {
       log.error('Error loading app:', error);
       Alert.alert('Error', 'Failed to load app', [
-        { text: 'OK', onPress: () => router.back() }
+        { text: 'OK', onPress: safeGoBack }
       ]);
     } finally {
       setIsLoading(false);
@@ -509,9 +518,10 @@ export default function AppViewPage() {
           style: 'destructive',
           onPress: async () => {
             try {
+              await stopWebViewLiveActivitiesForApp(app.id);
               await AppStorageService.deleteApp(app.id);
               Alert.alert('Success', 'App deleted successfully', [
-                { text: 'OK', onPress: () => router.back() }
+                { text: 'OK', onPress: safeGoBack }
               ]);
             } catch (error) {
               log.error('Error deleting app:', error);
@@ -549,7 +559,7 @@ export default function AppViewPage() {
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle" size={64} color="#EF4444" />
           <Text style={styles.errorText}>App not found</Text>
-          <TouchableOpacity style={styles.button} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.button} onPress={safeGoBack}>
             <Text style={styles.buttonText}>Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -574,7 +584,7 @@ export default function AppViewPage() {
       {!isFullscreen && (
         <SafeAreaView>
           <View style={styles.header}>
-            <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
+            <TouchableOpacity style={styles.headerButton} onPress={safeGoBack}>
               <Ionicons name="arrow-back" size={24} color="rgba(0, 0, 0, 0.8)" />
             </TouchableOpacity>
             

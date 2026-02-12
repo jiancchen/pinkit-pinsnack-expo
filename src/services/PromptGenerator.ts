@@ -88,14 +88,26 @@ Key principle: Either full-height OR auto-height, never dynamic growing containe
 
 	<native_live_activities>
 	Live Activities / Dynamic Island (iOS only, requires a development build, iOS 16.2+):
-	- Start a timer Live Activity:
+	- Start a countdown timer Live Activity (counts DOWN):
 	  window.ReactNativeWebView.postMessage(JSON.stringify({
 	    type:'live_activity_start_timer',
 	    activityKey:'main',
 	    title:'Focus Timer',
 	    subtitle:'Tap to open',
 	    endAtMs: Date.now() + 25*60*1000,
+	    direction:'down',
 	    tintColor:'#7C3AED'
+	  }))
+	- Start a stopwatch / count-up Live Activity (counts UP):
+	  window.ReactNativeWebView.postMessage(JSON.stringify({
+	    type:'live_activity_start_timer',
+	    activityKey:'stopwatch',
+	    title:'Stopwatch',
+	    subtitle:'Tap to open',
+	    startAtMs: Date.now(),
+	    durationMs: 24*60*60*1000,
+	    direction:'up',
+	    tintColor:'#2D5A7B'
 	  }))
 	- Start a counter Live Activity:
 	  window.ReactNativeWebView.postMessage(JSON.stringify({
