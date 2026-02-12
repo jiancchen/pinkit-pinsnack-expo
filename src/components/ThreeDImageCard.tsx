@@ -46,7 +46,7 @@ export default function ThreeDImageCard({
   const screenshotStore = useScreenshotStore();
 
   // Check different states (moved up to avoid scope issues)
-  const isGenerating = historyItem.html === 'GENERATING...';
+  const isGenerating = historyItem.status === 'generating';
   const isNewItem = (historyItem.accessCount || 0) < 1 && !isGenerating;
   const isFavorite = historyItem.favorite === true;
 

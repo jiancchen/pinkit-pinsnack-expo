@@ -311,6 +311,30 @@ export class AppStorageService {
     }
   }
 
+  static async getStorageStats(): Promise<{
+    totalApps: number;
+    favorites: number;
+    estimatedSizeKB: number;
+  }> {
+    try {
+      const raw = await AsyncStorage.getItem(APPS_STORAGE_KEY);
+      if (!raw) return { totalApps: 0, favorites: 0, estimatedSizeKB: 0 };
+      const parsed = JSON.parse(raw);
+      const apps = Array.isArray(parsed) ? parsed : [];
+      const totalApps = apps.length;
+      const favorites = apps.filter((app: any) => app && app.favorite === true).length;
+      const estimatedSizeKB = Math.round(raw.length / 1024);
+      return { totalApps, favorites, estimatedSizeKB };
+    } catch (error) {
+      log.error('Error getting apps storage stats:', error);
+      return { totalApps: 0, favorites: 0, estimatedSizeKB: 0 };
+    }
+  }
+
+  static async clearAllApps(): Promise<void> {
+    await AsyncStorage.removeItem(APPS_STORAGE_KEY);
+  }
+
   /**
    * Get a specific app by ID
    */

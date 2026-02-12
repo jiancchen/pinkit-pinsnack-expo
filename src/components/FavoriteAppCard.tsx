@@ -21,20 +21,30 @@ const FavoriteAppCard: React.FC<FavoriteAppCardProps> = ({
 }) => {
   const screenshotState = useScreenshotState(historyItem.id);
   const [imageError, setImageError] = useState(false);
+  const isGenerating = historyItem.status === 'generating';
 
   const screenshot = screenshotState?.uri;
   const showImage = screenshot && !imageError;
 
   return (
     <TouchableOpacity
-      style={styles.container}
-      onPress={() => onNavigateToApp(historyItem.id)}
+      style={[styles.container, isGenerating && styles.containerDisabled]}
+      onPress={() => {
+        if (!isGenerating) onNavigateToApp(historyItem.id);
+      }}
       activeOpacity={0.8}
+      disabled={isGenerating}
     >
       <View style={styles.imageContainer}>
         {screenshotState?.isLoading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="small" color="#999" />
+          </View>
+        )}
+
+        {isGenerating && (
+          <View style={styles.generatingOverlay}>
+            <ActivityIndicator size="small" color="#fff" />
           </View>
         )}
         
@@ -78,6 +88,9 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
+  containerDisabled: {
+    opacity: 0.6,
+  },
   imageContainer: {
     flex: 1,
     borderRadius: 8,
@@ -110,6 +123,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
     zIndex: 1,
+  },
+  generatingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    zIndex: 2,
   },
   title: {
     fontSize: 12,

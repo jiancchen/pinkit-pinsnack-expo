@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppStorageService } from './AppStorageService';
 import { ClaudeApiService } from './ClaudeApiService';
 import { PromptGenerator, AppGenerationRequest } from './PromptGenerator';
+import { PromptHistoryService } from './PromptHistoryService';
 import { createLogger } from '../utils/Logger';
 import {
   clampMaxOutputTokens,
@@ -98,6 +99,11 @@ export class GenerationQueueService {
 
     const savedApp = await AppStorageService.saveApp(request, undefined, undefined, model, generatedPrompt);
     await AppStorageService.updateApp(savedApp.id, { status: 'generating' });
+    try {
+      await PromptHistoryService.add(request);
+    } catch (error) {
+      log.warn('Failed to save prompt history:', error);
+    }
 
     const now = Date.now();
     const job: GenerationJob = {

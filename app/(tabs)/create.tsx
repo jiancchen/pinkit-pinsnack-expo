@@ -8,6 +8,7 @@ import { getLiquidGlassTabBarContentPaddingBottom } from '../../src/constants/Li
 import { PromptGenerator, AppStyle, AppCategory, AppGenerationRequest } from '../../src/services/PromptGenerator';
 import { GenerationQueueService } from '../../src/services/GenerationQueueService';
 import { SecureStorageService } from '../../src/services/SecureStorageService';
+import { PromptHistoryService, type PromptHistoryEntry } from '../../src/services/PromptHistoryService';
 import {
   CLAUDE_MODEL_PICKER_OPTIONS,
   DEFAULT_CONFIG,
@@ -90,6 +91,9 @@ export default function CreatePage() {
   const [prompt, setPrompt] = useState('');
   const [selectedStyle, setSelectedStyle] = useState<AppStyle>('modern');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPromptHistory, setShowPromptHistory] = useState(false);
+  const [promptHistoryEntries, setPromptHistoryEntries] = useState<PromptHistoryEntry[]>([]);
+  const [isLoadingPromptHistory, setIsLoadingPromptHistory] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
   const [isCheckingApiKey, setIsCheckingApiKey] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -125,6 +129,24 @@ export default function CreatePage() {
       checkApiKeyStatus();
     }, [])
   );
+
+  const loadPromptHistory = async () => {
+    try {
+      setIsLoadingPromptHistory(true);
+      const entries = await PromptHistoryService.list(120);
+      setPromptHistoryEntries(entries);
+    } catch (error) {
+      log.warn('Failed to load prompt history:', error);
+      setPromptHistoryEntries([]);
+    } finally {
+      setIsLoadingPromptHistory(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (!showPromptHistory) return;
+    void loadPromptHistory();
+  }, [showPromptHistory]);
 
   const getModelDisplayName = (model: string): string => {
     const modelInfo = MODEL_INFO[model];
@@ -252,20 +274,17 @@ export default function CreatePage() {
       });
       log.info('Queued generation job:', { jobId: job.id, appId: job.appId });
 
+      router.push('/(tabs)');
       Alert.alert(
         'Generation queued',
         'Your app is generating. You can navigate around Droplets, but please keep the app open — backgrounding may pause generation. You’ll get a notification when it’s ready.',
         [
           {
-            text: 'View Apps',
-            onPress: () => router.push('/(tabs)'),
+            text: 'OK',
           },
           {
             text: 'Create Another',
-            onPress: () => {
-              setPrompt('');
-              setSelectedStyle('modern');
-            },
+            onPress: () => router.push('/(tabs)/create'),
             style: 'cancel'
           }
         ]
@@ -322,11 +341,28 @@ export default function CreatePage() {
           <View style={styleSheet.card}>
             <View style={styleSheet.inputHeader}>
               <Text style={styleSheet.sectionTitle}>Describe Your App</Text>
-              {prompt.length > 0 && (
-                <TouchableOpacity onPress={() => setPrompt('')}>
-                  <Ionicons name="close" size={20} color="#666" />
+              <View style={styleSheet.inputHeaderActions}>
+                <TouchableOpacity
+                  onPress={() => setShowPromptHistory(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open prompt history"
+                  style={styleSheet.inputHeaderIconButton}
+                  disabled={isLoading}
+                >
+                  <Ionicons name="time-outline" size={20} color="#666" />
                 </TouchableOpacity>
-              )}
+                {prompt.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setPrompt('')}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear prompt"
+                    style={styleSheet.inputHeaderIconButton}
+                    disabled={isLoading}
+                  >
+                    <Ionicons name="close" size={20} color="#666" />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
             
             <TextInput
@@ -548,6 +584,104 @@ export default function CreatePage() {
                   <Text style={styleSheet.modalButtonText}>Done</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Prompt History Modal */}
+        <Modal
+          visible={showPromptHistory}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowPromptHistory(false)}
+          onDismiss={() => setShowPromptHistory(false)}
+        >
+          <View style={styleSheet.modalOverlay}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowPromptHistory(false)} />
+
+            <View style={styleSheet.modelPickerContent}>
+              <View style={styleSheet.historyHeaderRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styleSheet.modalTitle}>Previous Prompts</Text>
+                  <Text style={styleSheet.modalSubtitle}>
+                    Tap a prompt to load it into the editor.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styleSheet.headerIconButton}
+                  onPress={() => setShowPromptHistory(false)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close prompt history"
+                >
+                  <Ionicons name="close" size={20} color="rgba(0, 0, 0, 0.8)" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styleSheet.modalButtonRow}>
+                <TouchableOpacity
+                  style={[styleSheet.modalButton, styleSheet.modalButtonSecondary]}
+                  onPress={() => {
+                    Alert.alert(
+                      'Clear prompt history',
+                      'Delete all saved prompts on this device?',
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Clear',
+                          style: 'destructive',
+                          onPress: async () => {
+                            await PromptHistoryService.clear();
+                            await loadPromptHistory();
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                >
+                  <Text style={[styleSheet.modalButtonText, styleSheet.modalButtonTextSecondary]}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styleSheet.modalButton} onPress={() => setShowPromptHistory(false)}>
+                  <Text style={styleSheet.modalButtonText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styleSheet.modelOptionsScroll} contentContainerStyle={styleSheet.modelOptionsScrollContent}>
+                {isLoadingPromptHistory ? (
+                  <View style={styleSheet.historyEmptyState}>
+                    <Text style={styleSheet.modalSubtitle}>Loading…</Text>
+                  </View>
+                ) : promptHistoryEntries.length === 0 ? (
+                  <View style={styleSheet.historyEmptyState}>
+                    <Text style={styleSheet.modalSubtitle}>No saved prompts yet.</Text>
+                  </View>
+                ) : (
+                  promptHistoryEntries.map((entry) => {
+                    const createdAt = new Date(entry.createdAt);
+                    const description = entry.request?.description || '';
+                    return (
+                      <TouchableOpacity
+                        key={entry.id}
+                        style={styleSheet.historyRow}
+                        onPress={() => {
+                          setPrompt(description);
+                          setSelectedStyle(entry.request.style);
+                          setShowPromptHistory(false);
+                        }}
+                      >
+                        <View style={styleSheet.historyRowTop}>
+                          <Text style={styleSheet.historyRowStyle}>{entry.request.style}</Text>
+                          <Text style={styleSheet.historyRowDate}>
+                            {Number.isFinite(createdAt.getTime()) ? createdAt.toLocaleString() : ''}
+                          </Text>
+                        </View>
+                        <Text style={styleSheet.historyRowPrompt} numberOfLines={3}>
+                          {description}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </ScrollView>
             </View>
           </View>
         </Modal>
@@ -774,6 +908,16 @@ const styleSheet = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+  },
+  inputHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  inputHeaderIconButton: {
+    padding: 6,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.04)',
   },
   textInput: {
     borderWidth: 1,
@@ -1006,16 +1150,62 @@ const styleSheet = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  modalButtonSecondary: {
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+  },
   modalButtonText: {
     fontSize: 14,
     fontWeight: '800',
     color: 'white',
+  },
+  modalButtonTextSecondary: {
+    color: 'rgba(0, 0, 0, 0.85)',
   },
   modelOptionsScroll: {
     marginTop: 14,
   },
   modelOptionsScrollContent: {
     paddingBottom: 10,
+  },
+  historyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  historyEmptyState: {
+    paddingVertical: 18,
+    alignItems: 'center',
+  },
+  historyRow: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  historyRowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  historyRowStyle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: 'rgba(0, 0, 0, 0.75)',
+    textTransform: 'capitalize',
+  },
+  historyRowDate: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(0, 0, 0, 0.5)',
+  },
+  historyRowPrompt: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(0, 0, 0, 0.8)',
+    lineHeight: 18,
   },
   modelOption: {
     backgroundColor: '#F8FAFC',

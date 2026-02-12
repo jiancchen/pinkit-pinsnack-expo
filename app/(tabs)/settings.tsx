@@ -5,12 +5,15 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../../src/constants/AppColors';
 import { getLiquidGlassTabBarContentPaddingBottom } from '../../src/constants/LiquidGlassTabBarLayout';
-import { samplePromptHistory } from '../../src/types/Samples';
 import { SecureStorageService } from '../../src/services/SecureStorageService';
 import { ClaudeApiService } from '../../src/services/ClaudeApiService';
 import { SeedService } from '../../src/services/SeedService';
 import { AppStorageService } from '../../src/services/AppStorageService';
+import { PromptHistoryService } from '../../src/services/PromptHistoryService';
 import { TokenTrackingService, TokenStats } from '../../src/services/TokenTrackingService';
+import { ScreenshotService } from '../../src/services/ScreenshotService';
+import { WebViewScreenshotService } from '../../src/services/WebViewScreenshotService';
+import { useScreenshotStore } from '../../src/stores/ScreenshotStore';
 import {
   CLAUDE_MODELS,
   CLAUDE_MODEL_PICKER_OPTIONS,
@@ -58,6 +61,14 @@ export default function SettingsPage() {
   const [tokenStats, setTokenStats] = useState<TokenStats | null>(null);
   const [isLoadingTokenStats, setIsLoadingTokenStats] = useState(true);
   const [showModelSelector, setShowModelSelector] = useState(false);
+  const [appsStorageStats, setAppsStorageStats] = useState<{ totalApps: number; favorites: number; estimatedSizeKB: number } | null>(null);
+  const [promptHistoryStats, setPromptHistoryStats] = useState<{ total: number; estimatedSizeKB: number } | null>(null);
+  const [screenshotStats, setScreenshotStats] = useState<{ totalScreenshots: number; estimatedSizeKB: number } | null>(null);
+  const [webviewScreenshotStats, setWebviewScreenshotStats] = useState<{ totalScreenshots: number; estimatedSizeKB: number } | null>(null);
+  const [isLoadingStorageStats, setIsLoadingStorageStats] = useState(true);
+  const [showManageApps, setShowManageApps] = useState(false);
+  const [manageApps, setManageApps] = useState<Array<{ id: string; title: string; status?: string; sizeKB: number }> | null>(null);
+  const [isLoadingManageApps, setIsLoadingManageApps] = useState(false);
 
   const tabBarVariant = useUISettingsStore((s) => s.tabBar.variant);
   const tabBarTintColor = useUISettingsStore((s) => s.tabBar.tintColor);
@@ -73,6 +84,7 @@ export default function SettingsPage() {
     loadClaudeConfig();
     loadSampleAppsCount();
     loadTokenStats();
+    loadStorageStats();
   }, []);
 
   useFocusEffect(
@@ -82,6 +94,7 @@ export default function SettingsPage() {
       loadClaudeConfig();
       loadSampleAppsCount();
       loadTokenStats();
+      loadStorageStats();
     }, [])
   );
 
@@ -127,6 +140,144 @@ export default function SettingsPage() {
     } finally {
       setIsLoadingTokenStats(false);
     }
+  };
+
+  const formatSize = (kb: number): string => {
+    if (!Number.isFinite(kb) || kb <= 0) return '0 KB';
+    if (kb < 1024) return `${kb.toLocaleString()} KB`;
+    const mb = kb / 1024;
+    if (mb < 1024) return `${mb.toFixed(1)} MB`;
+    const gb = mb / 1024;
+    return `${gb.toFixed(2)} GB`;
+  };
+
+  const loadStorageStats = async () => {
+    try {
+      setIsLoadingStorageStats(true);
+      const [apps, prompts, screenshots, webviewShots] = await Promise.all([
+        AppStorageService.getStorageStats(),
+        PromptHistoryService.getStats(),
+        ScreenshotService.getStorageStats(),
+        WebViewScreenshotService.getStorageStats(),
+      ]);
+      setAppsStorageStats(apps);
+      setPromptHistoryStats(prompts);
+      setScreenshotStats(screenshots);
+      setWebviewScreenshotStats(webviewShots);
+    } catch (error) {
+      log.error('Error loading storage stats:', error);
+      setAppsStorageStats(null);
+      setPromptHistoryStats(null);
+      setScreenshotStats(null);
+      setWebviewScreenshotStats(null);
+    } finally {
+      setIsLoadingStorageStats(false);
+    }
+  };
+
+  const loadManageApps = async () => {
+    try {
+      setIsLoadingManageApps(true);
+      const apps = await AppStorageService.getAllApps();
+      const normalized = apps.map((app) => {
+        const sizeChars =
+          (app.html?.length || 0) +
+          (app.prompt?.length || 0) +
+          (app.generatedPrompt?.length || 0) +
+          (app.title?.length || 0) +
+          (app.description?.length || 0);
+        return {
+          id: app.id,
+          title: app.title,
+          status: app.status,
+          sizeKB: Math.max(1, Math.round(sizeChars / 1024)),
+        };
+      });
+      normalized.sort((a, b) => b.sizeKB - a.sizeKB);
+      setManageApps(normalized);
+    } catch (error) {
+      log.error('Error loading apps list:', error);
+      setManageApps([]);
+    } finally {
+      setIsLoadingManageApps(false);
+    }
+  };
+
+  const deleteAppAndAssets = async (appId: string): Promise<void> => {
+    await AppStorageService.deleteApp(appId);
+    await Promise.all([
+      ScreenshotService.deleteScreenshot(appId),
+      WebViewScreenshotService.deleteWebViewScreenshot(appId),
+    ]);
+    try {
+      useScreenshotStore.getState().removeScreenshot(appId);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleClearAllApps = () => {
+    Alert.alert(
+      'Clear all apps',
+      'Delete all saved apps on this device? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const apps = await AppStorageService.getAllApps();
+              await Promise.all(
+                apps.map((app) =>
+                  Promise.all([
+                    ScreenshotService.deleteScreenshot(app.id),
+                    WebViewScreenshotService.deleteWebViewScreenshot(app.id),
+                  ])
+                )
+              );
+              await AppStorageService.clearAllApps();
+              try {
+                useScreenshotStore.getState().clearAllScreenshots();
+              } catch {
+                // ignore
+              }
+              await loadSampleAppsCount();
+              await loadStorageStats();
+              setManageApps(null);
+              Alert.alert('Success', 'All apps cleared.');
+            } catch (error) {
+              log.error('Error clearing apps:', error);
+              Alert.alert('Error', 'Failed to clear apps.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleClearPromptHistory = () => {
+    Alert.alert(
+      'Clear prompt history',
+      'Delete all saved prompts on this device? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await PromptHistoryService.clear();
+              await loadStorageStats();
+              Alert.alert('Success', 'Prompt history cleared.');
+            } catch (error) {
+              log.error('Error clearing prompt history:', error);
+              Alert.alert('Error', 'Failed to clear prompt history.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleClearTokenHistory = () => {
@@ -588,13 +739,63 @@ export default function SettingsPage() {
             <View style={styles.statsContainer}>
               <StatItem
                 label="Total Apps"
-                value={samplePromptHistory.length.toString()}
+                value={appsStorageStats ? appsStorageStats.totalApps.toString() : '—'}
               />
               <StatItem
                 label="Favorites"
-                value={samplePromptHistory.filter(item => item.favorite).length.toString()}
+                value={appsStorageStats ? appsStorageStats.favorites.toString() : '—'}
               />
             </View>
+            <View style={styles.separator} />
+            <View style={styles.settingsItem}>
+              <View>
+                <Text style={styles.settingsItemTitle}>Storage (estimated)</Text>
+                {isLoadingStorageStats ? (
+                  <Text style={styles.settingsItemDescription}>Loading…</Text>
+                ) : (
+                  <Text style={styles.settingsItemDescription}>
+                    Total: {formatSize((appsStorageStats?.estimatedSizeKB ?? 0) + (screenshotStats?.estimatedSizeKB ?? 0) + (webviewScreenshotStats?.estimatedSizeKB ?? 0) + (promptHistoryStats?.estimatedSizeKB ?? 0))} • Apps: {formatSize(appsStorageStats?.estimatedSizeKB ?? 0)} • Screenshots: {formatSize((screenshotStats?.estimatedSizeKB ?? 0) + (webviewScreenshotStats?.estimatedSizeKB ?? 0))} • Prompts: {formatSize(promptHistoryStats?.estimatedSizeKB ?? 0)}
+                  </Text>
+                )}
+              </View>
+            </View>
+          </SettingsCard>
+        </View>
+
+        {/* Storage & Data Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Storage & Data</Text>
+
+          <SettingsCard>
+            <SettingsItem
+              title="Manage Apps"
+              description="Delete apps one by one"
+              onPress={() => {
+                setShowManageApps(true);
+                void loadManageApps();
+              }}
+              icon="albums-outline"
+            />
+
+            <View style={styles.separator} />
+
+            <SettingsItem
+              title="Clear All Apps"
+              description="Deletes all saved apps on this device"
+              onPress={handleClearAllApps}
+              icon="trash-outline"
+              statusColor="#DC3545"
+            />
+
+            <View style={styles.separator} />
+
+            <SettingsItem
+              title="Clear Prompt History"
+              description="Deletes saved prompts used to create apps"
+              onPress={handleClearPromptHistory}
+              icon="time-outline"
+              statusColor="#DC3545"
+            />
           </SettingsCard>
         </View>
 
@@ -788,6 +989,102 @@ export default function SettingsPage() {
           </View>
         </View>
       </Modal>
+
+      {/* Manage Apps Modal */}
+      <Modal
+        visible={showManageApps}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowManageApps(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowManageApps(false)} />
+
+          <View style={styles.modalContent}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Manage Apps</Text>
+                <Text style={styles.modalSubtitle}>Delete individual apps and free up space.</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.headerIconButton, { backgroundColor: 'rgba(0, 0, 0, 0.06)' }]}
+                onPress={() => setShowManageApps(false)}
+              >
+                <Ionicons name="close" size={20} color="rgba(0, 0, 0, 0.8)" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.separator} />
+
+            <ScrollView style={{ marginTop: 12, maxHeight: 420 }}>
+              {isLoadingManageApps ? (
+                <View style={styles.settingsItem}>
+                  <Text style={styles.settingsItemDescription}>Loading apps…</Text>
+                </View>
+              ) : (manageApps ?? []).length === 0 ? (
+                <View style={styles.settingsItem}>
+                  <Text style={styles.settingsItemDescription}>No apps found.</Text>
+                </View>
+              ) : (
+                (manageApps ?? []).map((app) => (
+                  <View key={app.id} style={[styles.settingsItem, { paddingVertical: 12 }]}>
+                    <View style={{ flex: 1, paddingRight: 10 }}>
+                      <Text style={styles.settingsItemTitle} numberOfLines={1}>
+                        {app.title}
+                      </Text>
+                      <Text style={styles.settingsItemDescription} numberOfLines={1}>
+                        {app.status ? `Status: ${app.status} • ` : ''}
+                        Est. {formatSize(app.sizeKB)}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.button, { backgroundColor: '#dc3545', paddingVertical: 8, paddingHorizontal: 12 }]}
+                      onPress={() => {
+                        Alert.alert(
+                          'Delete app',
+                          `Delete "${app.title}"? This cannot be undone.`,
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Delete',
+                              style: 'destructive',
+                              onPress: async () => {
+                                await deleteAppAndAssets(app.id);
+                                await loadManageApps();
+                                await loadSampleAppsCount();
+                                await loadStorageStats();
+                              },
+                            },
+                          ]
+                        );
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={16} color="white" style={{ marginRight: 6 }} />
+                      <Text style={styles.buttonText}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: '#dc3545', flex: 1 }]}
+                onPress={handleClearAllApps}
+              >
+                <Ionicons name="trash-outline" size={16} color="white" style={{ marginRight: 8 }} />
+                <Text style={styles.buttonText}>Clear All</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: '#6c757d', flex: 1 }]}
+                onPress={() => setShowManageApps(false)}
+              >
+                <Text style={styles.buttonText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -852,6 +1149,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: 'rgba(0, 0, 0, 0.8)',
+  },
+  headerIconButton: {
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
   },
   scrollView: {
     flex: 1,

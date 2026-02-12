@@ -17,6 +17,7 @@ import {PromptHistory } from '../types/PromptHistory';
 import { AppColors } from '../constants/AppColors';
 import FavoriteAppCard from './FavoriteAppCard';
 import MostUsedAppCard from './MostUsedAppCard';
+import GenerationInlineProgressBar from './GenerationInlineProgressBar';
 
 interface SearchBarWithFavoritesProps {
   searchText: string;
@@ -177,7 +178,7 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
         />
       )}
 
-      <View style={styles.content}>
+        <View style={styles.content}>
         {/* Search Bar */}
         <View>
           <Animated.View
@@ -222,6 +223,11 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
                   <Ionicons name="close" size={20} color="#999" />
                 </TouchableOpacity>
               )}
+            </View>
+
+            {/* Thin generation progress (under search field) */}
+            <View style={styles.inlineProgressWrap}>
+              <GenerationInlineProgressBar />
             </View>
           </Animated.View>
         </View>
@@ -308,6 +314,10 @@ const styles = StyleSheet.create({
   },
   searchBarContainer: {
     marginBottom: 8,
+  },
+  inlineProgressWrap: {
+    marginTop: 8,
+    paddingHorizontal: 14,
   },
   searchBar: {
     height: 56,

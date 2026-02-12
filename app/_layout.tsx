@@ -13,7 +13,6 @@ import { NotificationService } from '../src/services/NotificationService';
 import { SeedService } from '../src/services/SeedService';
 import { AppColors } from '../src/constants/AppColors';
 import { createLogger } from '../src/utils/Logger';
-import GenerationActivityBanner from '../src/components/GenerationActivityBanner';
 import GenerationLiveActivityController from '../src/components/GenerationLiveActivityController';
 
 const log = createLogger('RootLayout');
@@ -85,7 +84,6 @@ export default function RootLayout() {
           <Stack.Screen name="app-view" options={{ headerShown: false }} />
         </Stack>
         <GenerationLiveActivityController />
-        <GenerationActivityBanner />
         <StatusBar style="light" translucent backgroundColor="transparent" />
       </GestureHandlerRootView>
     </SafeAreaProvider>

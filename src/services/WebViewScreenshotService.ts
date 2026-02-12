@@ -270,4 +270,33 @@ export class WebViewScreenshotService {
       log.error('Error deleting screenshot:', error);
     }
   }
+
+  static async getStorageStats(): Promise<{
+    totalScreenshots: number;
+    estimatedSizeKB: number;
+  }> {
+    try {
+      const allKeys = await AsyncStorage.getAllKeys();
+      const screenshotKeys = allKeys.filter((key) => key.startsWith(this.SCREENSHOT_PREFIX));
+
+      let totalSize = 0;
+      for (const key of screenshotKeys.slice(0, 5)) {
+        const data = await AsyncStorage.getItem(key);
+        if (data) {
+          totalSize += data.length;
+        }
+      }
+
+      const avgSize = screenshotKeys.length > 0 ? totalSize / Math.min(5, screenshotKeys.length) : 0;
+      const estimatedTotalSize = avgSize * screenshotKeys.length;
+
+      return {
+        totalScreenshots: screenshotKeys.length,
+        estimatedSizeKB: Math.round(estimatedTotalSize / 1024),
+      };
+    } catch (error) {
+      log.error('Error getting storage stats:', error);
+      return { totalScreenshots: 0, estimatedSizeKB: 0 };
+    }
+  }
 }

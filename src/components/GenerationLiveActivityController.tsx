@@ -141,7 +141,8 @@ export default function GenerationLiveActivityController() {
             }
           } finally {
             try {
-              await stopLiveActivity(ACTIVITY_ID, { dismissalPolicy: 'immediate' });
+              // Give users a moment to see the completion/failure state.
+              await stopLiveActivity(ACTIVITY_ID, { dismissalPolicy: { after: Date.now() + 2500 } });
             } catch {
               // Best-effort; ignore.
             }

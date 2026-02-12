@@ -7,6 +7,7 @@ import SearchBarWithFavorites from '../../src/components/SearchBarWithFavorites'
 import { PromptHistory } from '../../src/types/PromptHistory';
 import { AppColors } from '../../src/constants/AppColors';
 import { AppStorageService, StoredApp } from '../../src/services/AppStorageService';
+import { useGenerationStatusStore } from '../../src/stores/GenerationStatusStore';
 import { createLogger } from '../../src/utils/Logger';
 
 const log = createLogger('MyApps');
@@ -17,6 +18,8 @@ export default function MyAppsPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [showFavorites, setShowFavorites] = useState(false);
+  const queue = useGenerationStatusStore((s) => s.queue);
+  const lastTerminalUpdateRef = React.useRef<number>(0);
 
   const loadApps = async () => {
     try {
@@ -58,9 +61,26 @@ export default function MyAppsPage() {
     loadApps();
   }, []);
 
+  useEffect(() => {
+    // When a generation job finishes (success/fail/cancel), refresh app list so cards become clickable.
+    const latestTerminalUpdatedAt = queue.reduce((best, job) => {
+      if (job.status !== 'completed' && job.status !== 'failed' && job.status !== 'canceled') return best;
+      return Math.max(best, job.updatedAt);
+    }, 0);
+
+    if (latestTerminalUpdatedAt > lastTerminalUpdateRef.current) {
+      lastTerminalUpdateRef.current = latestTerminalUpdatedAt;
+      void loadApps();
+    }
+  }, [queue]);
+
   const handleNavigateToApp = async (appId: string) => {
     const app = promptHistory.find((item: PromptHistory) => item.id === appId);
     if (app) {
+      if (app.status === 'generating') {
+        Alert.alert('Still generating', 'This app is still generating. Please wait for it to finish.');
+        return;
+      }
       try {
         // Update access count
         await AppStorageService.incrementAccessCount(appId);
