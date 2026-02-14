@@ -2,7 +2,9 @@ import React, { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StatusBar,
@@ -47,6 +49,7 @@ const TOPIC_COLORS = [
 ];
 
 const FOCUSED_PANEL_HEIGHT_FRACTION = 0.75;
+const ENABLE_TOPIC_PLANET_BUILDER = false;
 
 type TopicGroup = {
   topic: string;
@@ -111,7 +114,6 @@ export default function UniversePage() {
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   const [apps, setApps] = useState<StoredApp[]>([]);
-  const [customTopics, setCustomTopics] = useState<string[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [isTopicFocused, setIsTopicFocused] = useState(false);
   const [showTopicManager, setShowTopicManager] = useState(false);
@@ -121,6 +123,7 @@ export default function UniversePage() {
   const [isUpdatingTopics, setIsUpdatingTopics] = useState(false);
   const [rotationPhaseDeg, setRotationPhaseDeg] = useState(0);
   const backfillTriggeredRef = useRef(false);
+  const isTopicManagerActive = ENABLE_TOPIC_PLANET_BUILDER && showTopicManager;
 
   const screenBottomPadding = getLiquidGlassTabBarContentPaddingBottom(insets.bottom, 12);
 
@@ -134,13 +137,13 @@ export default function UniversePage() {
   const panLimitY = Math.max(screenHeight * 2.1, 900);
 
   React.useEffect(() => {
-    if (isTopicFocused) return;
+    if (isTopicFocused || isTopicManagerActive) return;
 
     const interval = setInterval(() => {
       setRotationPhaseDeg((prev) => prev + 0.45);
     }, 40);
     return () => clearInterval(interval);
-  }, [isTopicFocused]);
+  }, [isTopicFocused, isTopicManagerActive]);
 
   const resetViewport = () => {
     scale.value = withTiming(1, { duration: 240 });
@@ -151,7 +154,7 @@ export default function UniversePage() {
   const panGesture = useMemo(
     () =>
       Gesture.Pan()
-        .enabled(!isTopicFocused)
+        .enabled(!isTopicFocused && !isTopicManagerActive)
         .minDistance(12)
         .onStart(() => {
           panStartX.value = translateX.value;
@@ -166,13 +169,13 @@ export default function UniversePage() {
           translateX.value = nextX;
           translateY.value = nextY;
         }),
-    [isTopicFocused, panLimitX, panLimitY, panStartX, panStartY, translateX, translateY]
+    [isTopicFocused, isTopicManagerActive, panLimitX, panLimitY, panStartX, panStartY, translateX, translateY]
   );
 
   const pinchGesture = useMemo(
     () =>
       Gesture.Pinch()
-        .enabled(!isTopicFocused)
+        .enabled(!isTopicFocused && !isTopicManagerActive)
         .onStart(() => {
           pinchStartScale.value = scale.value;
         })
@@ -181,7 +184,7 @@ export default function UniversePage() {
           if (!Number.isFinite(next)) return;
           scale.value = next < 0.65 ? 0.65 : next > 2.6 ? 2.6 : next;
         }),
-    [isTopicFocused, pinchStartScale, scale]
+    [isTopicFocused, isTopicManagerActive, pinchStartScale, scale]
   );
 
   const mapGesture = useMemo(
@@ -203,16 +206,12 @@ export default function UniversePage() {
     }
 
     try {
-      const [storedApps, topicConfig] = await Promise.all([
-        AppStorageService.getAllApps(),
-        TopicPreferencesService.getCustomTopics(),
-      ]);
+      const storedApps = await AppStorageService.getAllApps();
 
       const sorted = [...storedApps].sort(
         (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
       );
       setApps(sorted);
-      setCustomTopics(topicConfig);
 
       if (sorted.length > 0) {
         setSelectedTopic((current) => current || getPrimaryTopic(sorted[0]));
@@ -370,57 +369,44 @@ export default function UniversePage() {
     router.push(`/app-view?appId=${appId}`);
   };
 
+  const closeTopicManager = (): void => {
+    setShowTopicManager(false);
+    setNewCustomTopic('');
+  };
+
+  const openTopicManager = (): void => {
+    if (!ENABLE_TOPIC_PLANET_BUILDER) {
+      return;
+    }
+    setShowTopicManager(true);
+  };
+
   const addCustomTopic = async () => {
-    if (!newCustomTopic.trim()) {
+    if (!ENABLE_TOPIC_PLANET_BUILDER) {
+      return;
+    }
+
+    const topicName = newCustomTopic.trim();
+    if (!topicName) {
       return;
     }
 
     setIsUpdatingTopics(true);
     try {
-      const result = await TopicPreferencesService.addCustomTopic(newCustomTopic);
+      const result = await TopicPreferencesService.addCustomTopic(topicName);
       if (!result.ok) {
         Alert.alert('Invalid topic', result.reason || 'Could not add this topic.');
         return;
       }
 
-      setNewCustomTopic('');
+      closeTopicManager();
       await handleSyncTopics('custom_topic_added');
-      const nextCustomTopics = await TopicPreferencesService.getCustomTopics();
-      setCustomTopics(nextCustomTopics);
     } catch (error) {
       log.error('Failed to add custom topic:', error);
       Alert.alert('Error', 'Unable to add custom topic.');
     } finally {
       setIsUpdatingTopics(false);
     }
-  };
-
-  const removeCustomTopic = async (topic: string) => {
-    Alert.alert(
-      'Remove Topic Planet',
-      `Remove "${formatTopicLabel(topic)}" and re-sort all projects?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            setIsUpdatingTopics(true);
-            try {
-              await TopicPreferencesService.removeCustomTopic(topic);
-              await handleSyncTopics('custom_topic_removed');
-              const nextCustomTopics = await TopicPreferencesService.getCustomTopics();
-              setCustomTopics(nextCustomTopics);
-            } catch (error) {
-              log.error('Failed to remove custom topic:', error);
-              Alert.alert('Error', 'Unable to remove topic.');
-            } finally {
-              setIsUpdatingTopics(false);
-            }
-          },
-        },
-      ]
-    );
   };
 
   return (
@@ -449,9 +435,11 @@ export default function UniversePage() {
             </Text>
           </View>
           <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.iconButton} onPress={() => setShowTopicManager(true)}>
-              <Ionicons name="planet-outline" size={19} color="#fff" />
-            </TouchableOpacity>
+            {ENABLE_TOPIC_PLANET_BUILDER ? (
+              <TouchableOpacity style={styles.iconButton} onPress={openTopicManager}>
+                <Ionicons name="planet-outline" size={19} color="#fff" />
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity style={styles.iconButton} onPress={closeTopicFocus}>
               <Ionicons name="locate-outline" size={19} color="#fff" />
             </TouchableOpacity>
@@ -666,74 +654,62 @@ export default function UniversePage() {
         )}
       </View>
 
-      <Modal
-        visible={showTopicManager}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowTopicManager(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowTopicManager(false)} />
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Planet Builder</Text>
-                <Text style={styles.modalSubtitle}>Create custom topic planets and re-sort with AI</Text>
-              </View>
-              <TouchableOpacity style={styles.modalClose} onPress={() => setShowTopicManager(false)}>
-                <Ionicons name="close" size={22} color="#e7eef6" />
-              </TouchableOpacity>
-            </View>
+      {ENABLE_TOPIC_PLANET_BUILDER ? (
+        <Modal visible={showTopicManager} animationType="fade" transparent onRequestClose={closeTopicManager}>
+          <KeyboardAvoidingView
+            style={styles.addPlanetOverlay}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          >
+            <Pressable
+              style={StyleSheet.absoluteFill}
+              onPress={isUpdatingTopics ? undefined : closeTopicManager}
+            />
+            <View style={styles.addPlanetCard}>
+              <Text style={styles.addPlanetTitle}>Add Topic Planet</Text>
+              <Text style={styles.addPlanetSubtitle}>Give your new planet a topic, then AI will re-sort apps.</Text>
 
-            <View style={styles.inputRow}>
               <TextInput
                 value={newCustomTopic}
                 onChangeText={setNewCustomTopic}
                 placeholder="e.g. startup-research"
-                placeholderTextColor="rgba(255,255,255,0.45)"
+                placeholderTextColor="rgba(225,240,255,0.45)"
                 autoCapitalize="none"
                 autoCorrect={false}
-                style={styles.topicInput}
+                autoFocus
+                returnKeyType="done"
+                editable={!isUpdatingTopics}
+                onSubmitEditing={() => void addCustomTopic()}
+                style={styles.addPlanetInput}
               />
-              <TouchableOpacity
-                style={[styles.addButton, isUpdatingTopics ? styles.syncButtonDisabled : undefined]}
-                onPress={() => void addCustomTopic()}
-                disabled={isUpdatingTopics}
-              >
-                {isUpdatingTopics ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Ionicons name="add" size={18} color="#fff" />
-                )}
-              </TouchableOpacity>
+
+              <View style={styles.addPlanetActions}>
+                <TouchableOpacity
+                  style={styles.addPlanetCancelButton}
+                  onPress={closeTopicManager}
+                  disabled={isUpdatingTopics}
+                >
+                  <Text style={styles.addPlanetCancelText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.addPlanetConfirmButton,
+                    isUpdatingTopics || !newCustomTopic.trim() ? styles.syncButtonDisabled : undefined,
+                  ]}
+                  onPress={() => void addCustomTopic()}
+                  disabled={isUpdatingTopics || !newCustomTopic.trim()}
+                >
+                  {isUpdatingTopics ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.addPlanetConfirmText}>Add Planet</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
-
-            <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
-              <Text style={styles.sectionLabel}>Custom Planets</Text>
-              {customTopics.length === 0 ? (
-                <Text style={styles.emptyText}>No custom planets yet.</Text>
-              ) : (
-                <View style={styles.customTopicList}>
-                  {customTopics.map((topic) => (
-                    <View key={topic} style={styles.customTopicRow}>
-                      <Text style={styles.customTopicText}>{formatTopicLabel(topic)}</Text>
-                      <TouchableOpacity onPress={() => void removeCustomTopic(topic)}>
-                        <Ionicons name="trash-outline" size={18} color="#ff6b6b" />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              <Text style={styles.sectionLabel}>Built-in Planets</Text>
-              <Text style={styles.builtInText}>
-                Productivity, Education, Finance, Health, Lifestyle, Social, Entertainment, Gaming, Travel,
-                Shopping, Business, Utilities, Creative, Developer Tools, Other
-              </Text>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+          </KeyboardAvoidingView>
+        </Modal>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -1017,51 +993,77 @@ const styles = StyleSheet.create({
     marginTop: 1,
     fontSize: 11,
   },
-  modalBackdrop: {
+  addPlanetOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.52)',
-    justifyContent: 'flex-end',
-  },
-  modalCard: {
-    maxHeight: '88%',
-    backgroundColor: '#071426',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(121,169,224,0.45)',
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 24,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginBottom: 10,
-  },
-  modalTitle: {
-    color: '#f4f9ff',
-    fontSize: 21,
-    fontWeight: '900',
-  },
-  modalSubtitle: {
-    color: 'rgba(203,227,249,0.8)',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  modalClose: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    backgroundColor: 'rgba(2,6,15,0.58)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(182,215,247,0.3)',
-    backgroundColor: 'rgba(10,36,63,0.95)',
+    paddingHorizontal: 18,
   },
-  modalList: {
-    flex: 1,
+  addPlanetCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(128,177,235,0.48)',
+    backgroundColor: 'rgba(7,20,38,0.98)',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  addPlanetTitle: {
+    color: '#f3f9ff',
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  addPlanetSubtitle: {
+    color: 'rgba(203,227,249,0.82)',
+    fontSize: 12,
+  },
+  addPlanetInput: {
+    borderWidth: 1,
+    borderColor: 'rgba(114,161,213,0.48)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: '#f7fbff',
+    backgroundColor: 'rgba(5,25,46,0.95)',
+  },
+  addPlanetActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  addPlanetCancelButton: {
+    minWidth: 96,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(166,202,237,0.4)',
+    backgroundColor: 'rgba(9,33,57,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addPlanetCancelText: {
+    color: '#dcefff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  addPlanetConfirmButton: {
+    minWidth: 110,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#0f7cff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addPlanetConfirmText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
   },
   modalMoonCard: {
     borderRadius: 13,
@@ -1129,61 +1131,6 @@ const styles = StyleSheet.create({
   historyLine: {
     color: 'rgba(197,223,248,0.8)',
     fontSize: 10,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 10,
-  },
-  topicInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: 'rgba(114,161,213,0.48)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#f7fbff',
-    backgroundColor: 'rgba(5,25,46,0.95)',
-  },
-  addButton: {
-    width: 44,
-    borderRadius: 12,
-    backgroundColor: '#0f7cff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sectionLabel: {
-    color: '#eff7ff',
-    fontSize: 13,
-    fontWeight: '900',
-    marginTop: 6,
-    marginBottom: 8,
-  },
-  customTopicList: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  customTopicRow: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(110,158,211,0.4)',
-    backgroundColor: 'rgba(6,31,55,0.93)',
-    paddingHorizontal: 11,
-    paddingVertical: 9,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  customTopicText: {
-    color: '#f3faff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  builtInText: {
-    color: 'rgba(197,223,248,0.83)',
-    fontSize: 12,
-    lineHeight: 18,
   },
   emptyText: {
     color: 'rgba(197,223,248,0.83)',

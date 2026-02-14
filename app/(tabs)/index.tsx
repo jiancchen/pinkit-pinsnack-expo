@@ -4,16 +4,20 @@ import { useFocusEffect } from 'expo-router';
 import { useRouter } from 'expo-router';
 import Scrollable3DStack from '../../src/components/Scrollable3DStack';
 import SearchBarWithFavorites from '../../src/components/SearchBarWithFavorites';
+import AppThemeBackground from '../../src/components/AppThemeBackground';
 import { PromptHistory } from '../../src/types/PromptHistory';
 import { AppColors } from '../../src/constants/AppColors';
 import { AppStorageService, StoredApp } from '../../src/services/AppStorageService';
 import { useGenerationStatusStore } from '../../src/stores/GenerationStatusStore';
+import { useUISettingsStore } from '../../src/stores/UISettingsStore';
 import { createLogger } from '../../src/utils/Logger';
 
 const log = createLogger('MyApps');
 
 export default function MyAppsPage() {
   const router = useRouter();
+  const appTheme = useUISettingsStore((s) => s.appTheme);
+  const isUniverseTheme = appTheme === 'universe';
   const [promptHistory, setPromptHistory] = useState<PromptHistory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -146,8 +150,9 @@ export default function MyAppsPage() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]}>
       <StatusBar translucent backgroundColor="transparent" />
+      <AppThemeBackground />
       
       {/* Main 3D Stack */}
       <Scrollable3DStack
@@ -175,5 +180,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: AppColors.Primary,
+  },
+  containerUniverse: {
+    backgroundColor: 'transparent',
   },
 });

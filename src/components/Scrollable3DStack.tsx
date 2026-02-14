@@ -12,6 +12,7 @@ import ThreeDImageCard from './ThreeDImageCard';
 import { PromptHistory } from '../types/PromptHistory';
 import { AppColors } from '../constants/AppColors';
 import { getLiquidGlassTabBarOverlapHeight } from '../constants/LiquidGlassTabBarLayout';
+import { useUISettingsStore } from '../stores/UISettingsStore';
 
 const { height: screenHeight } = Dimensions.get('window');
 
@@ -34,6 +35,8 @@ export default function Scrollable3DStack({
   onNavigateToApp,
   onShowSnackbar,
 }: Scrollable3DStackProps) {
+  const appTheme = useUISettingsStore((s) => s.appTheme);
+  const isUniverseTheme = appTheme === 'universe';
   const scrollViewRef = useRef<ScrollView>(null);
   const [scrollY, setScrollY] = useState(0);
   const insets = useSafeAreaInsets();
@@ -75,7 +78,7 @@ export default function Scrollable3DStack({
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]}>
       <ScrollView
         ref={scrollViewRef}
         style={styles.scrollView}
@@ -114,6 +117,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: AppColors.Primary,
+  },
+  containerUniverse: {
+    backgroundColor: 'transparent',
   },
   scrollView: {
     flex: 1,

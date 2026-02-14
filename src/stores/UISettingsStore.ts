@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 export type TabBarVariant = 'tinted' | 'clear';
+export type AppTheme = 'yellow' | 'universe';
 
 export interface TabBarSettings {
   variant: TabBarVariant;
@@ -11,11 +12,15 @@ export interface TabBarSettings {
 }
 
 export interface UISettingsState {
+  appTheme: AppTheme;
   tabBar: TabBarSettings;
+  setAppTheme: (theme: AppTheme) => void;
   setTabBarVariant: (variant: TabBarVariant) => void;
   setTabBarTintColor: (tintColor: string) => void;
   setTabBarBlurIntensity: (blurIntensity: number) => void;
 }
+
+const DEFAULT_APP_THEME: AppTheme = 'yellow';
 
 const DEFAULT_TAB_BAR_SETTINGS: TabBarSettings = {
   variant: 'tinted',
@@ -45,7 +50,12 @@ function clampBlurIntensity(value: number): number {
 export const useUISettingsStore = create<UISettingsState>()(
   persist(
     (set, get) => ({
+      appTheme: DEFAULT_APP_THEME,
       tabBar: DEFAULT_TAB_BAR_SETTINGS,
+      setAppTheme: (theme: AppTheme) =>
+        set(() => ({
+          appTheme: theme === 'universe' ? 'universe' : 'yellow',
+        })),
       setTabBarVariant: (variant: TabBarVariant) =>
         set((state) => ({
           tabBar: {
@@ -70,16 +80,21 @@ export const useUISettingsStore = create<UISettingsState>()(
     }),
     {
       name: 'ui_settings',
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => AsyncStorage),
       // Future-proofing: if schema changes, we can migrate here.
       migrate: (persistedState: any) => {
         if (!persistedState || typeof persistedState !== 'object') {
-          return { tabBar: DEFAULT_TAB_BAR_SETTINGS };
+          return {
+            appTheme: DEFAULT_APP_THEME,
+            tabBar: DEFAULT_TAB_BAR_SETTINGS,
+          };
         }
 
         const tabBar = persistedState.tabBar ?? {};
+        const appTheme = persistedState.appTheme === 'universe' ? 'universe' : 'yellow';
         return {
+          appTheme,
           tabBar: {
             variant: tabBar.variant === 'clear' ? 'clear' : 'tinted',
             tintColor: normalizeHexColor(typeof tabBar.tintColor === 'string' ? tabBar.tintColor : ''),
@@ -87,8 +102,10 @@ export const useUISettingsStore = create<UISettingsState>()(
           },
         };
       },
-      partialize: (state) => ({ tabBar: state.tabBar }),
+      partialize: (state) => ({
+        appTheme: state.appTheme,
+        tabBar: state.tabBar,
+      }),
     }
   )
 );
-

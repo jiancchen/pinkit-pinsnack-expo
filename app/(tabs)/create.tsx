@@ -5,10 +5,12 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../../src/constants/AppColors';
 import { getLiquidGlassTabBarContentPaddingBottom } from '../../src/constants/LiquidGlassTabBarLayout';
+import AppThemeBackground from '../../src/components/AppThemeBackground';
 import { PromptGenerator, AppStyle, AppCategory, AppGenerationRequest } from '../../src/services/PromptGenerator';
 import { GenerationQueueService } from '../../src/services/GenerationQueueService';
 import { SecureStorageService } from '../../src/services/SecureStorageService';
 import { PromptHistoryService, type PromptHistoryEntry } from '../../src/services/PromptHistoryService';
+import { useUISettingsStore } from '../../src/stores/UISettingsStore';
 import {
   CLAUDE_MODEL_PICKER_OPTIONS,
   DEFAULT_CONFIG,
@@ -88,6 +90,8 @@ const templates = [
 export default function CreatePage() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const appTheme = useUISettingsStore((s) => s.appTheme);
+  const isUniverseTheme = appTheme === 'universe';
   const [prompt, setPrompt] = useState('');
   const [selectedStyle, setSelectedStyle] = useState<AppStyle>('modern');
   const [isLoading, setIsLoading] = useState(false);
@@ -308,8 +312,12 @@ export default function CreatePage() {
   };
 
   return (
-    <SafeAreaView style={styleSheet.container} edges={[]}>
+    <SafeAreaView
+      style={[styleSheet.container, isUniverseTheme ? styleSheet.containerUniverse : undefined]}
+      edges={[]}
+    >
       <StatusBar translucent backgroundColor="transparent" />
+      <AppThemeBackground />
       
       {/* Header */}
 	      <View style={styleSheet.header}>
@@ -317,17 +325,27 @@ export default function CreatePage() {
 	          style={styleSheet.backButton}
 	          onPress={() => router.back()}
 	        >
-	          <Ionicons name="arrow-back" size={24} color="rgba(0, 0, 0, 0.8)" />
+	          <Ionicons
+              name="arrow-back"
+              size={24}
+              color={isUniverseTheme ? 'rgba(226, 240, 255, 0.92)' : 'rgba(0, 0, 0, 0.8)'}
+            />
 	        </TouchableOpacity>
-	        <Text style={styleSheet.headerTitle}>Create New App</Text>
+	        <Text style={[styleSheet.headerTitle, isUniverseTheme ? styleSheet.headerTitleUniverse : undefined]}>
+            Create New App
+          </Text>
           <View style={{ flex: 1 }} />
           <TouchableOpacity
-            style={styleSheet.headerIconButton}
+            style={[styleSheet.headerIconButton, isUniverseTheme ? styleSheet.headerIconButtonUniverse : undefined]}
             onPress={() => setShowAdvanced(true)}
             accessibilityRole="button"
             accessibilityLabel="Open advanced settings"
           >
-            <Ionicons name="options-outline" size={22} color="rgba(0, 0, 0, 0.8)" />
+            <Ionicons
+              name="options-outline"
+              size={22}
+              color={isUniverseTheme ? 'rgba(226, 240, 255, 0.92)' : 'rgba(0, 0, 0, 0.8)'}
+            />
           </TouchableOpacity>
 	      </View>
 
@@ -340,7 +358,9 @@ export default function CreatePage() {
         <View style={styleSheet.section}>
           <View style={styleSheet.card}>
             <View style={styleSheet.inputHeader}>
-              <Text style={styleSheet.sectionTitle}>Describe Your App</Text>
+              <Text style={[styleSheet.sectionTitle, isUniverseTheme ? styleSheet.sectionTitleUniverse : undefined]}>
+                Describe Your App
+              </Text>
               <View style={styleSheet.inputHeaderActions}>
                 <TouchableOpacity
                   onPress={() => setShowPromptHistory(true)}
@@ -381,7 +401,9 @@ export default function CreatePage() {
 
         {/* Style Selection Section */}
         <View style={styleSheet.section}>
-          <Text style={styleSheet.sectionTitle}>Pick a Design Style</Text>
+          <Text style={[styleSheet.sectionTitle, isUniverseTheme ? styleSheet.sectionTitleUniverse : undefined]}>
+            Pick a Design Style
+          </Text>
           
           <View style={styleSheet.card}>
             <View style={styleSheet.optionsContainer}>
@@ -439,7 +461,12 @@ export default function CreatePage() {
 	          </TouchableOpacity>
 
             {runEstimate && (
-              <Text style={styleSheet.costEstimateText}>
+              <Text
+                style={[
+                  styleSheet.costEstimateText,
+                  isUniverseTheme ? styleSheet.costEstimateTextUniverse : undefined,
+                ]}
+              >
                 Est. max cost {formatUsd(runEstimate.estimatedMaxCost)} • Input ~{runEstimate.estimatedInputTokens.toLocaleString()} • Output up to {runEstimate.effectiveMaxTokens.toLocaleString()} ({getModelDisplayName(generationModel)})
               </Text>
             )}
@@ -448,7 +475,9 @@ export default function CreatePage() {
         {/* Templates Section */}
         {!isLoading && (
           <View style={styleSheet.section}>
-            <Text style={styleSheet.sectionTitle}>Quick Templates</Text>
+            <Text style={[styleSheet.sectionTitle, isUniverseTheme ? styleSheet.sectionTitleUniverse : undefined]}>
+              Quick Templates
+            </Text>
             
             {templates.map((template, index) => (
               <TemplateCard
@@ -815,6 +844,9 @@ const styleSheet = StyleSheet.create({
     flex: 1,
     backgroundColor: AppColors.Primary,
   },
+  containerUniverse: {
+    backgroundColor: 'transparent',
+  },
   header: {
     paddingTop: 60,
     paddingHorizontal: 16,
@@ -831,6 +863,9 @@ const styleSheet = StyleSheet.create({
     fontWeight: 'bold',
     color: 'rgba(0, 0, 0, 0.8)',
   },
+  headerTitleUniverse: {
+    color: 'rgba(234, 246, 255, 0.95)',
+  },
   scrollView: {
     flex: 1,
   },
@@ -846,6 +881,9 @@ const styleSheet = StyleSheet.create({
     fontWeight: 'bold',
     color: 'rgba(0, 0, 0, 0.8)',
     marginBottom: 12,
+  },
+  sectionTitleUniverse: {
+    color: 'rgba(219, 236, 255, 0.92)',
   },
   card: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -1022,11 +1060,19 @@ const styleSheet = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: 'rgba(255, 255, 255, 0.6)',
   },
+  headerIconButtonUniverse: {
+    backgroundColor: 'rgba(12, 37, 65, 0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(155, 196, 239, 0.34)',
+  },
   costEstimateText: {
     marginTop: 10,
     fontSize: 12,
     color: 'rgba(0, 0, 0, 0.65)',
     textAlign: 'center',
+  },
+  costEstimateTextUniverse: {
+    color: 'rgba(207, 226, 248, 0.92)',
   },
   modalOverlay: {
     flex: 1,

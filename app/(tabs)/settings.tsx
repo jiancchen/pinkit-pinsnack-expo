@@ -5,6 +5,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { AppColors } from '../../src/constants/AppColors';
 import { getLiquidGlassTabBarContentPaddingBottom } from '../../src/constants/LiquidGlassTabBarLayout';
+import AppThemeBackground from '../../src/components/AppThemeBackground';
 import { SecureStorageService } from '../../src/services/SecureStorageService';
 import { ClaudeApiService } from '../../src/services/ClaudeApiService';
 import { SeedService } from '../../src/services/SeedService';
@@ -26,7 +27,7 @@ import {
   PRICING_AS_OF_DISPLAY
 } from '../../src/types/ClaudeApi';
 import { createLogger } from '../../src/utils/Logger';
-import { TabBarVariant, useUISettingsStore } from '../../src/stores/UISettingsStore';
+import { AppTheme, TabBarVariant, useUISettingsStore } from '../../src/stores/UISettingsStore';
 
 const log = createLogger('Settings');
 
@@ -73,6 +74,9 @@ export default function SettingsPage() {
   const tabBarVariant = useUISettingsStore((s) => s.tabBar.variant);
   const tabBarTintColor = useUISettingsStore((s) => s.tabBar.tintColor);
   const tabBarBlurIntensity = useUISettingsStore((s) => s.tabBar.blurIntensity);
+  const appTheme = useUISettingsStore((s) => s.appTheme);
+  const isUniverseTheme = appTheme === 'universe';
+  const setAppTheme = useUISettingsStore((s) => s.setAppTheme);
   const setTabBarVariant = useUISettingsStore((s) => s.setTabBarVariant);
   const setTabBarTintColor = useUISettingsStore((s) => s.setTabBarTintColor);
   const setTabBarBlurIntensity = useUISettingsStore((s) => s.setTabBarBlurIntensity);
@@ -445,6 +449,10 @@ export default function SettingsPage() {
     setTabBarVariant(variant);
   };
 
+  const selectAppTheme = (theme: AppTheme) => {
+    setAppTheme(theme);
+  };
+
   const getModelDisplayName = (model: string): string => {
     const modelInfo = MODEL_INFO[model];
     if (!modelInfo) return model;
@@ -492,12 +500,15 @@ export default function SettingsPage() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={[]}>
+    <SafeAreaView style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]} edges={[]}>
       <StatusBar translucent backgroundColor="transparent" />
+      <AppThemeBackground />
       
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={[styles.headerTitle, isUniverseTheme ? styles.headerTitleUniverse : undefined]}>
+          Settings
+        </Text>
       </View>
 
       <ScrollView 
@@ -507,7 +518,9 @@ export default function SettingsPage() {
       >
         {/* API Configuration Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>API Configuration</Text>
+          <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
+            API Configuration
+          </Text>
           
           <SettingsCard>
             <SettingsItem
@@ -539,7 +552,9 @@ export default function SettingsPage() {
 
         {/* Claude Model Configuration Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Claude Model Settings</Text>
+          <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
+            Claude Model Settings
+          </Text>
           
           <SettingsCard>
             <View style={styles.settingGroup}>
@@ -615,9 +630,55 @@ export default function SettingsPage() {
 
         {/* Appearance Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Appearance</Text>
+          <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
+            Appearance
+          </Text>
 
           <SettingsCard>
+            <View style={styles.settingGroup}>
+              <Text style={styles.settingLabel}>App Theme</Text>
+              <View style={styles.segmentedControl}>
+                <TouchableOpacity
+                  style={[
+                    styles.segmentButton,
+                    appTheme === 'yellow' && styles.segmentButtonSelected
+                  ]}
+                  onPress={() => selectAppTheme('yellow')}
+                >
+                  <Text
+                    style={[
+                      styles.segmentButtonText,
+                      appTheme === 'yellow' && styles.segmentButtonTextSelected
+                    ]}
+                  >
+                    Yellow
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.segmentButton,
+                    appTheme === 'universe' && styles.segmentButtonSelected
+                  ]}
+                  onPress={() => selectAppTheme('universe')}
+                >
+                  <Text
+                    style={[
+                      styles.segmentButtonText,
+                      appTheme === 'universe' && styles.segmentButtonTextSelected
+                    ]}
+                  >
+                    Universe
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.helperText}>
+                Universe adds a galaxy background with stars across app screens.
+              </Text>
+            </View>
+
+            <View style={styles.separator} />
+
             <View style={styles.settingGroup}>
               <Text style={styles.settingLabel}>Tab Bar Style</Text>
               <View style={styles.segmentedControl}>
@@ -728,7 +789,9 @@ export default function SettingsPage() {
 
         {/* Language & Region Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Language & Region Settings</Text>
+          <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
+            Language & Region Settings
+          </Text>
           
           <SettingsCard>
             <View style={styles.settingGroup}>
@@ -746,7 +809,9 @@ export default function SettingsPage() {
 
         {/* App Statistics Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>App Statistics</Text>
+          <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
+            App Statistics
+          </Text>
           
           <SettingsCard>
             <View style={styles.statsContainer}>
@@ -777,7 +842,9 @@ export default function SettingsPage() {
 
         {/* Storage & Data Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Storage & Data</Text>
+          <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
+            Storage & Data
+          </Text>
 
           <SettingsCard>
             <SettingsItem
@@ -814,7 +881,9 @@ export default function SettingsPage() {
 
         {/* Token Usage Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Token Usage & Costs</Text>
+          <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
+            Token Usage & Costs
+          </Text>
           
           <SettingsCard>
             {isLoadingTokenStats ? (
@@ -872,7 +941,9 @@ export default function SettingsPage() {
 
         {/* Sample Apps Management Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Sample Apps Management</Text>
+          <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
+            Sample Apps Management
+          </Text>
           
           <SettingsCard>
             <View style={styles.settingsItem}>
@@ -1153,6 +1224,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: AppColors.Primary,
   },
+  containerUniverse: {
+    backgroundColor: 'transparent',
+  },
   header: {
     paddingTop: 60,
     paddingHorizontal: 16,
@@ -1162,6 +1236,9 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: 'rgba(0, 0, 0, 0.8)',
+  },
+  headerTitleUniverse: {
+    color: 'rgba(234, 246, 255, 0.95)',
   },
   headerIconButton: {
     padding: 8,
@@ -1183,6 +1260,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'rgba(0, 0, 0, 0.8)',
     marginBottom: 12,
+  },
+  sectionTitleUniverse: {
+    color: 'rgba(219, 236, 255, 0.92)',
   },
   card: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
