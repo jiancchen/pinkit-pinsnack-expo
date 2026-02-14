@@ -620,7 +620,7 @@ export default function UniversePage() {
                     {selectedGroup.apps.length > 0 ? (
                       selectedGroup.apps.slice(0, 30).map((app, index) => (
                         <TouchableOpacity key={app.id} style={styles.moonRow} onPress={() => openProject(app.id)}>
-                          <View style={styles.moonBullet}>
+                          <View style={[styles.moonBullet, { backgroundColor: selectedGroup.color }]}>
                             <Text style={styles.moonBulletText}>{index + 1}</Text>
                           </View>
                           <View style={styles.moonTextWrap}>
