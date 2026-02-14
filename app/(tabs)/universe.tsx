@@ -130,6 +130,8 @@ export default function UniversePage() {
   const panStartX = useSharedValue(0);
   const panStartY = useSharedValue(0);
   const pinchStartScale = useSharedValue(1);
+  const panLimitX = Math.max(screenWidth * 2.1, 900);
+  const panLimitY = Math.max(screenHeight * 2.1, 900);
 
   React.useEffect(() => {
     if (isTopicFocused) return;
@@ -146,33 +148,46 @@ export default function UniversePage() {
     translateY.value = withTiming(0, { duration: 240 });
   };
 
-  const panGesture = Gesture.Pan()
-    .enabled(!isTopicFocused)
-    .minDistance(12)
-    .onStart(() => {
-      panStartX.value = translateX.value;
-      panStartY.value = translateY.value;
-    })
-    .onUpdate((event) => {
-      const nextX = panStartX.value + event.translationX;
-      const nextY = panStartY.value + event.translationY;
-      if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) return;
-      translateX.value = nextX;
-      translateY.value = nextY;
-    });
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(!isTopicFocused)
+        .minDistance(12)
+        .onStart(() => {
+          panStartX.value = translateX.value;
+          panStartY.value = translateY.value;
+        })
+        .onUpdate((event) => {
+          const rawX = panStartX.value + event.translationX;
+          const rawY = panStartY.value + event.translationY;
+          const nextX = rawX < -panLimitX ? -panLimitX : rawX > panLimitX ? panLimitX : rawX;
+          const nextY = rawY < -panLimitY ? -panLimitY : rawY > panLimitY ? panLimitY : rawY;
+          if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) return;
+          translateX.value = nextX;
+          translateY.value = nextY;
+        }),
+    [isTopicFocused, panLimitX, panLimitY, panStartX, panStartY, translateX, translateY]
+  );
 
-  const pinchGesture = Gesture.Pinch()
-    .enabled(!isTopicFocused)
-    .onStart(() => {
-      pinchStartScale.value = scale.value;
-    })
-    .onUpdate((event) => {
-      const next = pinchStartScale.value * event.scale;
-      if (!Number.isFinite(next)) return;
-      scale.value = clamp(next, 0.65, 2.6);
-    });
+  const pinchGesture = useMemo(
+    () =>
+      Gesture.Pinch()
+        .enabled(!isTopicFocused)
+        .onStart(() => {
+          pinchStartScale.value = scale.value;
+        })
+        .onUpdate((event) => {
+          const next = pinchStartScale.value * event.scale;
+          if (!Number.isFinite(next)) return;
+          scale.value = next < 0.65 ? 0.65 : next > 2.6 ? 2.6 : next;
+        }),
+    [isTopicFocused, pinchStartScale, scale]
+  );
 
-  const mapGesture = Gesture.Simultaneous(panGesture, pinchGesture);
+  const mapGesture = useMemo(
+    () => Gesture.Simultaneous(panGesture, pinchGesture),
+    [panGesture, pinchGesture]
+  );
 
   const mapTranslateStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }, { translateY: translateY.value }],
@@ -260,6 +275,7 @@ export default function UniversePage() {
   const mapHeight = clamp(availableHeight - 210, 280, 620);
   const centerX = mapWidth / 2;
   const centerY = mapHeight / 2;
+  const normalizedRotationDeg = ((rotationPhaseDeg % 360) + 360) % 360;
 
   const orbits = useMemo<OrbitConfig[]>(() => {
     if (topicGroups.length === 0) return [];
@@ -299,7 +315,7 @@ export default function UniversePage() {
       const orbit = orbits.find((item) => item.topic === topic);
       if (!orbit) return;
 
-      const angleDeg = orbit.phaseDeg + rotationPhaseDeg * orbit.speed;
+      const angleDeg = orbit.phaseDeg + normalizedRotationDeg * orbit.speed;
       const angle = (angleDeg * Math.PI) / 180;
       const planetX = centerX + Math.sin(angle) * orbit.radius;
       const planetY = centerY - Math.cos(angle) * orbit.radius;
@@ -316,7 +332,7 @@ export default function UniversePage() {
       translateX.value = withTiming(targetX - scaledPlanetX, { duration: 280 });
       translateY.value = withTiming(targetY - scaledPlanetY, { duration: 280 });
     },
-    [centerX, centerY, orbits, rotationPhaseDeg, scale, translateX, translateY]
+    [centerX, centerY, normalizedRotationDeg, orbits, scale, translateX, translateY]
   );
 
   const handleSyncTopics = async (reason = 'universe_manual_sync') => {
@@ -427,9 +443,9 @@ export default function UniversePage() {
       >
         <View style={styles.headerCard}>
           <View style={styles.headerMain}>
-            <Text style={styles.title}>Galaxy Universe</Text>
+            <Text style={styles.title}>Apps Universe</Text>
             <Text style={styles.subtitle}>
-              {topicGroups.length} orbiting topic planets. Tap a topic to lock focus and open moons.
+              {topicGroups.length} topic planets. Tap a topic to lock focus and open moons.
             </Text>
           </View>
           <View style={styles.headerActions}>
@@ -502,7 +518,7 @@ export default function UniversePage() {
                     </View>
 
                     {orbits.map((orbit) => {
-                      const angleDeg = orbit.phaseDeg + rotationPhaseDeg * orbit.speed;
+                      const angleDeg = orbit.phaseDeg + normalizedRotationDeg * orbit.speed;
                       const angle = (angleDeg * Math.PI) / 180;
                       const planetX = centerX + Math.sin(angle) * orbit.radius;
                       const planetY = centerY - Math.cos(angle) * orbit.radius;
@@ -578,7 +594,7 @@ export default function UniversePage() {
                   <View style={styles.focusedTopicHeader}>
                     <View style={styles.focusedTopicHeaderMain}>
                       <Text style={styles.focusedTopicTitle}>
-                        {formatTopicLabel(selectedGroup.topic)} Moons
+                        {formatTopicLabel(selectedGroup.topic)}
                       </Text>
                       <Text style={styles.focusedTopicSubtitle}>
                         {selectedGroup.apps.length} projects in orbit
