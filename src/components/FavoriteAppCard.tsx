@@ -13,11 +13,13 @@ import { useScreenshotState } from '../stores/ScreenshotStore';
 interface FavoriteAppCardProps {
   historyItem: PromptHistory;
   onNavigateToApp: (appId: string) => void;
+  isUniverseTheme?: boolean;
 }
 
 const FavoriteAppCard: React.FC<FavoriteAppCardProps> = ({
   historyItem,
   onNavigateToApp,
+  isUniverseTheme = false,
 }) => {
   const screenshotState = useScreenshotState(historyItem.id);
   const [imageError, setImageError] = useState(false);
@@ -28,17 +30,21 @@ const FavoriteAppCard: React.FC<FavoriteAppCardProps> = ({
 
   return (
     <TouchableOpacity
-      style={[styles.container, isGenerating && styles.containerDisabled]}
+      style={[
+        styles.container,
+        isUniverseTheme ? styles.containerUniverse : undefined,
+        isGenerating && styles.containerDisabled,
+      ]}
       onPress={() => {
         if (!isGenerating) onNavigateToApp(historyItem.id);
       }}
       activeOpacity={0.8}
       disabled={isGenerating}
     >
-      <View style={styles.imageContainer}>
+      <View style={[styles.imageContainer, isUniverseTheme ? styles.imageContainerUniverse : undefined]}>
         {screenshotState?.isLoading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#999" />
+          <View style={[styles.loadingContainer, isUniverseTheme ? styles.loadingContainerUniverse : undefined]}>
+            <ActivityIndicator size="small" color={isUniverseTheme ? 'rgba(206, 230, 255, 0.86)' : '#999'} />
           </View>
         )}
 
@@ -56,15 +62,17 @@ const FavoriteAppCard: React.FC<FavoriteAppCardProps> = ({
             onError={() => setImageError(true)}
           />
         ) : (
-          <View style={styles.placeholderContainer}>
-            <Text style={styles.placeholderText}>
+          <View
+            style={[styles.placeholderContainer, isUniverseTheme ? styles.placeholderContainerUniverse : undefined]}
+          >
+            <Text style={[styles.placeholderText, isUniverseTheme ? styles.placeholderTextUniverse : undefined]}>
               {historyItem.title?.charAt(0)?.toUpperCase() || '?'}
             </Text>
           </View>
         )}
       </View>
       
-      <Text style={styles.title} numberOfLines={2}>
+      <Text style={[styles.title, isUniverseTheme ? styles.titleUniverse : undefined]} numberOfLines={2}>
         {historyItem.title || 'Untitled App'}
       </Text>
     </TouchableOpacity>
@@ -88,6 +96,12 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
+  containerUniverse: {
+    backgroundColor: 'rgba(8, 27, 49, 0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(125, 171, 222, 0.32)',
+    shadowOpacity: 0.2,
+  },
   containerDisabled: {
     opacity: 0.6,
   },
@@ -97,6 +111,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#f5f5f5',
     marginBottom: 4,
+  },
+  imageContainerUniverse: {
+    backgroundColor: 'rgba(10, 35, 61, 0.9)',
   },
   screenshot: {
     width: '100%',
@@ -108,10 +125,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#e0e0e0',
   },
+  placeholderContainerUniverse: {
+    backgroundColor: 'rgba(16, 49, 83, 0.86)',
+  },
   placeholderText: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#999',
+  },
+  placeholderTextUniverse: {
+    color: 'rgba(206, 228, 250, 0.86)',
   },
   loadingContainer: {
     position: 'absolute',
@@ -123,6 +146,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
     zIndex: 1,
+  },
+  loadingContainerUniverse: {
+    backgroundColor: 'rgba(7, 20, 38, 0.7)',
   },
   generatingOverlay: {
     position: 'absolute',
@@ -141,6 +167,9 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.8)',
     textAlign: 'center',
     lineHeight: 14,
+  },
+  titleUniverse: {
+    color: 'rgba(226, 240, 255, 0.95)',
   },
 });
 

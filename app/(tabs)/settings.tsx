@@ -453,6 +453,40 @@ export default function SettingsPage() {
     setAppTheme(theme);
   };
 
+  const themedSettingLabelStyle = isUniverseTheme ? styles.settingLabelUniverse : undefined;
+  const themedHelperTextStyle = isUniverseTheme ? styles.helperTextUniverse : undefined;
+  const themedDropdownStyle = isUniverseTheme ? styles.dropdownUniverse : undefined;
+  const themedDropdownTextStyle = isUniverseTheme ? styles.dropdownTextUniverse : undefined;
+  const themedSegmentedControlStyle = isUniverseTheme ? styles.segmentedControlUniverse : undefined;
+
+  const getSegmentButtonStyle = (isSelected: boolean) => [
+    styles.segmentButton,
+    isUniverseTheme ? styles.segmentButtonUniverse : undefined,
+    isSelected ? styles.segmentButtonSelected : undefined,
+    isSelected && isUniverseTheme ? styles.segmentButtonSelectedUniverse : undefined,
+  ];
+
+  const getSegmentButtonTextStyle = (isSelected: boolean) => [
+    styles.segmentButtonText,
+    isUniverseTheme ? styles.segmentButtonTextUniverse : undefined,
+    isSelected ? styles.segmentButtonTextSelected : undefined,
+    isSelected && isUniverseTheme ? styles.segmentButtonTextSelectedUniverse : undefined,
+  ];
+
+  const getChipStyle = (isSelected: boolean) => [
+    styles.chip,
+    isUniverseTheme ? styles.chipUniverse : undefined,
+    isSelected ? styles.chipSelected : undefined,
+    isSelected && isUniverseTheme ? styles.chipSelectedUniverse : undefined,
+  ];
+
+  const getChipTextStyle = (isSelected: boolean) => [
+    styles.chipText,
+    isUniverseTheme ? styles.chipTextUniverse : undefined,
+    isSelected ? styles.chipTextSelected : undefined,
+    isSelected && isUniverseTheme ? styles.chipTextSelectedUniverse : undefined,
+  ];
+
   const getModelDisplayName = (model: string): string => {
     const modelInfo = MODEL_INFO[model];
     if (!modelInfo) return model;
@@ -558,15 +592,19 @@ export default function SettingsPage() {
           
           <SettingsCard>
             <View style={styles.settingGroup}>
-              <Text style={styles.settingLabel}>Model</Text>
+              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>Model</Text>
               <TouchableOpacity 
-                style={styles.dropdown}
+                style={[styles.dropdown, themedDropdownStyle]}
                 onPress={() => setShowModelSelector(true)}
               >
-                <Text style={styles.dropdownText}>{getModelDisplayName(selectedModel)}</Text>
-                <Ionicons name="chevron-down" size={20} color="#666" />
+                <Text style={[styles.dropdownText, themedDropdownTextStyle]}>{getModelDisplayName(selectedModel)}</Text>
+                <Ionicons
+                  name="chevron-down"
+                  size={20}
+                  color={isUniverseTheme ? 'rgba(196, 222, 250, 0.78)' : '#666'}
+                />
               </TouchableOpacity>
-              <Text style={styles.helperText}>
+              <Text style={[styles.helperText, themedHelperTextStyle]}>
                 Current model: {getModelDisplayName(selectedModel)}
                 {'\n'}
                 {formatModelPricingShort(selectedModel) || 'Pricing unavailable'} (as of {PRICING_AS_OF_DISPLAY})
@@ -576,7 +614,7 @@ export default function SettingsPage() {
             <View style={styles.separator} />
 
             <View style={styles.settingGroup}>
-              <Text style={styles.settingLabel}>
+              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>
                 Max Output Tokens: {maxTokens.toLocaleString()}
               </Text>
               <View style={styles.chipRow}>
@@ -585,17 +623,17 @@ export default function SettingsPage() {
                   return (
                     <TouchableOpacity
                       key={preset}
-                      style={[styles.chip, isSelected && styles.chipSelected]}
+                      style={getChipStyle(isSelected)}
                       onPress={() => handleMaxTokensSelect(preset)}
                     >
-                      <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                      <Text style={getChipTextStyle(isSelected)}>
                         {preset >= 1000 ? `${preset / 1000}K` : `${preset}`}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
-              <Text style={styles.helperText}>
+              <Text style={[styles.helperText, themedHelperTextStyle]}>
                 Larger values reduce truncation but increase cost. Model max: {getModelMaxOutputTokens(selectedModel).toLocaleString()} tokens.
               </Text>
             </View>
@@ -603,24 +641,24 @@ export default function SettingsPage() {
             <View style={styles.separator} />
 
             <View style={styles.settingGroup}>
-              <Text style={styles.settingLabel}>Temperature: {temperature.toFixed(1)}</Text>
+              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>Temperature: {temperature.toFixed(1)}</Text>
               <View style={styles.chipRow}>
                 {TEMPERATURE_PRESETS.map((preset) => {
                   const isSelected = Math.abs(temperature - preset.value) < 0.0001;
                   return (
                     <TouchableOpacity
                       key={preset.label}
-                      style={[styles.chip, isSelected && styles.chipSelected]}
+                      style={getChipStyle(isSelected)}
                       onPress={() => handleTemperatureSelect(preset.value)}
                     >
-                      <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                      <Text style={getChipTextStyle(isSelected)}>
                         {preset.label}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
-              <Text style={styles.helperText}>
+              <Text style={[styles.helperText, themedHelperTextStyle]}>
                 {TEMPERATURE_PRESETS.find((p) => Math.abs(p.value - temperature) < 0.0001)?.helper ||
                   'Lower values are more focused; higher values are more creative.'}
               </Text>
@@ -636,43 +674,27 @@ export default function SettingsPage() {
 
           <SettingsCard>
             <View style={styles.settingGroup}>
-              <Text style={styles.settingLabel}>App Theme</Text>
-              <View style={styles.segmentedControl}>
+              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>App Theme</Text>
+              <View style={[styles.segmentedControl, themedSegmentedControlStyle]}>
                 <TouchableOpacity
-                  style={[
-                    styles.segmentButton,
-                    appTheme === 'yellow' && styles.segmentButtonSelected
-                  ]}
+                  style={getSegmentButtonStyle(appTheme === 'yellow')}
                   onPress={() => selectAppTheme('yellow')}
                 >
-                  <Text
-                    style={[
-                      styles.segmentButtonText,
-                      appTheme === 'yellow' && styles.segmentButtonTextSelected
-                    ]}
-                  >
+                  <Text style={getSegmentButtonTextStyle(appTheme === 'yellow')}>
                     Yellow
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[
-                    styles.segmentButton,
-                    appTheme === 'universe' && styles.segmentButtonSelected
-                  ]}
+                  style={getSegmentButtonStyle(appTheme === 'universe')}
                   onPress={() => selectAppTheme('universe')}
                 >
-                  <Text
-                    style={[
-                      styles.segmentButtonText,
-                      appTheme === 'universe' && styles.segmentButtonTextSelected
-                    ]}
-                  >
+                  <Text style={getSegmentButtonTextStyle(appTheme === 'universe')}>
                     Universe
                   </Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.helperText}>
+              <Text style={[styles.helperText, themedHelperTextStyle]}>
                 Universe adds a galaxy background with stars across app screens.
               </Text>
             </View>
@@ -680,43 +702,27 @@ export default function SettingsPage() {
             <View style={styles.separator} />
 
             <View style={styles.settingGroup}>
-              <Text style={styles.settingLabel}>Tab Bar Style</Text>
-              <View style={styles.segmentedControl}>
+              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>Tab Bar Style</Text>
+              <View style={[styles.segmentedControl, themedSegmentedControlStyle]}>
                 <TouchableOpacity
-                  style={[
-                    styles.segmentButton,
-                    tabBarVariant === 'tinted' && styles.segmentButtonSelected
-                  ]}
+                  style={getSegmentButtonStyle(tabBarVariant === 'tinted')}
                   onPress={() => selectTabBarVariant('tinted')}
                 >
-                  <Text
-                    style={[
-                      styles.segmentButtonText,
-                      tabBarVariant === 'tinted' && styles.segmentButtonTextSelected
-                    ]}
-                  >
+                  <Text style={getSegmentButtonTextStyle(tabBarVariant === 'tinted')}>
                     Tinted Glass
                   </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={[
-                    styles.segmentButton,
-                    tabBarVariant === 'clear' && styles.segmentButtonSelected
-                  ]}
+                  style={getSegmentButtonStyle(tabBarVariant === 'clear')}
                   onPress={() => selectTabBarVariant('clear')}
                 >
-                  <Text
-                    style={[
-                      styles.segmentButtonText,
-                      tabBarVariant === 'clear' && styles.segmentButtonTextSelected
-                    ]}
-                  >
+                  <Text style={getSegmentButtonTextStyle(tabBarVariant === 'clear')}>
                     Clear Glass
                   </Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.helperText}>
+              <Text style={[styles.helperText, themedHelperTextStyle]}>
                 Clear keeps the pill more transparent; tint controls the glow and active highlight.
               </Text>
             </View>
@@ -724,7 +730,7 @@ export default function SettingsPage() {
             <View style={styles.separator} />
 
             <View style={styles.settingGroup}>
-              <Text style={styles.settingLabel}>Tab Bar Tint</Text>
+              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>Tab Bar Tint</Text>
               <View style={styles.colorSwatchRow}>
                 {TAB_BAR_TINT_OPTIONS.map((option) => {
                   const isSelected = tabBarTintColor.toUpperCase() === option.color.toUpperCase();
@@ -745,14 +751,14 @@ export default function SettingsPage() {
                   );
                 })}
               </View>
-              <Text style={styles.helperText}>Current tint: {tabBarTintColor}</Text>
+              <Text style={[styles.helperText, themedHelperTextStyle]}>Current tint: {tabBarTintColor}</Text>
             </View>
 
             <View style={styles.separator} />
 
             <View style={styles.settingGroup}>
-              <Text style={styles.settingLabel}>Blur Intensity</Text>
-              <View style={styles.segmentedControl}>
+              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>Blur Intensity</Text>
+              <View style={[styles.segmentedControl, themedSegmentedControlStyle]}>
                 {[
                   { label: 'Low', value: 60 },
                   { label: 'Med', value: 80 },
@@ -762,25 +768,17 @@ export default function SettingsPage() {
                   return (
                     <TouchableOpacity
                       key={opt.value}
-                      style={[
-                        styles.segmentButton,
-                        isSelected && styles.segmentButtonSelected
-                      ]}
+                      style={getSegmentButtonStyle(isSelected)}
                       onPress={() => setTabBarBlurIntensity(opt.value)}
                     >
-                      <Text
-                        style={[
-                          styles.segmentButtonText,
-                          isSelected && styles.segmentButtonTextSelected
-                        ]}
-                      >
+                      <Text style={getSegmentButtonTextStyle(isSelected)}>
                         {opt.label}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
-              <Text style={styles.helperText}>
+              <Text style={[styles.helperText, themedHelperTextStyle]}>
                 Higher blur looks more iOS-like (Android uses a best-effort blur fallback).
               </Text>
             </View>
@@ -795,12 +793,16 @@ export default function SettingsPage() {
           
           <SettingsCard>
             <View style={styles.settingGroup}>
-              <Text style={styles.settingLabel}>App Language</Text>
-              <TouchableOpacity style={styles.dropdown}>
-                <Text style={styles.dropdownText}>{selectedLanguage}</Text>
-                <Ionicons name="chevron-down" size={20} color="#666" />
+              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>App Language</Text>
+              <TouchableOpacity style={[styles.dropdown, themedDropdownStyle]}>
+                <Text style={[styles.dropdownText, themedDropdownTextStyle]}>{selectedLanguage}</Text>
+                <Ionicons
+                  name="chevron-down"
+                  size={20}
+                  color={isUniverseTheme ? 'rgba(196, 222, 250, 0.78)' : '#666'}
+                />
               </TouchableOpacity>
-              <Text style={styles.helperText}>
+              <Text style={[styles.helperText, themedHelperTextStyle]}>
                 Changes will take effect after restarting the app
               </Text>
             </View>
@@ -825,13 +827,27 @@ export default function SettingsPage() {
               />
             </View>
             <View style={styles.separator} />
-            <View style={styles.settingsItem}>
+            <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
               <View>
-                <Text style={styles.settingsItemTitle}>Storage (estimated)</Text>
+                <Text style={[styles.settingsItemTitle, isUniverseTheme ? styles.settingsItemTitleUniverse : undefined]}>
+                  Storage (estimated)
+                </Text>
                 {isLoadingStorageStats ? (
-                  <Text style={styles.settingsItemDescription}>Loading…</Text>
+                  <Text
+                    style={[
+                      styles.settingsItemDescription,
+                      isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
+                    ]}
+                  >
+                    Loading…
+                  </Text>
                 ) : (
-                  <Text style={styles.settingsItemDescription}>
+                  <Text
+                    style={[
+                      styles.settingsItemDescription,
+                      isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
+                    ]}
+                  >
                     Total: {formatSize((appsStorageStats?.estimatedSizeKB ?? 0) + (screenshotStats?.estimatedSizeKB ?? 0) + (webviewScreenshotStats?.estimatedSizeKB ?? 0) + (promptHistoryStats?.estimatedSizeKB ?? 0))} • Apps: {formatSize(appsStorageStats?.estimatedSizeKB ?? 0)} • Screenshots: {formatSize((screenshotStats?.estimatedSizeKB ?? 0) + (webviewScreenshotStats?.estimatedSizeKB ?? 0))} • Prompts: {formatSize(promptHistoryStats?.estimatedSizeKB ?? 0)}
                   </Text>
                 )}
@@ -887,35 +903,64 @@ export default function SettingsPage() {
           
           <SettingsCard>
             {isLoadingTokenStats ? (
-              <View style={styles.settingsItem}>
-                <Text style={styles.settingsItemDescription}>Loading token usage statistics...</Text>
+              <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
+                <Text
+                  style={[
+                    styles.settingsItemDescription,
+                    isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
+                  ]}
+                >
+                  Loading token usage statistics...
+                </Text>
               </View>
             ) : tokenStats ? (
               <View>
-                <View style={styles.settingsItem}>
+                <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
                   <View>
-                    <Text style={styles.settingsItemTitle}>Total Usage</Text>
-                    <Text style={styles.settingsItemDescription}>
+                    <Text style={[styles.settingsItemTitle, isUniverseTheme ? styles.settingsItemTitleUniverse : undefined]}>
+                      Total Usage
+                    </Text>
+                    <Text
+                      style={[
+                        styles.settingsItemDescription,
+                        isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
+                      ]}
+                    >
                       {tokenStats.totalTokens.toLocaleString()} tokens across {tokenStats.totalRequests} requests
                     </Text>
                   </View>
                 </View>
                 
-                <View style={styles.settingsItem}>
+                <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
                   <View>
-                    <Text style={styles.settingsItemTitle}>Input/Output Breakdown</Text>
-                    <Text style={styles.settingsItemDescription}>
+                    <Text style={[styles.settingsItemTitle, isUniverseTheme ? styles.settingsItemTitleUniverse : undefined]}>
+                      Input/Output Breakdown
+                    </Text>
+                    <Text
+                      style={[
+                        styles.settingsItemDescription,
+                        isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
+                      ]}
+                    >
                       Input: {tokenStats.totalInputTokens.toLocaleString()} • Output: {tokenStats.totalOutputTokens.toLocaleString()}
                     </Text>
                   </View>
                 </View>
 
                 {Object.entries(tokenStats.usageByModel).length > 0 && (
-                  <View style={styles.settingsItem}>
+                  <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
                     <View>
-                      <Text style={styles.settingsItemTitle}>Usage by Model</Text>
+                      <Text style={[styles.settingsItemTitle, isUniverseTheme ? styles.settingsItemTitleUniverse : undefined]}>
+                        Usage by Model
+                      </Text>
                       {Object.entries(tokenStats.usageByModel).map(([model, usage]) => (
-                        <Text key={model} style={styles.settingsItemDescription}>
+                        <Text
+                          key={model}
+                          style={[
+                            styles.settingsItemDescription,
+                            isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
+                          ]}
+                        >
                           {getModelDisplayName(model)}: {(usage.inputTokens + usage.outputTokens).toLocaleString()} tokens ({usage.requests} requests)
                         </Text>
                       ))}
@@ -932,8 +977,15 @@ export default function SettingsPage() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={styles.settingsItem}>
-                <Text style={styles.settingsItemDescription}>No token usage data available</Text>
+              <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
+                <Text
+                  style={[
+                    styles.settingsItemDescription,
+                    isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
+                  ]}
+                >
+                  No token usage data available
+                </Text>
               </View>
             )}
           </SettingsCard>
@@ -946,10 +998,17 @@ export default function SettingsPage() {
           </Text>
           
           <SettingsCard>
-            <View style={styles.settingsItem}>
+            <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
               <View>
-                <Text style={styles.settingsItemTitle}>Sample Apps</Text>
-                <Text style={styles.settingsItemDescription}>
+                <Text style={[styles.settingsItemTitle, isUniverseTheme ? styles.settingsItemTitleUniverse : undefined]}>
+                  Sample Apps
+                </Text>
+                <Text
+                  style={[
+                    styles.settingsItemDescription,
+                    isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
+                  ]}
+                >
                   {sampleAppsCount} sample apps currently available
                 </Text>
               </View>
@@ -979,7 +1038,7 @@ export default function SettingsPage() {
               </TouchableOpacity>
             </View>
             
-            <Text style={[styles.helperText, { marginTop: 12 }]}>
+            <Text style={[styles.helperText, themedHelperTextStyle, { marginTop: 12 }]}>
               Sample apps are automatically restored when you restart the app. 
               You can remove them temporarily or restore them to their original state.
             </Text>
@@ -1020,9 +1079,13 @@ export default function SettingsPage() {
         <View style={styles.modalOverlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowModelSelector(false)} />
 
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Claude Model</Text>
-            <Text style={styles.modalSubtitle}>Prices as of {PRICING_AS_OF_DISPLAY} (USD per MTok)</Text>
+          <View style={[styles.modalContent, isUniverseTheme ? styles.modalContentUniverse : undefined]}>
+            <Text style={[styles.modalTitle, isUniverseTheme ? styles.modalTitleUniverse : undefined]}>
+              Select Claude Model
+            </Text>
+            <Text style={[styles.modalSubtitle, isUniverseTheme ? styles.modalSubtitleUniverse : undefined]}>
+              Prices as of {PRICING_AS_OF_DISPLAY} (USD per MTok)
+            </Text>
 
             <ScrollView
               style={styles.modelOptionsScroll}
@@ -1038,8 +1101,10 @@ export default function SettingsPage() {
                     key={modelId}
                     style={[
                       styles.modelOption,
+                      isUniverseTheme ? styles.modelOptionUniverse : undefined,
                       isRetired && styles.modelOptionDisabled,
-                      selectedModel === modelId && styles.modelOptionSelected
+                      selectedModel === modelId && styles.modelOptionSelected,
+                      selectedModel === modelId && isUniverseTheme ? styles.modelOptionSelectedUniverse : undefined,
                     ]}
                     disabled={isRetired}
                     onPress={() => handleModelSelect(modelId)}
@@ -1047,12 +1112,14 @@ export default function SettingsPage() {
                     <View style={styles.modelOptionContent}>
                       <Text style={[
                         styles.modelOptionTitle,
+                        isUniverseTheme ? styles.modelOptionTitleUniverse : undefined,
                         isRetired && styles.modelOptionTitleDisabled,
-                        selectedModel === modelId && styles.modelOptionTitleSelected
+                        selectedModel === modelId && styles.modelOptionTitleSelected,
+                        selectedModel === modelId && isUniverseTheme ? styles.modelOptionTitleSelectedUniverse : undefined,
                       ]}>
                         {getModelDisplayName(modelId)}
                       </Text>
-                      <Text style={styles.modelOptionPricing}>
+                      <Text style={[styles.modelOptionPricing, isUniverseTheme ? styles.modelOptionPricingUniverse : undefined]}>
                         {formatModelPricingFull(modelId) || 'Pricing unavailable'}
                       </Text>
                     </View>
@@ -1065,10 +1132,12 @@ export default function SettingsPage() {
             </ScrollView>
 
             <TouchableOpacity 
-              style={styles.modalCancelButton}
+              style={[styles.modalCancelButton, isUniverseTheme ? styles.modalCancelButtonUniverse : undefined]}
               onPress={() => setShowModelSelector(false)}
             >
-              <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              <Text style={[styles.modalCancelButtonText, isUniverseTheme ? styles.modalCancelButtonTextUniverse : undefined]}>
+                Cancel
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1084,17 +1153,28 @@ export default function SettingsPage() {
         <View style={styles.modalOverlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowManageApps(false)} />
 
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, isUniverseTheme ? styles.modalContentUniverse : undefined]}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle}>Manage Apps</Text>
-                <Text style={styles.modalSubtitle}>Delete individual apps and free up space.</Text>
+                <Text style={[styles.modalTitle, isUniverseTheme ? styles.modalTitleUniverse : undefined]}>
+                  Manage Apps
+                </Text>
+                <Text style={[styles.modalSubtitle, isUniverseTheme ? styles.modalSubtitleUniverse : undefined]}>
+                  Delete individual apps and free up space.
+                </Text>
               </View>
               <TouchableOpacity
-                style={[styles.headerIconButton, { backgroundColor: 'rgba(0, 0, 0, 0.06)' }]}
+                style={[
+                  styles.headerIconButton,
+                  { backgroundColor: isUniverseTheme ? 'rgba(11, 37, 65, 0.82)' : 'rgba(0, 0, 0, 0.06)' },
+                ]}
                 onPress={() => setShowManageApps(false)}
               >
-                <Ionicons name="close" size={20} color="rgba(0, 0, 0, 0.8)" />
+                <Ionicons
+                  name="close"
+                  size={20}
+                  color={isUniverseTheme ? 'rgba(226, 240, 255, 0.92)' : 'rgba(0, 0, 0, 0.8)'}
+                />
               </TouchableOpacity>
             </View>
 
@@ -1102,21 +1182,41 @@ export default function SettingsPage() {
 
             <ScrollView style={{ marginTop: 12, maxHeight: 420 }}>
               {isLoadingManageApps ? (
-                <View style={styles.settingsItem}>
-                  <Text style={styles.settingsItemDescription}>Loading apps…</Text>
+                <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
+                  <Text style={[styles.settingsItemDescription, isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined]}>
+                    Loading apps…
+                  </Text>
                 </View>
               ) : (manageApps ?? []).length === 0 ? (
-                <View style={styles.settingsItem}>
-                  <Text style={styles.settingsItemDescription}>No apps found.</Text>
+                <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
+                  <Text style={[styles.settingsItemDescription, isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined]}>
+                    No apps found.
+                  </Text>
                 </View>
               ) : (
                 (manageApps ?? []).map((app) => (
-                  <View key={app.id} style={[styles.settingsItem, { paddingVertical: 12 }]}>
+                  <View
+                    key={app.id}
+                    style={[
+                      styles.settingsItem,
+                      isUniverseTheme ? styles.settingsItemUniverse : undefined,
+                      { paddingVertical: 12 },
+                    ]}
+                  >
                     <View style={{ flex: 1, paddingRight: 10 }}>
-                      <Text style={styles.settingsItemTitle} numberOfLines={1}>
+                      <Text
+                        style={[styles.settingsItemTitle, isUniverseTheme ? styles.settingsItemTitleUniverse : undefined]}
+                        numberOfLines={1}
+                      >
                         {app.title}
                       </Text>
-                      <Text style={styles.settingsItemDescription} numberOfLines={1}>
+                      <Text
+                        style={[
+                          styles.settingsItemDescription,
+                          isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
+                        ]}
+                        numberOfLines={1}
+                      >
                         {app.status ? `Status: ${app.status} • ` : ''}
                         Est. {formatSize(app.sizeKB)}
                       </Text>
@@ -1178,8 +1278,9 @@ interface SettingsCardProps {
 }
 
 function SettingsCard({ children }: SettingsCardProps) {
+  const isUniverseTheme = useUISettingsStore((s) => s.appTheme === 'universe');
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, isUniverseTheme ? styles.cardUniverse : undefined]}>
       {children}
     </View>
   );
@@ -1194,11 +1295,24 @@ interface SettingsItemProps {
 }
 
 function SettingsItem({ title, description, onPress, icon = "chevron-forward", statusColor }: SettingsItemProps) {
+  const isUniverseTheme = useUISettingsStore((s) => s.appTheme === 'universe');
   return (
-    <TouchableOpacity style={styles.settingsItem} onPress={onPress}>
+    <TouchableOpacity
+      style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}
+      onPress={onPress}
+    >
       <View style={styles.settingsItemContent}>
-        <Text style={styles.settingsItemTitle}>{title}</Text>
-        <Text style={styles.settingsItemDescription}>{description}</Text>
+        <Text style={[styles.settingsItemTitle, isUniverseTheme ? styles.settingsItemTitleUniverse : undefined]}>
+          {title}
+        </Text>
+        <Text
+          style={[
+            styles.settingsItemDescription,
+            isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
+          ]}
+        >
+          {description}
+        </Text>
       </View>
       <Ionicons name={icon as any} size={20} color={statusColor || "#94A3B8"} />
     </TouchableOpacity>
@@ -1211,10 +1325,11 @@ interface StatItemProps {
 }
 
 function StatItem({ label, value }: StatItemProps) {
+  const isUniverseTheme = useUISettingsStore((s) => s.appTheme === 'universe');
   return (
     <View style={styles.statItem}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statValue, isUniverseTheme ? styles.statValueUniverse : undefined]}>{value}</Text>
+      <Text style={[styles.statLabel, isUniverseTheme ? styles.statLabelUniverse : undefined]}>{label}</Text>
     </View>
   );
 }
@@ -1277,6 +1392,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
+  cardUniverse: {
+    backgroundColor: 'rgba(8, 22, 42, 0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(123, 169, 220, 0.42)',
+    shadowOpacity: 0.22,
+  },
   settingsItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1285,6 +1406,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     borderRadius: 12,
     marginVertical: 4,
+  },
+  settingsItemUniverse: {
+    backgroundColor: 'rgba(9, 28, 52, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(123, 169, 220, 0.32)',
   },
   settingsItemContent: {
     flex: 1,
@@ -1295,9 +1421,15 @@ const styles = StyleSheet.create({
     color: '#1E293B',
     marginBottom: 2,
   },
+  settingsItemTitleUniverse: {
+    color: 'rgba(225, 239, 255, 0.95)',
+  },
   settingsItemDescription: {
     fontSize: 12,
     color: '#64748B',
+  },
+  settingsItemDescriptionUniverse: {
+    color: 'rgba(190, 216, 244, 0.84)',
   },
   separator: {
     height: 8,
@@ -1311,6 +1443,9 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.8)',
     marginBottom: 8,
   },
+  settingLabelUniverse: {
+    color: 'rgba(223, 238, 255, 0.94)',
+  },
   dropdown: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1322,14 +1457,24 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     marginBottom: 4,
   },
+  dropdownUniverse: {
+    borderColor: 'rgba(125, 171, 222, 0.44)',
+    backgroundColor: 'rgba(6, 23, 44, 0.92)',
+  },
   dropdownText: {
     fontSize: 16,
     color: 'rgba(0, 0, 0, 0.8)',
+  },
+  dropdownTextUniverse: {
+    color: 'rgba(224, 240, 255, 0.94)',
   },
   helperText: {
     fontSize: 12,
     color: '#64748B',
     marginTop: 4,
+  },
+  helperTextUniverse: {
+    color: 'rgba(190, 216, 244, 0.84)',
   },
   chipRow: {
     flexDirection: 'row',
@@ -1345,17 +1490,31 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 0, 0, 0.12)',
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
   },
+  chipUniverse: {
+    borderColor: 'rgba(125, 171, 222, 0.4)',
+    backgroundColor: 'rgba(7, 28, 52, 0.9)',
+  },
   chipSelected: {
     backgroundColor: 'rgba(95, 15, 64, 0.12)',
     borderColor: 'rgba(0, 0, 0, 0.2)',
+  },
+  chipSelectedUniverse: {
+    backgroundColor: 'rgba(34, 76, 122, 0.86)',
+    borderColor: 'rgba(199, 224, 250, 0.78)',
   },
   chipText: {
     fontSize: 12,
     fontWeight: '700',
     color: 'rgba(0, 0, 0, 0.65)',
   },
+  chipTextUniverse: {
+    color: 'rgba(214, 233, 253, 0.9)',
+  },
   chipTextSelected: {
     color: 'rgba(0, 0, 0, 0.9)',
+  },
+  chipTextSelectedUniverse: {
+    color: '#F2FAFF',
   },
   segmentedControl: {
     flexDirection: 'row',
@@ -1364,6 +1523,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 0, 0, 0.12)',
     overflow: 'hidden',
   },
+  segmentedControlUniverse: {
+    borderColor: 'rgba(123, 169, 220, 0.35)',
+    backgroundColor: 'rgba(8, 22, 42, 0.4)',
+  },
   segmentButton: {
     flex: 1,
     paddingVertical: 10,
@@ -1371,16 +1534,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
   },
+  segmentButtonUniverse: {
+    backgroundColor: 'rgba(7, 28, 52, 0.9)',
+  },
   segmentButtonSelected: {
     backgroundColor: 'rgba(95, 15, 64, 0.12)',
+  },
+  segmentButtonSelectedUniverse: {
+    backgroundColor: 'rgba(34, 76, 122, 0.86)',
   },
   segmentButtonText: {
     fontSize: 12,
     fontWeight: '700',
     color: 'rgba(0, 0, 0, 0.65)',
   },
+  segmentButtonTextUniverse: {
+    color: 'rgba(214, 233, 253, 0.9)',
+  },
   segmentButtonTextSelected: {
     color: 'rgba(0, 0, 0, 0.9)',
+  },
+  segmentButtonTextSelectedUniverse: {
+    color: '#F2FAFF',
   },
   colorSwatchRow: {
     flexDirection: 'row',
@@ -1432,10 +1607,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'rgba(0, 0, 0, 0.8)',
   },
+  statValueUniverse: {
+    color: 'rgba(225, 239, 255, 0.95)',
+  },
   statLabel: {
     fontSize: 12,
     color: 'rgba(0, 0, 0, 0.6)',
     marginTop: 2,
+  },
+  statLabelUniverse: {
+    color: 'rgba(190, 216, 244, 0.84)',
   },
   button: {
     flexDirection: 'row',
@@ -1464,6 +1645,11 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
     height: '80%',
   },
+  modalContentUniverse: {
+    backgroundColor: 'rgba(7, 20, 38, 0.98)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(123, 169, 220, 0.42)',
+  },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -1471,12 +1657,18 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
+  modalTitleUniverse: {
+    color: 'rgba(225, 239, 255, 0.95)',
+  },
   modalSubtitle: {
     fontSize: 12,
     color: 'rgba(0, 0, 0, 0.6)',
     textAlign: 'center',
     marginTop: -12,
     marginBottom: 20,
+  },
+  modalSubtitleUniverse: {
+    color: 'rgba(190, 216, 244, 0.84)',
   },
   modelOptionsScroll: {
     flex: 1,
@@ -1496,12 +1688,20 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'transparent',
   },
+  modelOptionUniverse: {
+    backgroundColor: 'rgba(9, 28, 52, 0.9)',
+    borderColor: 'rgba(123, 169, 220, 0.32)',
+  },
   modelOptionDisabled: {
     opacity: 0.45,
   },
   modelOptionSelected: {
     backgroundColor: 'rgba(255, 193, 7, 0.1)',
     borderColor: AppColors.FABMain,
+  },
+  modelOptionSelectedUniverse: {
+    borderColor: 'rgba(199, 224, 250, 0.78)',
+    backgroundColor: 'rgba(34, 76, 122, 0.86)',
   },
   modelOptionContent: {
     flex: 1,
@@ -1512,15 +1712,24 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.8)',
     marginBottom: 4,
   },
+  modelOptionTitleUniverse: {
+    color: 'rgba(225, 239, 255, 0.95)',
+  },
   modelOptionTitleDisabled: {
     color: 'rgba(0, 0, 0, 0.6)',
   },
   modelOptionTitleSelected: {
     color: 'rgba(0, 0, 0, 0.9)',
   },
+  modelOptionTitleSelectedUniverse: {
+    color: '#F2FAFF',
+  },
   modelOptionPricing: {
     fontSize: 12,
     color: 'rgba(0, 0, 0, 0.6)',
+  },
+  modelOptionPricingUniverse: {
+    color: 'rgba(190, 216, 244, 0.84)',
   },
   modalCancelButton: {
     backgroundColor: '#f0f0f0',
@@ -1528,10 +1737,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginTop: 12,
   },
+  modalCancelButtonUniverse: {
+    backgroundColor: 'rgba(8, 33, 58, 0.95)',
+    borderWidth: 1,
+    borderColor: 'rgba(123, 169, 220, 0.35)',
+  },
   modalCancelButtonText: {
     fontSize: 16,
     fontWeight: '600',
     color: 'rgba(0, 0, 0, 0.6)',
     textAlign: 'center',
+  },
+  modalCancelButtonTextUniverse: {
+    color: 'rgba(214, 233, 253, 0.92)',
   },
 });

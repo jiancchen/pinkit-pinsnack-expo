@@ -18,6 +18,7 @@ import { AppColors } from '../constants/AppColors';
 import FavoriteAppCard from './FavoriteAppCard';
 import MostUsedAppCard from './MostUsedAppCard';
 import GenerationInlineProgressBar from './GenerationInlineProgressBar';
+import { useUISettingsStore } from '../stores/UISettingsStore';
 
 interface SearchBarWithFavoritesProps {
   searchText: string;
@@ -43,6 +44,8 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
   style,
 }) => {
   const insets = useSafeAreaInsets();
+  const appTheme = useUISettingsStore((s) => s.appTheme);
+  const isUniverseTheme = appTheme === 'universe';
 
   const isPopupVisible = showFavorites && searchText.length === 0;
   const closePopup = React.useCallback(() => {
@@ -189,19 +192,25 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
               },
             ]}
           >
-            <View style={styles.searchBar}>
+            <View style={[styles.searchBar, isUniverseTheme ? styles.searchBarUniverse : undefined]}>
               {/* Star/Favorites Toggle */}
               <TouchableOpacity style={styles.starButton} onPress={onToggleFavorites}>
                 <Ionicons
                   name="star"
                   size={24}
-                  color={showFavorites ? AppColors.FABMain : '#999'}
+                  color={
+                    showFavorites
+                      ? AppColors.FABMain
+                      : isUniverseTheme
+                        ? 'rgba(196, 222, 250, 0.78)'
+                        : '#999'
+                  }
                 />
               </TouchableOpacity>
 
               {/* Search Input */}
               <TextInput
-                style={styles.searchInput}
+                style={[styles.searchInput, isUniverseTheme ? styles.searchInputUniverse : undefined]}
                 value={searchText}
                 onChangeText={onSearchTextChange}
                 onFocus={() => {
@@ -210,17 +219,26 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
                   }
                 }}
                 placeholder="Search your apps..."
-                placeholderTextColor="#999"
+                placeholderTextColor={isUniverseTheme ? 'rgba(198, 220, 244, 0.6)' : '#999'}
                 returnKeyType="search"
               />
 
               {/* Leading Search Icon */}
-              <Ionicons name="search" size={20} color="#999" style={styles.searchIcon} />
+              <Ionicons
+                name="search"
+                size={20}
+                color={isUniverseTheme ? 'rgba(198, 220, 244, 0.7)' : '#999'}
+                style={styles.searchIcon}
+              />
 
               {/* Clear Button */}
               {searchText.length > 0 && (
                 <TouchableOpacity style={styles.clearButton} onPress={onClearSearch}>
-                  <Ionicons name="close" size={20} color="#999" />
+                  <Ionicons
+                    name="close"
+                    size={20}
+                    color={isUniverseTheme ? 'rgba(210, 232, 252, 0.8)' : '#999'}
+                  />
                 </TouchableOpacity>
               )}
             </View>
@@ -238,6 +256,7 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
             <Animated.View
               style={[
                 styles.favoritesContainer,
+                isUniverseTheme ? styles.favoritesContainerUniverse : undefined,
                 {
                   opacity: favoritesOpacity,
                   transform: [{ translateY: favoritesOffset }],
@@ -246,7 +265,9 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
             >
               <View style={styles.favoritesContent}>
                 {/* Favorite Apps Section */}
-                <Text style={styles.sectionTitle}>Favorite Apps</Text>
+                <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
+                  Favorite Apps
+                </Text>
                 {favoriteItems.length > 0 ? (
                   <ScrollView
                     horizontal
@@ -257,16 +278,27 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
                       <FavoriteAppCard
                         key={item.id}
                         historyItem={item}
+                        isUniverseTheme={isUniverseTheme}
                         onNavigateToApp={onNavigateToApp}
                       />
                     ))}
                   </ScrollView>
                 ) : (
-                  <Text style={styles.emptyText}>No favorite apps yet</Text>
+                  <Text style={[styles.emptyText, isUniverseTheme ? styles.emptyTextUniverse : undefined]}>
+                    No favorite apps yet
+                  </Text>
                 )}
 
                 {/* Most Used Apps Section */}
-                <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Most Used Apps</Text>
+                <Text
+                  style={[
+                    styles.sectionTitle,
+                    isUniverseTheme ? styles.sectionTitleUniverse : undefined,
+                    { marginTop: 20 },
+                  ]}
+                >
+                  Most Used Apps
+                </Text>
                 {mostUsedItems.length > 0 ? (
                   <ScrollView
                     horizontal
@@ -277,12 +309,15 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
                       <MostUsedAppCard
                         key={item.id}
                         historyItem={item}
+                        isUniverseTheme={isUniverseTheme}
                         onNavigateToApp={onNavigateToApp}
                       />
                     ))}
                   </ScrollView>
                 ) : (
-                  <Text style={styles.emptyText}>No usage data yet</Text>
+                  <Text style={[styles.emptyText, isUniverseTheme ? styles.emptyTextUniverse : undefined]}>
+                    No usage data yet
+                  </Text>
                 )}
               </View>
             </Animated.View>
@@ -335,6 +370,12 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
+  searchBarUniverse: {
+    backgroundColor: 'rgba(8, 26, 48, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(136, 181, 228, 0.42)',
+    shadowOpacity: 0.28,
+  },
   starButton: {
     padding: 8,
     marginRight: 12,
@@ -345,6 +386,9 @@ const styles = StyleSheet.create({
     color: '#333',
     paddingHorizontal: 12,
     paddingLeft: 32, // Space for search icon
+  },
+  searchInputUniverse: {
+    color: 'rgba(229, 242, 255, 0.95)',
   },
   searchIcon: {
     position: 'absolute',
@@ -367,6 +411,12 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 4,
   },
+  favoritesContainerUniverse: {
+    backgroundColor: 'rgba(7, 20, 38, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(124, 171, 222, 0.4)',
+    shadowOpacity: 0.25,
+  },
   favoritesContent: {
     padding: 16,
   },
@@ -376,6 +426,9 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.8)',
     marginBottom: 12,
   },
+  sectionTitleUniverse: {
+    color: 'rgba(223, 238, 255, 0.94)',
+  },
   horizontalScrollContent: {
     paddingHorizontal: 4,
     gap: 12,
@@ -384,6 +437,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#999',
     marginBottom: 8,
+  },
+  emptyTextUniverse: {
+    color: 'rgba(195, 219, 247, 0.82)',
   },
 });
 

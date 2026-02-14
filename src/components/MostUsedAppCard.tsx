@@ -13,11 +13,13 @@ import { useScreenshotState } from '../stores/ScreenshotStore';
 interface MostUsedAppCardProps {
   historyItem: PromptHistory;
   onNavigateToApp: (appId: string) => void;
+  isUniverseTheme?: boolean;
 }
 
 const MostUsedAppCard: React.FC<MostUsedAppCardProps> = ({
   historyItem,
   onNavigateToApp,
+  isUniverseTheme = false,
 }) => {
   const screenshotState = useScreenshotState(historyItem.id);
   const [imageError, setImageError] = useState(false);
@@ -28,17 +30,21 @@ const MostUsedAppCard: React.FC<MostUsedAppCardProps> = ({
 
   return (
     <TouchableOpacity
-      style={[styles.container, isGenerating && styles.containerDisabled]}
+      style={[
+        styles.container,
+        isUniverseTheme ? styles.containerUniverse : undefined,
+        isGenerating && styles.containerDisabled,
+      ]}
       onPress={() => {
         if (!isGenerating) onNavigateToApp(historyItem.id);
       }}
       activeOpacity={0.8}
       disabled={isGenerating}
     >
-      <View style={styles.imageContainer}>
+      <View style={[styles.imageContainer, isUniverseTheme ? styles.imageContainerUniverse : undefined]}>
         {screenshotState?.isLoading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#999" />
+          <View style={[styles.loadingContainer, isUniverseTheme ? styles.loadingContainerUniverse : undefined]}>
+            <ActivityIndicator size="small" color={isUniverseTheme ? 'rgba(206, 230, 255, 0.86)' : '#999'} />
           </View>
         )}
 
@@ -56,8 +62,10 @@ const MostUsedAppCard: React.FC<MostUsedAppCardProps> = ({
             onError={() => setImageError(true)}
           />
         ) : (
-          <View style={styles.placeholderContainer}>
-            <Text style={styles.placeholderText}>
+          <View
+            style={[styles.placeholderContainer, isUniverseTheme ? styles.placeholderContainerUniverse : undefined]}
+          >
+            <Text style={[styles.placeholderText, isUniverseTheme ? styles.placeholderTextUniverse : undefined]}>
               {historyItem.title?.charAt(0)?.toUpperCase() || '?'}
             </Text>
           </View>
@@ -65,10 +73,10 @@ const MostUsedAppCard: React.FC<MostUsedAppCardProps> = ({
       </View>
       
       <View style={styles.textContainer}>
-        <Text style={styles.title} numberOfLines={1}>
+        <Text style={[styles.title, isUniverseTheme ? styles.titleUniverse : undefined]} numberOfLines={1}>
           {historyItem.title || 'Untitled App'}
         </Text>
-        <Text style={styles.accessCount}>
+        <Text style={[styles.accessCount, isUniverseTheme ? styles.accessCountUniverse : undefined]}>
           Used {historyItem.accessCount || 0} times
         </Text>
       </View>
@@ -93,6 +101,12 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
   },
+  containerUniverse: {
+    backgroundColor: 'rgba(8, 27, 49, 0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(125, 171, 222, 0.32)',
+    shadowOpacity: 0.2,
+  },
   containerDisabled: {
     opacity: 0.6,
   },
@@ -104,6 +118,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
     marginBottom: 8,
   },
+  imageContainerUniverse: {
+    backgroundColor: 'rgba(10, 35, 61, 0.9)',
+  },
   screenshot: {
     width: '100%',
     height: '100%',
@@ -114,10 +131,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#e0e0e0',
   },
+  placeholderContainerUniverse: {
+    backgroundColor: 'rgba(16, 49, 83, 0.86)',
+  },
   placeholderText: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#999',
+  },
+  placeholderTextUniverse: {
+    color: 'rgba(206, 228, 250, 0.86)',
   },
   loadingContainer: {
     position: 'absolute',
@@ -129,6 +152,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
     zIndex: 1,
+  },
+  loadingContainerUniverse: {
+    backgroundColor: 'rgba(7, 20, 38, 0.7)',
   },
   generatingOverlay: {
     position: 'absolute',
@@ -151,10 +177,16 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.8)',
     lineHeight: 16,
   },
+  titleUniverse: {
+    color: 'rgba(226, 240, 255, 0.95)',
+  },
   accessCount: {
     fontSize: 11,
     color: 'rgba(0, 0, 0, 0.5)',
     fontWeight: '500',
+  },
+  accessCountUniverse: {
+    color: 'rgba(191, 216, 243, 0.84)',
   },
 });
 
