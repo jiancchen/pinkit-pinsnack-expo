@@ -238,6 +238,10 @@ export class GenerationQueueService {
         job.model
       );
 
+      if (typeof response.category === 'string' && response.category.trim()) {
+        await AppStorageService.updateApp(job.appId, { category: response.category.trim().toLowerCase() });
+      }
+
       await this.markJob(job.id, { status: 'completed', errorMessage: undefined });
 
       await NotificationService.notifyGenerationCompleted({

@@ -28,6 +28,7 @@ import {
 } from '../../src/types/ClaudeApi';
 import { createLogger } from '../../src/utils/Logger';
 import { AppTheme, TabBarVariant, useUISettingsStore } from '../../src/stores/UISettingsStore';
+import { useStrings } from '../../src/i18n/strings';
 
 const log = createLogger('Settings');
 
@@ -54,7 +55,6 @@ export default function SettingsPage() {
   const [temperature, setTemperature] = useState(0.3);
   const [maxTokens, setMaxTokens] = useState(DEFAULT_CONFIG.maxTokens);
   const [selectedModel, setSelectedModel] = useState<string>(CLAUDE_MODELS.HAIKU_4_5);
-  const [selectedLanguage, setSelectedLanguage] = useState('English');
   const [hasApiKey, setHasApiKey] = useState(false);
   const [isLoadingApiKey, setIsLoadingApiKey] = useState(true);
   const [sampleAppsCount, setSampleAppsCount] = useState(0);
@@ -75,8 +75,11 @@ export default function SettingsPage() {
   const tabBarTintColor = useUISettingsStore((s) => s.tabBar.tintColor);
   const tabBarBlurIntensity = useUISettingsStore((s) => s.tabBar.blurIntensity);
   const appTheme = useUISettingsStore((s) => s.appTheme);
+  const appLanguage = useUISettingsStore((s) => s.appLanguage);
   const isUniverseTheme = appTheme === 'universe';
+  const { t } = useStrings();
   const setAppTheme = useUISettingsStore((s) => s.setAppTheme);
+  const setAppLanguage = useUISettingsStore((s) => s.setAppLanguage);
   const setTabBarVariant = useUISettingsStore((s) => s.setTabBarVariant);
   const setTabBarTintColor = useUISettingsStore((s) => s.setTabBarTintColor);
   const setTabBarBlurIntensity = useUISettingsStore((s) => s.setTabBarBlurIntensity);
@@ -797,17 +800,28 @@ export default function SettingsPage() {
           
           <SettingsCard>
             <View style={styles.settingGroup}>
-              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>App Language</Text>
-              <TouchableOpacity style={[styles.dropdown, themedDropdownStyle]}>
-                <Text style={[styles.dropdownText, themedDropdownTextStyle]}>{selectedLanguage}</Text>
-                <Ionicons
-                  name="chevron-down"
-                  size={20}
-                  color={isUniverseTheme ? 'rgba(196, 222, 250, 0.78)' : '#666'}
-                />
-              </TouchableOpacity>
+              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>{t('settings.language.title')}</Text>
+              <View style={[styles.segmentedControl, themedSegmentedControlStyle]}>
+                <TouchableOpacity
+                  style={getSegmentButtonStyle(appLanguage === 'en-US')}
+                  onPress={() => setAppLanguage('en-US')}
+                >
+                  <Text style={getSegmentButtonTextStyle(appLanguage === 'en-US')}>
+                    {t('settings.language.english')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={getSegmentButtonStyle(appLanguage === 'es-ES')}
+                  onPress={() => setAppLanguage('es-ES')}
+                >
+                  <Text style={getSegmentButtonTextStyle(appLanguage === 'es-ES')}>
+                    {t('settings.language.spanish')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
               <Text style={[styles.helperText, themedHelperTextStyle]}>
-                Changes will take effect after restarting the app
+                {t('settings.language.helper')}
               </Text>
             </View>
           </SettingsCard>

@@ -458,8 +458,15 @@ export default function AppViewPage() {
     if (!app || !newTitle.trim()) return;
     
     try {
-      const updatedApp = { ...app, title: newTitle.trim() };
-      await AppStorageService.updateApp(app.id, updatedApp);
+      const updatedApp = {
+        ...app,
+        title: newTitle.trim(),
+        titleEditedByUser: true,
+      };
+      await AppStorageService.updateApp(app.id, {
+        title: updatedApp.title,
+        titleEditedByUser: true,
+      });
       setApp(updatedApp);
       setShowEditTitleModal(false);
       Alert.alert('Success', 'Title updated successfully');

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert,
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppColors } from '../../src/constants/AppColors';
 import { getLiquidGlassTabBarContentPaddingBottom } from '../../src/constants/LiquidGlassTabBarLayout';
 import AppThemeBackground from '../../src/components/AppThemeBackground';
@@ -11,6 +12,7 @@ import { GenerationQueueService } from '../../src/services/GenerationQueueServic
 import { SecureStorageService } from '../../src/services/SecureStorageService';
 import { PromptHistoryService, type PromptHistoryEntry } from '../../src/services/PromptHistoryService';
 import { useUISettingsStore } from '../../src/stores/UISettingsStore';
+import { useStrings } from '../../src/i18n/strings';
 import {
   CLAUDE_MODEL_PICKER_OPTIONS,
   DEFAULT_CONFIG,
@@ -26,6 +28,7 @@ import {
 import { createLogger } from '../../src/utils/Logger';
 
 const log = createLogger('CreateApp');
+const RECENT_STYLE_TAGS_STORAGE_KEY = 'create_recent_style_tags_v1';
 
 const MAX_OUTPUT_TOKEN_PRESETS = [4_000, 8_000, 16_000, 32_000, 64_000] as const;
 
@@ -35,14 +38,34 @@ const TEMPERATURE_PRESETS: Array<{ label: string; value: number }> = [
   { label: 'Creative', value: 0.7 },
 ];
 
-const styles = {
-  minimalist: { name: 'Minimalist', emoji: '🎨' },
-  creative: { name: 'Creative', emoji: '🎯' },
-  corporate: { name: 'Corporate', emoji: '💼' },
-  playful: { name: 'Playful', emoji: '🎪' },
-  elegant: { name: 'Elegant', emoji: '✨' },
-  modern: { name: 'Modern', emoji: '🚀' },
+const COMMON_STYLE_TAGS = [
+  'modern',
+  'minimalist',
+  'playful',
+  'creative',
+  'elegant',
+  'corporate',
+  'glassmorphism',
+  'retro',
+  'dark',
+  'pastel',
+  'bold',
+  'neon',
+  'clean',
+];
+
+const STYLE_TAG_TO_APP_STYLE: Record<string, AppStyle> = {
+  minimalist: 'minimalist',
+  creative: 'creative',
+  corporate: 'corporate',
+  playful: 'playful',
+  elegant: 'elegant',
+  modern: 'modern',
 };
+
+function normalizeTag(input: string): string {
+  return input.trim().toLowerCase().replace(/\s+/g, '-');
+}
 
 const templates = [
   {
@@ -92,8 +115,11 @@ export default function CreatePage() {
   const insets = useSafeAreaInsets();
   const appTheme = useUISettingsStore((s) => s.appTheme);
   const isUniverseTheme = appTheme === 'universe';
+  const { t } = useStrings();
   const [prompt, setPrompt] = useState('');
-  const [selectedStyle, setSelectedStyle] = useState<AppStyle>('modern');
+  const [selectedStyleTags, setSelectedStyleTags] = useState<string[]>(['modern']);
+  const [newStyleTag, setNewStyleTag] = useState('');
+  const [recentStyleTags, setRecentStyleTags] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showPromptHistory, setShowPromptHistory] = useState(false);
   const [promptHistoryEntries, setPromptHistoryEntries] = useState<PromptHistoryEntry[]>([]);
@@ -108,6 +134,49 @@ export default function CreatePage() {
   const [generationTemperature, setGenerationTemperature] = useState<number>(DEFAULT_CONFIG.temperature);
 
   const scrollContentPaddingBottom = getLiquidGlassTabBarContentPaddingBottom(insets.bottom, 32);
+
+  const selectedAppStyle: AppStyle = useMemo(() => {
+    for (const tag of selectedStyleTags) {
+      const mapped = STYLE_TAG_TO_APP_STYLE[tag];
+      if (mapped) return mapped;
+    }
+    return 'modern';
+  }, [selectedStyleTags]);
+
+  const persistRecentStyleTags = async (tags: string[]) => {
+    const unique = Array.from(new Set(tags.map(normalizeTag).filter(Boolean))).slice(0, 24);
+    setRecentStyleTags(unique);
+    try {
+      await AsyncStorage.setItem(RECENT_STYLE_TAGS_STORAGE_KEY, JSON.stringify(unique));
+    } catch (error) {
+      log.warn('Failed to persist recent style tags:', error);
+    }
+  };
+
+  const addStyleTag = async (rawTag: string) => {
+    const normalized = normalizeTag(rawTag);
+    if (!normalized) return;
+
+    if (!selectedStyleTags.includes(normalized)) {
+      const next = [...selectedStyleTags, normalized];
+      setSelectedStyleTags(next);
+      await persistRecentStyleTags([normalized, ...recentStyleTags]);
+    }
+  };
+
+  const removeStyleTag = (tag: string) => {
+    setSelectedStyleTags((prev) => {
+      const next = prev.filter((value) => value !== tag);
+      if (next.length === 0) return ['modern'];
+      return next;
+    });
+  };
+
+  const handleAddCustomTag = async () => {
+    if (!newStyleTag.trim()) return;
+    await addStyleTag(newStyleTag);
+    setNewStyleTag('');
+  };
 
   const checkApiKeyStatus = async () => {
     try {
@@ -133,6 +202,31 @@ export default function CreatePage() {
       checkApiKeyStatus();
     }, [])
   );
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const loadRecentTags = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(RECENT_STYLE_TAGS_STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return;
+        const normalized = parsed
+          .map((value: unknown) => (typeof value === 'string' ? normalizeTag(value) : ''))
+          .filter((value: string) => value.length > 0)
+          .slice(0, 24);
+        if (isMounted) {
+          setRecentStyleTags(normalized);
+        }
+      } catch (error) {
+        log.warn('Failed to load recent style tags:', error);
+      }
+    };
+    void loadRecentTags();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const loadPromptHistory = async () => {
     try {
@@ -177,7 +271,8 @@ export default function CreatePage() {
 
     const requestForPrompt: AppGenerationRequest = {
       description,
-      style: selectedStyle,
+      style: selectedAppStyle,
+      styleTags: selectedStyleTags,
       platform: 'mobile',
     };
 
@@ -193,7 +288,7 @@ export default function CreatePage() {
       effectiveMaxTokens,
       estimatedMaxCost,
     };
-  }, [prompt, selectedStyle, generationModel, effectiveMaxTokens]);
+  }, [prompt, selectedAppStyle, selectedStyleTags, generationModel, effectiveMaxTokens]);
 
   const handleAdvancedModelSelect = (modelId: string) => {
     const modelInfo = MODEL_INFO[modelId];
@@ -220,48 +315,19 @@ export default function CreatePage() {
     setGenerationTemperature(defaultsConfig.temperature);
   };
 
-  const handleSubmit = async () => {
+  const buildRequest = (): AppGenerationRequest => ({
+    description: prompt.trim(),
+    style: selectedAppStyle,
+    styleTags: selectedStyleTags,
+    platform: 'mobile',
+  });
+
+  const queueGeneration = async (request: AppGenerationRequest) => {
     log.debug('Starting app generation process');
-    
-    if (!prompt.trim()) {
-      log.warn('Empty prompt provided');
-      Alert.alert('Error', 'Please enter an app description');
-      return;
-    }
-
-    if (!hasApiKey) {
-      log.warn('No API key configured');
-      Alert.alert(
-        'API Key Required',
-        'You need to set up your Claude API key to generate apps. Would you like to add one now?',
-        [
-          { text: 'Add API Key', onPress: () => router.push('/(tabs)/settings') },
-          { text: 'Cancel', style: 'cancel' }
-        ]
-      );
-      return;
-    }
-
-    const request: AppGenerationRequest = {
-      description: prompt.trim(),
-      style: selectedStyle,
-      platform: 'mobile'
-    };
-    
     log.debug('Generation request:', request);
 
-    // Validate the request
-    const validation = PromptGenerator.validateRequest(request);
-    if (!validation.isValid) {
-      log.warn('Request validation failed:', validation.errors);
-      Alert.alert('Validation Error', validation.errors.join('\n'));
-      return;
-    }
-    
-    log.debug('Request validation passed');
-
     setIsLoading(true);
-    
+
     try {
       const modelUsed = generationModel;
       const maxTokensUsed = clampMaxOutputTokens(modelUsed, generationMaxTokens);
@@ -289,8 +355,8 @@ export default function CreatePage() {
           {
             text: 'Create Another',
             onPress: () => router.push('/(tabs)/create'),
-            style: 'cancel'
-          }
+            style: 'cancel',
+          },
         ]
       );
     } catch (error: any) {
@@ -306,9 +372,56 @@ export default function CreatePage() {
     }
   };
 
+  const handleSubmit = async () => {
+    if (!prompt.trim()) {
+      Alert.alert('Error', t('create.error.emptyPrompt'));
+      return;
+    }
+
+    if (!hasApiKey) {
+      Alert.alert(
+        t('create.apiRequired.title'),
+        t('create.apiRequired.body'),
+        [
+          { text: t('create.apiRequired.cta'), onPress: () => router.push('/(tabs)/settings') },
+          { text: t('create.actions.cancel'), style: 'cancel' },
+        ]
+      );
+      return;
+    }
+
+    const request = buildRequest();
+    const validation = PromptGenerator.validateRequest(request);
+    if (!validation.isValid) {
+      Alert.alert('Validation Error', validation.errors.join('\n'));
+      return;
+    }
+
+    const estimateText = t('create.confirm.body', {
+      cost: formatUsd(runEstimate?.estimatedMaxCost ?? 0),
+      model: getModelDisplayName(generationModel),
+      inputTokens: (runEstimate?.estimatedInputTokens ?? 0).toLocaleString(),
+      outputTokens: effectiveMaxTokens.toLocaleString(),
+    });
+
+    Alert.alert(
+      t('create.confirm.title'),
+      estimateText,
+      [
+        { text: t('create.actions.cancel'), style: 'cancel' },
+        {
+          text: t('create.actions.create'),
+          onPress: () => {
+            void queueGeneration(request);
+          },
+        },
+      ]
+    );
+  };
+
   const handleTemplateSelect = (template: typeof templates[0]) => {
     setPrompt(template.prompt);
-    setSelectedStyle(template.style);
+    void addStyleTag(template.style);
   };
 
   return (
@@ -325,10 +438,7 @@ export default function CreatePage() {
       
       {/* Header */}
 	      <View style={styleSheet.header}>
-	        <TouchableOpacity
-	          style={styleSheet.backButton}
-	          onPress={() => router.back()}
-	        >
+	        <TouchableOpacity style={styleSheet.backButton} onPress={() => router.back()}>
 	          <Ionicons
               name="arrow-back"
               size={24}
@@ -336,21 +446,38 @@ export default function CreatePage() {
             />
 	        </TouchableOpacity>
 	        <Text style={[styleSheet.headerTitle, isUniverseTheme ? styleSheet.headerTitleUniverse : undefined]}>
-            Create New App
+            {t('create.header')}
           </Text>
           <View style={{ flex: 1 }} />
-          <TouchableOpacity
-            style={[styleSheet.headerIconButton, isUniverseTheme ? styleSheet.headerIconButtonUniverse : undefined]}
-            onPress={() => setShowAdvanced(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Open advanced settings"
-          >
-            <Ionicons
-              name="options-outline"
-              size={22}
-              color={isUniverseTheme ? 'rgba(226, 240, 255, 0.92)' : 'rgba(0, 0, 0, 0.8)'}
-            />
-          </TouchableOpacity>
+          <View style={styleSheet.headerRightActions}>
+            <TouchableOpacity
+              style={[styleSheet.headerIconButton, isUniverseTheme ? styleSheet.headerIconButtonUniverse : undefined]}
+              onPress={() => setShowAdvanced(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Open advanced settings"
+            >
+              <Ionicons
+                name="options-outline"
+                size={22}
+                color={isUniverseTheme ? 'rgba(226, 240, 255, 0.92)' : 'rgba(0, 0, 0, 0.8)'}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styleSheet.headerCreateButton,
+                isUniverseTheme ? styleSheet.headerCreateButtonUniverse : undefined,
+                (!prompt.trim() || isLoading || !hasApiKey || isCheckingApiKey)
+                  ? styleSheet.headerCreateButtonDisabled
+                  : undefined,
+              ]}
+              onPress={() => void handleSubmit()}
+              disabled={!prompt.trim() || isLoading || !hasApiKey || isCheckingApiKey}
+            >
+              <Ionicons name="sparkles" size={16} color="#fff" />
+              <Text style={styleSheet.headerCreateButtonText}>{t('create.actions.create')}</Text>
+            </TouchableOpacity>
+          </View>
 	      </View>
 
       <ScrollView 
@@ -363,7 +490,7 @@ export default function CreatePage() {
           <View style={[styleSheet.card, isUniverseTheme ? styleSheet.cardUniverse : undefined]}>
             <View style={styleSheet.inputHeader}>
               <Text style={[styleSheet.sectionTitle, isUniverseTheme ? styleSheet.sectionTitleUniverse : undefined]}>
-                Describe Your App
+                {t('create.describe')}
               </Text>
               <View style={styleSheet.inputHeaderActions}>
                 <TouchableOpacity
@@ -407,7 +534,7 @@ export default function CreatePage() {
               style={[styleSheet.textInput, isUniverseTheme ? styleSheet.textInputUniverse : undefined]}
               value={prompt}
               onChangeText={setPrompt}
-              placeholder="Describe what kind of app you want to create..."
+              placeholder={t('create.describe.placeholder')}
               placeholderTextColor={isUniverseTheme ? 'rgba(191, 216, 243, 0.66)' : '#999'}
               multiline
               numberOfLines={5}
@@ -417,99 +544,160 @@ export default function CreatePage() {
           </View>
         </View>
 
-        {/* Style Selection Section */}
+        {/* Style Tag Section */}
         <View style={styleSheet.section}>
           <Text style={[styleSheet.sectionTitle, isUniverseTheme ? styleSheet.sectionTitleUniverse : undefined]}>
-            Pick a Design Style
+            {t('create.designTags')}
           </Text>
-          
+
           <View style={[styleSheet.card, isUniverseTheme ? styleSheet.cardUniverse : undefined]}>
-            <View style={styleSheet.optionsContainer}>
-              {Object.entries(styles).map(([key, style]) => (
-                <OptionCard
-                  key={key}
-                  id={key as AppStyle}
-                  emoji={style.emoji}
-                  name={style.name}
-                  isSelected={selectedStyle === key}
-                  isUniverseTheme={isUniverseTheme}
-                  onSelect={() => setSelectedStyle(key as AppStyle)}
-                />
+            <View style={styleSheet.selectedTagsWrap}>
+              {selectedStyleTags.map((tag) => (
+                <View
+                  key={tag}
+                  style={[styleSheet.selectedTagChip, isUniverseTheme ? styleSheet.selectedTagChipUniverse : undefined]}
+                >
+                  <Text
+                    style={[
+                      styleSheet.selectedTagText,
+                      isUniverseTheme ? styleSheet.selectedTagTextUniverse : undefined,
+                    ]}
+                  >
+                    {tag}
+                  </Text>
+                  <TouchableOpacity onPress={() => removeStyleTag(tag)} hitSlop={8}>
+                    <Ionicons
+                      name="close"
+                      size={14}
+                      color={isUniverseTheme ? 'rgba(216, 235, 255, 0.9)' : 'rgba(33,33,33,0.8)'}
+                    />
+                  </TouchableOpacity>
+                </View>
               ))}
             </View>
+
+            <View style={styleSheet.tagInputRow}>
+              <TextInput
+                style={[styleSheet.tagInput, isUniverseTheme ? styleSheet.tagInputUniverse : undefined]}
+                value={newStyleTag}
+                onChangeText={setNewStyleTag}
+                placeholder={t('create.designTags.placeholder')}
+                placeholderTextColor={isUniverseTheme ? 'rgba(191, 216, 243, 0.66)' : '#999'}
+                autoCapitalize="none"
+                autoCorrect={false}
+                onSubmitEditing={() => void handleAddCustomTag()}
+                returnKeyType="done"
+              />
+              <TouchableOpacity
+                style={[styleSheet.addTagButton, isUniverseTheme ? styleSheet.addTagButtonUniverse : undefined]}
+                onPress={() => void handleAddCustomTag()}
+              >
+                <Text style={styleSheet.addTagButtonText}>{t('create.designTags.add')}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styleSheet.helperText, isUniverseTheme ? styleSheet.helperTextUniverse : undefined]}>
+              {t('create.designTags.common')}
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styleSheet.tagSuggestionsRow}>
+              {COMMON_STYLE_TAGS.map((tag) => {
+                const isSelected = selectedStyleTags.includes(tag);
+                return (
+                  <TouchableOpacity
+                    key={tag}
+                    style={[
+                      styleSheet.suggestionChip,
+                      isUniverseTheme ? styleSheet.suggestionChipUniverse : undefined,
+                      isSelected ? styleSheet.suggestionChipSelected : undefined,
+                      isSelected && isUniverseTheme ? styleSheet.suggestionChipSelectedUniverse : undefined,
+                    ]}
+                    onPress={() => void addStyleTag(tag)}
+                  >
+                    <Text
+                      style={[
+                        styleSheet.suggestionChipText,
+                        isUniverseTheme ? styleSheet.suggestionChipTextUniverse : undefined,
+                        isSelected ? styleSheet.suggestionChipTextSelected : undefined,
+                        isSelected && isUniverseTheme ? styleSheet.suggestionChipTextSelectedUniverse : undefined,
+                      ]}
+                    >
+                      {tag}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {recentStyleTags.length > 0 ? (
+              <>
+                <Text style={[styleSheet.helperText, isUniverseTheme ? styleSheet.helperTextUniverse : undefined]}>
+                  {t('create.designTags.saved')}
+                </Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styleSheet.tagSuggestionsRow}
+                >
+                  {recentStyleTags.map((tag) => (
+                    <TouchableOpacity
+                      key={`recent-${tag}`}
+                      style={[styleSheet.suggestionChip, isUniverseTheme ? styleSheet.suggestionChipUniverse : undefined]}
+                      onPress={() => void addStyleTag(tag)}
+                    >
+                      <Text
+                        style={[
+                          styleSheet.suggestionChipText,
+                          isUniverseTheme ? styleSheet.suggestionChipTextUniverse : undefined,
+                        ]}
+                      >
+                        {tag}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
+            ) : null}
           </View>
         </View>
 
-	        {/* Generate Button Section */}
-	        <View style={styleSheet.section}>
-          {!hasApiKey && !isCheckingApiKey && (
+        {!hasApiKey && !isCheckingApiKey && (
+          <View style={styleSheet.section}>
             <View style={[styleSheet.warningCard, isUniverseTheme ? styleSheet.warningCardUniverse : undefined]}>
               <Ionicons name="warning" size={20} color="#F59E0B" />
               <Text style={[styleSheet.warningText, isUniverseTheme ? styleSheet.warningTextUniverse : undefined]}>
-                You need to set up your Claude API key to generate apps
+                {t('create.apiRequired.body')}
               </Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styleSheet.settingsButton, isUniverseTheme ? styleSheet.settingsButtonUniverse : undefined]}
                 onPress={() => router.push('/(tabs)/settings')}
               >
-                <Text style={styleSheet.settingsButtonText}>Go to Settings</Text>
+                <Text style={styleSheet.settingsButtonText}>{t('create.apiRequired.cta')}</Text>
               </TouchableOpacity>
             </View>
-          )}
-          
-	          <TouchableOpacity
-	            style={[
-	              styleSheet.generateButton,
-	              { opacity: (!prompt.trim() || isLoading || !hasApiKey) ? 0.6 : 1 }
-	            ]}
-	            onPress={handleSubmit}
-	            disabled={!prompt.trim() || isLoading || !hasApiKey}
-	          >
-            {isLoading ? (
-              <View style={styleSheet.loadingContainer}>
-                <Text style={styleSheet.generateButtonText}>Queuing…</Text>
-              </View>
-            ) : (
-              <View style={styleSheet.buttonContent}>
-                <Ionicons name="sparkles" size={20} color="white" />
-                <Text style={styleSheet.generateButtonText}>
-                  {hasApiKey ? 'Generate App with AI' : 'API Key Required'}
-                </Text>
-              </View>
-            )}
-	          </TouchableOpacity>
-
-            {runEstimate && (
-              <Text
-                style={[
-                  styleSheet.costEstimateText,
-                  isUniverseTheme ? styleSheet.costEstimateTextUniverse : undefined,
-                ]}
-              >
-                Est. max cost {formatUsd(runEstimate.estimatedMaxCost)} • Input ~{runEstimate.estimatedInputTokens.toLocaleString()} • Output up to {runEstimate.effectiveMaxTokens.toLocaleString()} ({getModelDisplayName(generationModel)})
-              </Text>
-            )}
-	        </View>
+          </View>
+        )}
 
         {/* Templates Section */}
         {!isLoading && (
           <View style={styleSheet.section}>
             <Text style={[styleSheet.sectionTitle, isUniverseTheme ? styleSheet.sectionTitleUniverse : undefined]}>
-              Quick Templates
+              {t('create.templates')}
             </Text>
-            
-            {templates.map((template, index) => (
-              <TemplateCard
-                key={index}
-                emoji={template.emoji}
-                name={template.name}
-                description={template.description}
-                style={template.style}
-                category={template.category}
-                isUniverseTheme={isUniverseTheme}
-                onSelect={() => handleTemplateSelect(template)}
-              />
-            ))}
+
+            <View style={styleSheet.templatesGrid}>
+              {templates.map((template, index) => (
+                <TemplateCard
+                  key={index}
+                  emoji={template.emoji}
+                  name={template.name}
+                  description={template.description}
+                  style={template.style}
+                  category={template.category}
+                  isUniverseTheme={isUniverseTheme}
+                  onSelect={() => handleTemplateSelect(template)}
+                />
+              ))}
+            </View>
           </View>
         )}
 	      </ScrollView>
@@ -518,7 +706,7 @@ export default function CreatePage() {
         <Modal
           visible={showAdvanced}
           transparent={true}
-          animationType="slide"
+          animationType="fade"
           onRequestClose={closeAdvanced}
           onDismiss={closeAdvanced}
         >
@@ -618,22 +806,22 @@ export default function CreatePage() {
                         isUniverseTheme ? styleSheet.modalCancelButtonTextUniverse : undefined,
                       ]}
                     >
-                      Done
+                      {t('create.actions.done')}
                     </Text>
                   </TouchableOpacity>
                 </>
               ) : (
                 <>
                   <Text style={[styleSheet.modalTitle, isUniverseTheme ? styleSheet.modalTitleUniverse : undefined]}>
-                    Advanced
+                    {t('create.advanced.title')}
                   </Text>
                   <Text style={[styleSheet.modalSubtitle, isUniverseTheme ? styleSheet.modalSubtitleUniverse : undefined]}>
-                    Tune model, token budget, and creativity for this run.
+                    {t('create.advanced.subtitle')}
                   </Text>
 
                   <View style={styleSheet.settingGroup}>
                     <Text style={[styleSheet.settingLabel, isUniverseTheme ? styleSheet.settingLabelUniverse : undefined]}>
-                      Model
+                      {t('create.advanced.model')}
                     </Text>
                     <TouchableOpacity
                       style={[styleSheet.dropdown, isUniverseTheme ? styleSheet.dropdownUniverse : undefined]}
@@ -657,7 +845,7 @@ export default function CreatePage() {
 
                   <View style={styleSheet.settingGroup}>
                     <Text style={[styleSheet.settingLabel, isUniverseTheme ? styleSheet.settingLabelUniverse : undefined]}>
-                      Max Output Tokens: {effectiveMaxTokens.toLocaleString()}
+                      {t('create.advanced.maxTokens')}: {effectiveMaxTokens.toLocaleString()}
                     </Text>
                     <View style={styleSheet.stepperRow}>
                       <TouchableOpacity
@@ -721,7 +909,7 @@ export default function CreatePage() {
 
                   <View style={styleSheet.settingGroup}>
                     <Text style={[styleSheet.settingLabel, isUniverseTheme ? styleSheet.settingLabelUniverse : undefined]}>
-                      Temperature: {effectiveTemperature.toFixed(1)}
+                      {t('create.advanced.temperature')}: {effectiveTemperature.toFixed(1)}
                     </Text>
                     <View style={styleSheet.chipRow}>
                       {TEMPERATURE_PRESETS.map((preset) => {
@@ -760,7 +948,7 @@ export default function CreatePage() {
 
                   <View style={styleSheet.settingGroup}>
                     <Text style={[styleSheet.settingLabel, isUniverseTheme ? styleSheet.settingLabelUniverse : undefined]}>
-                      Estimate
+                      {t('create.advanced.estimate')}
                     </Text>
                     {runEstimate ? (
                       <Text style={[styleSheet.helperText, isUniverseTheme ? styleSheet.helperTextUniverse : undefined]}>
@@ -789,11 +977,11 @@ export default function CreatePage() {
                           isUniverseTheme ? styleSheet.modalButtonTextSecondaryUniverse : undefined,
                         ]}
                       >
-                        Reset
+                        {t('create.actions.reset')}
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styleSheet.modalButton} onPress={closeAdvanced}>
-                      <Text style={styleSheet.modalButtonText}>Done</Text>
+                      <Text style={styleSheet.modalButtonText}>{t('create.actions.done')}</Text>
                     </TouchableOpacity>
                   </View>
                 </>
@@ -806,7 +994,7 @@ export default function CreatePage() {
         <Modal
           visible={showPromptHistory}
           transparent={true}
-          animationType="slide"
+          animationType="fade"
           onRequestClose={() => setShowPromptHistory(false)}
           onDismiss={() => setShowPromptHistory(false)}
         >
@@ -822,10 +1010,10 @@ export default function CreatePage() {
               <View style={styleSheet.historyHeaderRow}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styleSheet.modalTitle, isUniverseTheme ? styleSheet.modalTitleUniverse : undefined]}>
-                    Previous Prompts
+                    {t('create.history.title')}
                   </Text>
                   <Text style={[styleSheet.modalSubtitle, isUniverseTheme ? styleSheet.modalSubtitleUniverse : undefined]}>
-                    Tap a prompt to load it into the editor.
+                    {t('create.history.subtitle')}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -874,11 +1062,11 @@ export default function CreatePage() {
                       isUniverseTheme ? styleSheet.modalButtonTextSecondaryUniverse : undefined,
                     ]}
                   >
-                    Clear
+                    {t('create.actions.clear')}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styleSheet.modalButton} onPress={() => setShowPromptHistory(false)}>
-                  <Text style={styleSheet.modalButtonText}>Done</Text>
+                  <Text style={styleSheet.modalButtonText}>{t('create.actions.done')}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -886,13 +1074,13 @@ export default function CreatePage() {
                 {isLoadingPromptHistory ? (
                   <View style={styleSheet.historyEmptyState}>
                     <Text style={[styleSheet.modalSubtitle, isUniverseTheme ? styleSheet.modalSubtitleUniverse : undefined]}>
-                      Loading…
+                      {t('create.history.loading')}
                     </Text>
                   </View>
                 ) : promptHistoryEntries.length === 0 ? (
                   <View style={styleSheet.historyEmptyState}>
                     <Text style={[styleSheet.modalSubtitle, isUniverseTheme ? styleSheet.modalSubtitleUniverse : undefined]}>
-                      No saved prompts yet.
+                      {t('create.history.empty')}
                     </Text>
                   </View>
                 ) : (
@@ -905,7 +1093,14 @@ export default function CreatePage() {
                         style={[styleSheet.historyRow, isUniverseTheme ? styleSheet.historyRowUniverse : undefined]}
                         onPress={() => {
                           setPrompt(description);
-                          setSelectedStyle(entry.request.style);
+                          const historyTags =
+                            entry.request.styleTags && entry.request.styleTags.length > 0
+                              ? entry.request.styleTags
+                              : [entry.request.style];
+                          const nextTags = historyTags
+                            .map((tag) => normalizeTag(tag))
+                            .filter((tag) => tag.length > 0);
+                          setSelectedStyleTags(nextTags.length > 0 ? nextTags : ['modern']);
                           setShowPromptHistory(false);
                         }}
                       >
@@ -948,39 +1143,6 @@ export default function CreatePage() {
 	    </SafeAreaView>
 	  );
 	}
-
-interface OptionCardProps {
-  id: string;
-  emoji: string;
-  name: string;
-  isSelected: boolean;
-  isUniverseTheme?: boolean;
-  onSelect: () => void;
-}
-
-function OptionCard({ emoji, name, isSelected, isUniverseTheme = false, onSelect }: OptionCardProps) {
-  return (
-    <TouchableOpacity
-      style={[
-        styleSheet.optionCard,
-        isUniverseTheme && styleSheet.optionCardUniverse,
-        isSelected && styleSheet.optionCardSelected,
-        isSelected && isUniverseTheme && styleSheet.optionCardSelectedUniverse,
-      ]}
-      onPress={onSelect}
-    >
-      <Text style={styleSheet.optionEmoji}>{emoji}</Text>
-      <Text style={[
-        styleSheet.optionName,
-        isUniverseTheme && styleSheet.optionNameUniverse,
-        isSelected && styleSheet.optionNameSelected,
-        isSelected && isUniverseTheme && styleSheet.optionNameSelectedUniverse,
-      ]}>
-        {name}
-      </Text>
-    </TouchableOpacity>
-  );
-}
 
 interface TemplateCardProps {
   emoji: string;
@@ -1040,6 +1202,11 @@ const styleSheet = StyleSheet.create({
   headerTitleUniverse: {
     color: 'rgba(234, 246, 255, 0.95)',
   },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   scrollView: {
     flex: 1,
   },
@@ -1078,65 +1245,130 @@ const styleSheet = StyleSheet.create({
     borderColor: 'rgba(123, 169, 220, 0.42)',
     shadowOpacity: 0.22,
   },
-  optionsContainer: {
+  headerCreateButton: {
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: AppColors.FABMain,
+  },
+  headerCreateButtonUniverse: {
+    backgroundColor: '#0f7cff',
+  },
+  headerCreateButtonDisabled: {
+    opacity: 0.5,
+  },
+  headerCreateButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  selectedTagsWrap: {
+    flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+    marginBottom: 12,
   },
-  optionCard: {
-    width: 80,
-    height: 80,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    justifyContent: 'center',
+  selectedTagChip: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 235, 163, 0.85)',
     borderWidth: 1,
-    borderColor: 'rgba(128, 128, 128, 0.3)',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    margin: 4,
+    borderColor: 'rgba(0,0,0,0.12)',
   },
-  optionCardUniverse: {
-    backgroundColor: 'rgba(10, 30, 54, 0.92)',
-    borderColor: 'rgba(128, 174, 224, 0.44)',
-  },
-  optionCardSelected: {
-    backgroundColor: '#FFF3C4',
-    borderColor: AppColors.FABMain,
-    borderWidth: 2,
-    elevation: 6,
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  optionCardSelectedUniverse: {
+  selectedTagChipUniverse: {
     backgroundColor: 'rgba(34, 76, 122, 0.86)',
     borderColor: 'rgba(199, 224, 250, 0.78)',
   },
-  optionEmoji: {
-    fontSize: 20,
-    marginBottom: 4,
+  selectedTagText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(0, 0, 0, 0.85)',
   },
-  optionName: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: 'rgba(0, 0, 0, 0.8)',
-    textAlign: 'center',
+  selectedTagTextUniverse: {
+    color: 'rgba(226, 241, 255, 0.95)',
   },
-  optionNameUniverse: {
-    color: 'rgba(223, 238, 255, 0.94)',
+  tagInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
   },
-  optionNameSelected: {
-    color: 'rgba(0, 0, 0, 0.8)',
-    fontWeight: 'bold',
+  tagInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: 'rgba(128, 128, 128, 0.35)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontSize: 14,
+    color: 'rgba(0, 0, 0, 0.85)',
+    backgroundColor: '#fff',
   },
-  optionNameSelectedUniverse: {
+  tagInputUniverse: {
+    borderColor: 'rgba(125, 171, 222, 0.44)',
+    color: 'rgba(227, 242, 255, 0.95)',
+    backgroundColor: 'rgba(6, 23, 44, 0.92)',
+  },
+  addTagButton: {
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: AppColors.FABMain,
+  },
+  addTagButtonUniverse: {
+    backgroundColor: '#0f7cff',
+  },
+  addTagButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  tagSuggestionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingRight: 10,
+    paddingBottom: 4,
+  },
+  suggestionChip: {
+    paddingVertical: 7,
+    paddingHorizontal: 11,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+  },
+  suggestionChipUniverse: {
+    borderColor: 'rgba(125, 171, 222, 0.4)',
+    backgroundColor: 'rgba(7, 28, 52, 0.9)',
+  },
+  suggestionChipSelected: {
+    backgroundColor: 'rgba(95, 15, 64, 0.12)',
+    borderColor: 'rgba(0, 0, 0, 0.2)',
+  },
+  suggestionChipSelectedUniverse: {
+    backgroundColor: 'rgba(34, 76, 122, 0.86)',
+    borderColor: 'rgba(199, 224, 250, 0.78)',
+  },
+  suggestionChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: 'rgba(0, 0, 0, 0.7)',
+  },
+  suggestionChipTextUniverse: {
+    color: 'rgba(214, 233, 253, 0.9)',
+  },
+  suggestionChipTextSelected: {
+    color: 'rgba(0, 0, 0, 0.9)',
+  },
+  suggestionChipTextSelectedUniverse: {
     color: '#F2FAFF',
   },
   inputHeader: {
@@ -1236,13 +1468,18 @@ const styleSheet = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  templatesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
   templateCard: {
+    width: '48%',
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 12,
-    padding: 16,
+    padding: 14,
     marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
+    minHeight: 116,
     elevation: 4,
     shadowColor: '#000',
     shadowOffset: {
@@ -1259,8 +1496,8 @@ const styleSheet = StyleSheet.create({
     shadowOpacity: 0.22,
   },
   templateEmoji: {
-    fontSize: 24,
-    marginRight: 12,
+    fontSize: 22,
+    marginBottom: 8,
   },
   templateContent: {
     flex: 1,
@@ -1302,19 +1539,23 @@ const styleSheet = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
   modalContent: {
     backgroundColor: 'rgba(255, 255, 255, 0.98)',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderRadius: 20,
     padding: 20,
+    width: '100%',
+    maxWidth: 560,
+    maxHeight: '88%',
   },
   modalContentUniverse: {
     backgroundColor: 'rgba(7, 20, 38, 0.98)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(123, 169, 220, 0.4)',
+    borderWidth: 1,
+    borderColor: 'rgba(123, 169, 220, 0.4)',
   },
   modelPickerHeaderRow: {
     flexDirection: 'row',
@@ -1337,10 +1578,11 @@ const styleSheet = StyleSheet.create({
   },
   modelPickerContent: {
     backgroundColor: 'rgba(255, 255, 255, 0.98)',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderRadius: 20,
     padding: 20,
-    maxHeight: '85%',
+    width: '100%',
+    maxWidth: 560,
+    maxHeight: '88%',
   },
   modelPickerContentUniverse: {
     backgroundColor: 'rgba(7, 20, 38, 0.98)',

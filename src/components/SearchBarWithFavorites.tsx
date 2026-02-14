@@ -19,6 +19,7 @@ import FavoriteAppCard from './FavoriteAppCard';
 import MostUsedAppCard from './MostUsedAppCard';
 import GenerationInlineProgressBar from './GenerationInlineProgressBar';
 import { useUISettingsStore } from '../stores/UISettingsStore';
+import { useStrings } from '../i18n/strings';
 
 interface SearchBarWithFavoritesProps {
   searchText: string;
@@ -46,6 +47,7 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
   const insets = useSafeAreaInsets();
   const appTheme = useUISettingsStore((s) => s.appTheme);
   const isUniverseTheme = appTheme === 'universe';
+  const { t } = useStrings();
 
   const isPopupVisible = showFavorites && searchText.length === 0;
   const closePopup = React.useCallback(() => {
@@ -230,7 +232,7 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
                     onToggleFavorites();
                   }
                 }}
-                placeholder="Search your apps..."
+                placeholder={t('home.search.placeholder')}
                 placeholderTextColor={isUniverseTheme ? 'rgba(198, 220, 244, 0.6)' : '#999'}
                 returnKeyType="search"
               />
@@ -278,7 +280,7 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
               <View style={styles.favoritesContent}>
                 {/* Favorite Apps Section */}
                 <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
-                  Favorite Apps
+                  {t('home.favorites.title')}
                 </Text>
                 {favoriteItems.length > 0 ? (
                   <ScrollView
@@ -298,7 +300,7 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
                   </ScrollView>
                 ) : (
                   <Text style={[styles.emptyText, isUniverseTheme ? styles.emptyTextUniverse : undefined]}>
-                    No favorite apps yet
+                    {t('home.favorites.empty')}
                   </Text>
                 )}
 
@@ -310,7 +312,7 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
                     { marginTop: 20 },
                   ]}
                 >
-                  Most Used Apps
+                  {t('home.mostUsed.title')}
                 </Text>
                 {mostUsedItems.length > 0 ? (
                   <ScrollView
@@ -330,7 +332,7 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
                   </ScrollView>
                 ) : (
                   <Text style={[styles.emptyText, isUniverseTheme ? styles.emptyTextUniverse : undefined]}>
-                    No usage data yet
+                    {t('home.mostUsed.empty')}
                   </Text>
                 )}
               </View>

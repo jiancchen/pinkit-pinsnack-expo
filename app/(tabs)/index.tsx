@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Alert, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, Alert, StatusBar } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Scrollable3DStack from '../../src/components/Scrollable3DStack';
 import SearchBarWithFavorites from '../../src/components/SearchBarWithFavorites';
 import AppThemeBackground from '../../src/components/AppThemeBackground';
@@ -11,13 +12,16 @@ import { AppStorageService, StoredApp } from '../../src/services/AppStorageServi
 import { useGenerationStatusStore } from '../../src/stores/GenerationStatusStore';
 import { useUISettingsStore } from '../../src/stores/UISettingsStore';
 import { createLogger } from '../../src/utils/Logger';
+import { useStrings } from '../../src/i18n/strings';
 
 const log = createLogger('MyApps');
 
 export default function MyAppsPage() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const appTheme = useUISettingsStore((s) => s.appTheme);
   const isUniverseTheme = appTheme === 'universe';
+  const { t } = useStrings();
   const [promptHistory, setPromptHistory] = useState<PromptHistory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
@@ -157,6 +161,12 @@ export default function MyAppsPage() {
         barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
       />
       <AppThemeBackground />
+
+      <View pointerEvents="none" style={[styles.brandWrap, { top: insets.top + 4 }]}>
+        <Text style={[styles.brandText, isUniverseTheme ? styles.brandTextUniverse : undefined]}>
+          {t('home.brand')}
+        </Text>
+      </View>
       
       {/* Main 3D Stack */}
       <Scrollable3DStack
@@ -175,6 +185,7 @@ export default function MyAppsPage() {
         favoriteItems={favoriteItems}
         mostUsedItems={mostUsedItems}
         onNavigateToApp={handleNavigateToApp}
+        style={{ paddingTop: insets.top + 30 }}
       />
     </View>
   );
@@ -187,5 +198,26 @@ const styles = StyleSheet.create({
   },
   containerUniverse: {
     backgroundColor: 'transparent',
+  },
+  brandWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 1101,
+  },
+  brandText: {
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: 1.4,
+    color: 'rgba(37, 37, 37, 0.88)',
+    textShadowColor: 'rgba(255, 255, 255, 0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  brandTextUniverse: {
+    color: 'rgba(233, 246, 255, 0.95)',
+    textShadowColor: 'rgba(52, 135, 226, 0.55)',
+    textShadowRadius: 8,
   },
 });

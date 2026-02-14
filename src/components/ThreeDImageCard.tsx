@@ -13,6 +13,7 @@ import { AppColors } from '../constants/AppColors';
 import { Ionicons } from '@expo/vector-icons';
 import { useScreenshotState, useScreenshotActions, useScreenshotStore } from '../stores/ScreenshotStore';
 import { createLogger } from '../utils/Logger';
+import { useStrings } from '../i18n/strings';
 
 const log = createLogger('ThreeDImageCard');
 
@@ -25,6 +26,7 @@ interface ThreeDImageCardProps {
   scale: number;
   depth: number;
   alpha: number;
+  centerIntensity: number;
   backgroundColor: string;
   onNavigateToApp: (id: string) => void;
   onShowSnackbar?: (message: string) => void;
@@ -37,6 +39,7 @@ export default function ThreeDImageCard({
   scale,
   depth,
   alpha,
+  centerIntensity,
   backgroundColor,
   onNavigateToApp,
   onShowSnackbar,
@@ -44,6 +47,7 @@ export default function ThreeDImageCard({
   // Use Zustand store for reactive screenshot state - like Android LiveData
   const screenshotState = useScreenshotState(historyItem.id);
   const screenshotStore = useScreenshotStore();
+  const { t } = useStrings();
 
   // Check different states (moved up to avoid scope issues)
   const isGenerating = historyItem.status === 'generating';
@@ -69,12 +73,12 @@ export default function ThreeDImageCard({
     }
   }, [historyItem.id, historyItem.accessCount, isGenerating]);
 
-  const displayTitle = historyItem.title?.trim() || 
-    (historyItem.prompt.substring(0, 50) + '...');
+  const displayTitle =
+    historyItem.title?.trim() || (historyItem.prompt.substring(0, 50) + '...');
 
   const handlePress = () => {
     if (isGenerating) {
-      onShowSnackbar?.('Item is still generating, please wait...');
+      onShowSnackbar?.(t('home.generating.wait'));
     } else {
       onNavigateToApp(historyItem.id);
     }
@@ -175,7 +179,17 @@ export default function ThreeDImageCard({
 
           {/* Title text */}
           <View style={styles.titleContainer}>
-            <Text style={[styles.titleText, { fontSize: Math.max(18, 18 * scale) }]} numberOfLines={2}>
+            <Text
+              style={[
+                styles.titleText,
+                {
+                  fontSize: Math.max(18, 18 * scale * (1 + centerIntensity * 0.08)),
+                  textShadowRadius: 4 + centerIntensity * 8,
+                  textShadowColor: `rgba(255, 255, 255, ${0.18 + centerIntensity * 0.36})`,
+                },
+              ]}
+              numberOfLines={2}
+            >
               {displayTitle}
             </Text>
           </View>

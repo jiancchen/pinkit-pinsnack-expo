@@ -10,6 +10,7 @@ const APP_COUNTER_KEY = 'app_counter';
 export interface StoredApp {
   id: string;
   title: string;
+  titleEditedByUser?: boolean;
   description: string;
   html: string;
   prompt: string;
@@ -127,6 +128,24 @@ export class AppStorageService {
     return { title: claudeTitle, category: fallbackCategory };
   }
 
+  private static createTemporaryTitle(description: string): string {
+    const cleaned = description
+      .replace(/[^\w\s-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!cleaned) return 'New App';
+
+    const words = cleaned.split(' ').slice(0, 4);
+    const title = words
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ')
+      .slice(0, 24)
+      .trim();
+
+    return title || 'New App';
+  }
+
   /**
    * Generate a unique app ID
    */
@@ -167,8 +186,9 @@ export class AppStorageService {
       log.verbose('Generated baseUrl:', baseUrl);
       
       // Parse title and category from Claude's response (format: "Title | Category")
+      const temporaryTitle = this.createTemporaryTitle(request.description);
       const { title, category } = this.parseTitleAndCategory(
-        generatedConcept?.title || request.description,
+        generatedConcept?.title || temporaryTitle,
         'utility' // Default category
       );
       
@@ -188,7 +208,8 @@ export class AppStorageService {
         generatedConcept,
         request,
         baseUrl: `https://sandbox/${appId}/`,
-        model: model || 'unknown'
+        model: model || 'unknown',
+        titleEditedByUser: false,
       };
       
       log.verbose('Created app object:', {
@@ -514,11 +535,20 @@ export class AppStorageService {
     log.verbose('Model:', model);
     
     try {
+      const currentApp = await this.getAppById(appId);
       const updateData: Partial<StoredApp> = {
         html,
         generatedConcept: concept,
         status: 'completed'
       };
+
+      if (concept?.title) {
+        const parsed = this.parseTitleAndCategory(concept.title, currentApp?.category || 'utility');
+        if (!currentApp?.titleEditedByUser) {
+          updateData.title = parsed.title;
+        }
+        updateData.category = parsed.category;
+      }
       
       if (model) {
         updateData.model = model;

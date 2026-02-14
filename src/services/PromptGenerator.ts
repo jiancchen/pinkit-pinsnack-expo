@@ -9,6 +9,7 @@ export type AppCategory = 'productivity' | 'social' | 'utility' | 'entertainment
 export interface AppGenerationRequest {
   description: string;
   style: AppStyle;
+  styleTags?: string[];
   category?: AppCategory; // Optional - Claude will determine from description
   features?: string[];
   platform?: 'mobile' | 'web' | 'both';
@@ -30,6 +31,7 @@ Respond with ONLY the complete HTML code. No explanations, markdown blocks, or c
 - Start with <!DOCTYPE html>
 - End with </html>
 - Include data-app-title attribute with format: <html data-app-title="App Name | Category">
+- App Name MUST be short and readable: 1-4 words, max 24 characters, based on the user request
 - Category must be one of: utility, fun, productivity, entertainment, education, health, finance, social, travel, shopping, games, tools, lifestyle, business, creative, other
 - Do NOT display the app name or category visibly in the HTML content
 - Choose the most appropriate category based on the app's primary function
@@ -226,7 +228,7 @@ Note: localStorage is ALLOWED for data persistence within the app. Use it for sa
   ): string {
     log.debug('Starting prompt generation for request:', request);
     
-    const { description, style, features } = request;
+    const { description, style, features, styleTags } = request;
     
     log.verbose('Building prompt with parameters:', {
       description: description.substring(0, 50) + '...',
@@ -255,6 +257,14 @@ Note: localStorage is ALLOWED for data persistence within the app. Use it for sa
       featuresContext = `\n<required_features>\n${features.map(f => `- ${f}`).join('\n')}\n</required_features>`;
     }
 
+    let styleTagsContext = '';
+    if (Array.isArray(styleTags) && styleTags.length > 0) {
+      const normalized = styleTags.map((tag) => tag.trim()).filter(Boolean);
+      if (normalized.length > 0) {
+        styleTagsContext = `\n<style_tags>\n${normalized.map((tag) => `- ${tag}`).join('\n')}\n</style_tags>`;
+      }
+    }
+
     // Output token budget guidance (helps avoid truncated HTML)
     let outputBudgetContext = '';
     if (typeof options?.maxOutputTokens === 'number' && Number.isFinite(options.maxOutputTokens)) {
@@ -271,6 +281,7 @@ Note: localStorage is ALLOWED for data persistence within the app. Use it for sa
     const fullPrompt = this.CORE_PROMPT_TEMPLATE + 
       description + 
       styleGuidance + 
+      styleTagsContext +
       featuresContext + 
       outputBudgetContext +
       '\n</user_request>\n\nGenerate the complete HTML application now:';
@@ -371,6 +382,10 @@ Note: localStorage is ALLOWED for data persistence within the app. Use it for sa
 
     if (request.features && request.features.length > 10) {
       errors.push('Maximum 10 features allowed');
+    }
+
+    if (request.styleTags && request.styleTags.length > 20) {
+      errors.push('Maximum 20 style tags allowed');
     }
 
     return {
