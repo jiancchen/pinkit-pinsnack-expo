@@ -28,3 +28,14 @@ export interface TopicClassificationMetadata {
   signature: string;
   reason?: string;
 }
+
+export interface TopicSortHistoryEntry {
+  sortedAt: number;
+  source: 'claude' | 'heuristic';
+  confidence: number;
+  primaryTopic: string;
+  topics: string[];
+  model?: string;
+  summary?: string;
+  reason?: string;
+}

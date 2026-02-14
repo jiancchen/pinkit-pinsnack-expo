@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PromptHistory, GeneratedAppConcept } from '../types/PromptHistory';
-import { TopicClassificationMetadata } from '../types/ProjectTopics';
+import { TopicClassificationMetadata, TopicSortHistoryEntry } from '../types/ProjectTopics';
 import { AppGenerationRequest } from './PromptGenerator';
 import { StorageLogger as log } from '../utils/Logger';
 
@@ -28,6 +28,7 @@ export interface StoredApp {
   primaryTopic?: string;
   topics?: string[];
   topicClassification?: TopicClassificationMetadata;
+  topicSortHistory?: TopicSortHistoryEntry[];
   lastRevision?: {
     at: number;
     model: string;

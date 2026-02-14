@@ -1,17 +1,19 @@
 import { AppStorageService, StoredApp } from './AppStorageService';
 import { ClaudeApiService } from './ClaudeApiService';
 import { SecureStorageService } from './SecureStorageService';
+import { TopicPreferencesService } from './TopicPreferencesService';
 import { createLogger } from '../utils/Logger';
 import {
   PROJECT_TOPICS,
-  ProjectTopic,
   TopicClassificationMetadata,
+  TopicSortHistoryEntry,
 } from '../types/ProjectTopics';
 
 const log = createLogger('TopicClassifier');
 
 const CLASSIFICATION_VERSION = 1;
 const DEFAULT_DEBOUNCE_MS = 900;
+const MAX_SORT_HISTORY = 5;
 
 type ClassificationPayload = {
   title: string;
@@ -23,8 +25,8 @@ type ClassificationPayload = {
 };
 
 type ClassificationResult = {
-  topics: ProjectTopic[];
-  primaryTopic: ProjectTopic;
+  topics: string[];
+  primaryTopic: string;
   confidence: number;
   source: TopicClassificationMetadata['source'];
   summary: string;
@@ -40,7 +42,7 @@ export class TopicClassificationService {
   private static timers = new Map<string, ReturnType<typeof setTimeout>>();
   private static inFlight = new Map<string, Promise<ClassificationResult | null>>();
 
-  private static readonly KEYWORD_TOPIC_RULES: Array<{ topic: ProjectTopic; terms: string[] }> = [
+  private static readonly KEYWORD_TOPIC_RULES: Array<{ topic: string; terms: string[] }> = [
     { topic: 'productivity', terms: ['todo', 'tasks', 'productivity', 'checklist', 'notes', 'calendar'] },
     { topic: 'education', terms: ['learn', 'quiz', 'study', 'flashcard', 'school', 'education'] },
     { topic: 'finance', terms: ['budget', 'expense', 'finance', 'money', 'invoice', 'accounting'] },
@@ -57,7 +59,7 @@ export class TopicClassificationService {
     { topic: 'developer-tools', terms: ['developer', 'code', 'debug', 'api', 'json', 'terminal'] },
   ];
 
-  private static readonly CATEGORY_TO_TOPIC: Record<string, ProjectTopic> = {
+  private static readonly CATEGORY_TO_TOPIC: Record<string, string> = {
     productivity: 'productivity',
     education: 'education',
     finance: 'finance',
@@ -154,7 +156,8 @@ export class TopicClassificationService {
       return null;
     }
 
-    const fallback = this.classifyHeuristically(payload);
+    const taxonomy = await TopicPreferencesService.getTaxonomy();
+    const fallback = this.classifyHeuristically(payload, taxonomy);
     let resolved = fallback;
 
     const hasApiKey = await SecureStorageService.hasApiKey();
@@ -165,10 +168,10 @@ export class TopicClassificationService {
         if (initialized) {
           const claudeResult = await claudeService.classifyProjectTopics({
             ...payload,
-            taxonomy: [...PROJECT_TOPICS],
+            taxonomy,
             appId: app.id,
           });
-          resolved = this.mergeWithFallback(claudeResult, fallback);
+          resolved = this.mergeWithFallback(claudeResult, fallback, taxonomy);
         }
       } catch (error: unknown) {
         log.warn('Claude topic classification failed; using heuristic fallback', {
@@ -189,12 +192,25 @@ export class TopicClassificationService {
       reason: options.reason,
     };
 
+    const historyEntry: TopicSortHistoryEntry = {
+      sortedAt: Date.now(),
+      source: resolved.source,
+      confidence: resolved.confidence,
+      primaryTopic: resolved.primaryTopic,
+      topics: resolved.topics,
+      model: resolved.model,
+      summary: resolved.summary,
+      reason: options.reason,
+    };
+    const nextHistory = [historyEntry, ...(app.topicSortHistory || [])].slice(0, MAX_SORT_HISTORY);
+
     await AppStorageService.updateApp(
       app.id,
       {
         primaryTopic: resolved.primaryTopic,
         topics: resolved.topics,
         topicClassification: metadata,
+        topicSortHistory: nextHistory,
       },
       { skipTopicClassification: true }
     );
@@ -230,7 +246,7 @@ export class TopicClassificationService {
     return this.hashString(source);
   }
 
-  private static classifyHeuristically(payload: ClassificationPayload): ClassificationResult {
+  private static classifyHeuristically(payload: ClassificationPayload, taxonomy: string[]): ClassificationResult {
     const combinedText = [
       payload.title,
       payload.description,
@@ -242,12 +258,14 @@ export class TopicClassificationService {
       .join(' ')
       .toLowerCase();
 
-    const topicScores = new Map<ProjectTopic, number>();
-    for (const topic of PROJECT_TOPICS) {
+    const topicScores = new Map<string, number>();
+    for (const topic of taxonomy) {
       topicScores.set(topic, 0);
     }
 
     for (const { topic, terms } of this.KEYWORD_TOPIC_RULES) {
+      if (!topicScores.has(topic)) continue;
+
       let score = 0;
       for (const term of terms) {
         if (combinedText.includes(term)) {
@@ -259,24 +277,39 @@ export class TopicClassificationService {
       }
     }
 
+    for (const topic of taxonomy) {
+      if ((PROJECT_TOPICS as readonly string[]).includes(topic)) continue;
+
+      const humanTopic = topic.replace(/-/g, ' ');
+      let score = 0;
+      if (combinedText.includes(topic)) score += 2;
+      if (combinedText.includes(humanTopic)) score += 2;
+
+      const terms = humanTopic.split(/\s+/).filter((term) => term.length > 2);
+      for (const term of terms) {
+        if (combinedText.includes(term)) score += 1;
+      }
+
+      if (score > 0) {
+        topicScores.set(topic, (topicScores.get(topic) || 0) + score);
+      }
+    }
+
     const mappedCategory = this.CATEGORY_TO_TOPIC[payload.category];
-    if (mappedCategory) {
+    if (mappedCategory && topicScores.has(mappedCategory)) {
       topicScores.set(mappedCategory, (topicScores.get(mappedCategory) || 0) + 2);
     }
 
-    const sortedTopics = [...topicScores.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([topic]) => topic)
-      .filter((topic, index, arr) => index === 0 || topicScores.get(topic)! > 0 || index < 2);
-
-    const primaryTopic = sortedTopics[0] || mappedCategory || 'other';
-    const topics = this.uniqueTopics([
-      primaryTopic,
-      ...sortedTopics.slice(1, 3),
-      mappedCategory || 'other',
-    ]);
+    const ranked = [...topicScores.entries()].sort((a, b) => b[1] - a[1]);
+    const positiveTopics = ranked.filter(([, score]) => score > 0).map(([topic]) => topic);
+    const fallbackPrimary = mappedCategory && topicScores.has(mappedCategory) ? mappedCategory : 'other';
+    const primaryTopic = positiveTopics[0] || (topicScores.has(fallbackPrimary) ? fallbackPrimary : taxonomy[0]);
+    const topics = this.uniqueTopics(
+      [primaryTopic, ...positiveTopics.slice(1, 4), fallbackPrimary],
+      taxonomy
+    );
     const topScore = topicScores.get(primaryTopic) || 1;
-    const confidence = Math.min(0.88, 0.45 + topScore * 0.08);
+    const confidence = Math.min(0.9, 0.4 + topScore * 0.08);
 
     return {
       topics,
@@ -295,13 +328,14 @@ export class TopicClassificationService {
       summary?: string;
       model?: string;
     },
-    fallback: ClassificationResult
+    fallback: ClassificationResult,
+    taxonomy: string[]
   ): ClassificationResult {
-    const claudePrimary = this.normalizeTopic(claudeResult.primaryTopic);
-    const claudeTopics = this.uniqueTopics([
-      claudePrimary || fallback.primaryTopic,
-      ...claudeResult.topics.map((topic) => this.normalizeTopic(topic)),
-    ]);
+    const claudePrimary = this.normalizeTopic(claudeResult.primaryTopic, taxonomy);
+    const claudeTopics = this.uniqueTopics(
+      [claudePrimary || fallback.primaryTopic, ...claudeResult.topics.map((topic) => this.normalizeTopic(topic, taxonomy))],
+      taxonomy
+    );
 
     if (claudeTopics.length === 0) {
       return fallback;
@@ -317,26 +351,33 @@ export class TopicClassificationService {
     };
   }
 
-  private static normalizeTopic(topic: string | null | undefined): ProjectTopic {
-    if (!topic) return 'other';
+  private static normalizeTopic(topic: string | null | undefined, taxonomy: string[]): string {
+    if (!topic) return '';
     const normalized = topic.toLowerCase().trim().replace(/\s+/g, '-');
-    if ((PROJECT_TOPICS as readonly string[]).includes(normalized)) {
-      return normalized as ProjectTopic;
-    }
-    return 'other';
+    return taxonomy.includes(normalized) ? normalized : '';
   }
 
-  private static uniqueTopics(topics: Array<ProjectTopic | null | undefined>): ProjectTopic[] {
-    const seen = new Set<ProjectTopic>();
-    for (const topic of topics) {
-      if (!topic) continue;
+  private static uniqueTopics(topics: Array<string | null | undefined>, taxonomy: string[]): string[] {
+    const allowed = new Set(taxonomy);
+    const seen = new Set<string>();
+
+    for (const rawTopic of topics) {
+      if (!rawTopic) continue;
+      const topic = rawTopic.toLowerCase().trim().replace(/\s+/g, '-');
+      if (!allowed.has(topic)) continue;
       if (!seen.has(topic)) {
         seen.add(topic);
       }
     }
+
     if (seen.size === 0) {
-      seen.add('other');
+      if (allowed.has('other')) {
+        seen.add('other');
+      } else if (taxonomy.length > 0) {
+        seen.add(taxonomy[0]);
+      }
     }
+
     return [...seen].slice(0, 4);
   }
 
