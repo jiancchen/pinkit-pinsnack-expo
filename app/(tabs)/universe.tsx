@@ -111,8 +111,8 @@ export default function UniversePage() {
   const [apps, setApps] = useState<StoredApp[]>([]);
   const [customTopics, setCustomTopics] = useState<string[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
+  const [isTopicFocused, setIsTopicFocused] = useState(false);
   const [showTopicManager, setShowTopicManager] = useState(false);
-  const [showTopicOverlay, setShowTopicOverlay] = useState(false);
   const [newCustomTopic, setNewCustomTopic] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -130,11 +130,13 @@ export default function UniversePage() {
   const pinchStartScale = useSharedValue(1);
 
   React.useEffect(() => {
+    if (isTopicFocused) return;
+
     const interval = setInterval(() => {
       setRotationPhaseDeg((prev) => (prev + 0.45) % 360);
     }, 40);
     return () => clearInterval(interval);
-  }, []);
+  }, [isTopicFocused]);
 
   const resetViewport = () => {
     scale.value = withTiming(1, { duration: 240 });
@@ -143,6 +145,7 @@ export default function UniversePage() {
   };
 
   const panGesture = Gesture.Pan()
+    .enabled(!isTopicFocused)
     .minDistance(12)
     .onStart(() => {
       panStartX.value = translateX.value;
@@ -157,6 +160,7 @@ export default function UniversePage() {
     });
 
   const pinchGesture = Gesture.Pinch()
+    .enabled(!isTopicFocused)
     .onStart(() => {
       pinchStartScale.value = scale.value;
     })
@@ -247,7 +251,7 @@ export default function UniversePage() {
 
   const mapWidth = Math.max(screenWidth - 24, 340);
   const availableHeight = screenHeight - insets.top - screenBottomPadding;
-  const mapHeight = clamp(availableHeight - 190, 320, 560);
+  const mapHeight = clamp(availableHeight - 210, 280, 620);
   const centerX = mapWidth / 2;
   const centerY = mapHeight / 2;
 
@@ -289,17 +293,22 @@ export default function UniversePage() {
       const orbit = orbits.find((item) => item.topic === topic);
       if (!orbit) return;
 
-      const angleDeg = orbit.phaseDeg + rotationPhaseDeg * orbit.speed;
+      const targetRotationPhase = ((-orbit.phaseDeg / orbit.speed) % 360 + 360) % 360;
+      setRotationPhaseDeg(targetRotationPhase);
+
+      const angleDeg = orbit.phaseDeg + targetRotationPhase * orbit.speed;
       const angle = (angleDeg * Math.PI) / 180;
       const planetX = centerX + Math.sin(angle) * orbit.radius;
       const planetY = centerY - Math.cos(angle) * orbit.radius;
-      const targetScale = 1.55;
+      const targetScale = 1.7;
+      const targetX = centerX;
+      const targetY = Math.max(78, mapHeight * 0.24);
 
       scale.value = withTiming(targetScale, { duration: 280 });
-      translateX.value = withTiming(centerX - planetX * targetScale, { duration: 280 });
-      translateY.value = withTiming(centerY - planetY * targetScale, { duration: 280 });
+      translateX.value = withTiming(targetX - planetX * targetScale, { duration: 280 });
+      translateY.value = withTiming(targetY - planetY * targetScale, { duration: 280 });
     },
-    [centerX, centerY, orbits, rotationPhaseDeg, scale, translateX, translateY]
+    [centerX, centerY, mapHeight, orbits, scale, translateX, translateY]
   );
 
   const handleSyncTopics = async (reason = 'universe_manual_sync') => {
@@ -324,12 +333,16 @@ export default function UniversePage() {
 
   const handleTopicPress = (topic: string): void => {
     setSelectedTopic(topic);
+    setIsTopicFocused(true);
     focusOnTopic(topic);
-    setShowTopicOverlay(true);
+  };
+
+  const closeTopicFocus = (): void => {
+    setIsTopicFocused(false);
+    resetViewport();
   };
 
   const openProject = (appId: string): void => {
-    setShowTopicOverlay(false);
     router.push(`/app-view?appId=${appId}`);
   };
 
@@ -408,14 +421,14 @@ export default function UniversePage() {
           <View style={styles.headerMain}>
             <Text style={styles.title}>Galaxy Universe</Text>
             <Text style={styles.subtitle}>
-              {topicGroups.length} orbiting topic planets. Tap a planet to open a moon overlay.
+              {topicGroups.length} orbiting topic planets. Tap a topic to lock focus and open moons.
             </Text>
           </View>
           <View style={styles.headerActions}>
             <TouchableOpacity style={styles.iconButton} onPress={() => setShowTopicManager(true)}>
               <Ionicons name="planet-outline" size={19} color="#fff" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.iconButton} onPress={resetViewport}>
+            <TouchableOpacity style={styles.iconButton} onPress={closeTopicFocus}>
               <Ionicons name="locate-outline" size={19} color="#fff" />
             </TouchableOpacity>
             <TouchableOpacity
@@ -549,9 +562,50 @@ export default function UniversePage() {
                   })}
                 </Animated.View>
               </GestureDetector>
+
+              {isTopicFocused && selectedGroup ? (
+                <View style={styles.focusedTopicPanel}>
+                  <View style={styles.focusedTopicHeader}>
+                    <View style={styles.focusedTopicHeaderMain}>
+                      <Text style={styles.focusedTopicTitle}>
+                        {formatTopicLabel(selectedGroup.topic)} Moons
+                      </Text>
+                      <Text style={styles.focusedTopicSubtitle}>
+                        {selectedGroup.apps.length} projects in orbit
+                      </Text>
+                    </View>
+                    <TouchableOpacity style={styles.focusedTopicClose} onPress={closeTopicFocus}>
+                      <Ionicons name="close" size={18} color="#d7eaff" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <ScrollView style={styles.focusedTopicList} showsVerticalScrollIndicator={false}>
+                    {selectedGroup.apps.length > 0 ? (
+                      selectedGroup.apps.slice(0, 30).map((app, index) => (
+                        <TouchableOpacity key={app.id} style={styles.moonRow} onPress={() => openProject(app.id)}>
+                          <View style={styles.moonBullet}>
+                            <Text style={styles.moonBulletText}>{index + 1}</Text>
+                          </View>
+                          <View style={styles.moonTextWrap}>
+                            <Text style={styles.moonTitle}>{app.title}</Text>
+                            <Text style={styles.moonMeta}>Uses {app.accessCount || 0} • {app.status}</Text>
+                          </View>
+                          <Ionicons name="chevron-forward" size={17} color="rgba(255,255,255,0.7)" />
+                        </TouchableOpacity>
+                      ))
+                    ) : (
+                      <Text style={styles.emptyText}>No moons in this orbit yet.</Text>
+                    )}
+                  </ScrollView>
+                </View>
+              ) : null}
             </View>
 
-            <Text style={styles.legendHint}>Pinch to zoom, pan to move, tap any planet for moon details.</Text>
+            <Text style={styles.legendHint}>
+              {isTopicFocused
+                ? 'Focus locked. Tap X to zoom back out.'
+                : 'Pinch to zoom, pan to move, tap any planet to lock focus.'}
+            </Text>
 
             <ScrollView
               horizontal
@@ -581,51 +635,6 @@ export default function UniversePage() {
           </>
         )}
       </View>
-
-      <Modal
-        visible={showTopicOverlay && !!selectedGroup}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowTopicOverlay(false)}
-      >
-        <View style={styles.topicOverlayBackdrop}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowTopicOverlay(false)} />
-          <View style={styles.topicOverlayCard}>
-            <View style={styles.topicOverlayHeader}>
-              <View style={styles.topicOverlayHeaderMain}>
-                <Text style={styles.topicOverlayTitle}>
-                  {selectedGroup ? `${formatTopicLabel(selectedGroup.topic)} Moons` : 'Topic Moons'}
-                </Text>
-                <Text style={styles.topicOverlaySubtitle}>
-                  {selectedGroup ? `${selectedGroup.apps.length} projects in orbit` : '0 projects in orbit'}
-                </Text>
-              </View>
-              <TouchableOpacity style={styles.topicOverlayClose} onPress={() => setShowTopicOverlay(false)}>
-                <Ionicons name="close" size={22} color="#e7eef6" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.topicOverlayList} showsVerticalScrollIndicator={false}>
-              {selectedGroup && selectedGroup.apps.length > 0 ? (
-                selectedGroup.apps.slice(0, 30).map((app, index) => (
-                  <TouchableOpacity key={app.id} style={styles.moonRow} onPress={() => openProject(app.id)}>
-                    <View style={styles.moonBullet}>
-                      <Text style={styles.moonBulletText}>{index + 1}</Text>
-                    </View>
-                    <View style={styles.moonTextWrap}>
-                      <Text style={styles.moonTitle}>{app.title}</Text>
-                      <Text style={styles.moonMeta}>Uses {app.accessCount || 0} • {app.status}</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={17} color="rgba(255,255,255,0.7)" />
-                  </TouchableOpacity>
-                ))
-              ) : (
-                <Text style={styles.emptyText}>No moons in this orbit yet.</Text>
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
 
       <Modal
         visible={showTopicManager}
@@ -891,6 +900,51 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  focusedTopicPanel: {
+    position: 'absolute',
+    left: 10,
+    right: 10,
+    bottom: 10,
+    maxHeight: '58%',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(129,178,233,0.44)',
+    backgroundColor: 'rgba(7, 18, 40, 0.94)',
+    padding: 10,
+    gap: 8,
+  },
+  focusedTopicHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  focusedTopicHeaderMain: {
+    flex: 1,
+  },
+  focusedTopicTitle: {
+    color: '#f4f9ff',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  focusedTopicSubtitle: {
+    color: 'rgba(204,228,252,0.82)',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  focusedTopicClose: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(192,219,250,0.35)',
+    backgroundColor: 'rgba(12, 36, 67, 0.95)',
+  },
+  focusedTopicList: {
+    flex: 1,
+  },
   moonRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -927,56 +981,6 @@ const styles = StyleSheet.create({
     color: 'rgba(204,228,252,0.85)',
     marginTop: 1,
     fontSize: 11,
-  },
-  topicOverlayBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(2, 9, 24, 0.58)',
-    justifyContent: 'flex-end',
-  },
-  topicOverlayCard: {
-    maxHeight: '64%',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(121,169,224,0.42)',
-    backgroundColor: 'rgba(6, 18, 38, 0.97)',
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 20,
-    gap: 10,
-  },
-  topicOverlayHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 10,
-  },
-  topicOverlayHeaderMain: {
-    flex: 1,
-  },
-  topicOverlayTitle: {
-    color: '#f4f9ff',
-    fontSize: 20,
-    fontWeight: '900',
-  },
-  topicOverlaySubtitle: {
-    color: 'rgba(203,227,249,0.8)',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  topicOverlayClose: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(182,215,247,0.3)',
-    backgroundColor: 'rgba(10,36,63,0.95)',
-  },
-  topicOverlayList: {
-    flex: 1,
-    gap: 8,
   },
   modalBackdrop: {
     flex: 1,
