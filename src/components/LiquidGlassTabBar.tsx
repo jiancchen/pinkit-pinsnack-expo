@@ -84,6 +84,8 @@ function TabButton({ routeName, isFocused, onPress, onLongPress }: TabButtonProp
     switch (routeName) {
       case 'index':
         return isFocused ? 'home' : 'home-outline';
+      case 'universe':
+        return isFocused ? 'planet' : 'planet-outline';
       case 'create':
         return isFocused ? 'add-circle' : 'add-circle-outline';
       case 'settings':

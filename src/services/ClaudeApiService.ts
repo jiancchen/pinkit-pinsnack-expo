@@ -45,6 +45,23 @@ export class ClaudeApiService {
     return content;
   }
 
+  private normalizeJsonResponse(raw: string): string {
+    let content = raw.trim();
+
+    if (content.startsWith('```')) {
+      content = content.replace(/^```[a-zA-Z0-9_-]*\s*\n/, '').trim();
+      content = content.replace(/```[\s]*$/, '').trim();
+    }
+
+    const firstBrace = content.indexOf('{');
+    const lastBrace = content.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      content = content.slice(firstBrace, lastBrace + 1).trim();
+    }
+
+    return content;
+  }
+
   private constructor() {
     this.axiosInstance = axios.create({
       baseURL: 'https://api.anthropic.com/v1',
@@ -323,6 +340,87 @@ export class ClaudeApiService {
       log.error('Failed to generate app concept:', error);
       throw error;
     }
+  }
+
+  async classifyProjectTopics(args: {
+    title: string;
+    description: string;
+    prompt: string;
+    category: string;
+    style: string;
+    htmlSnippet: string;
+    taxonomy: string[];
+    model?: string;
+    appId?: string;
+  }): Promise<{
+    topics: string[];
+    primaryTopic: string;
+    confidence: number;
+    summary?: string;
+    model?: string;
+  }> {
+    const taxonomy = args.taxonomy.join(', ');
+    const model = resolveSupportedClaudeModel(args.model || this.config?.model);
+
+    const messages: ClaudeMessage[] = [
+      {
+        role: 'user',
+        content:
+          `You classify app projects into high-level topics.\n` +
+          `Return JSON only with keys: primaryTopic, topics, confidence, summary.\n` +
+          `Constraints:\n` +
+          `- primaryTopic must be one of: ${taxonomy}\n` +
+          `- topics must be an array of 1-4 unique values from the same taxonomy\n` +
+          `- confidence must be a number between 0 and 1\n` +
+          `- summary must be <= 160 characters\n\n` +
+          `Project:\n` +
+          `title: ${args.title}\n` +
+          `description: ${args.description}\n` +
+          `prompt: ${args.prompt}\n` +
+          `category: ${args.category}\n` +
+          `style: ${args.style}\n` +
+          `htmlSnippet: ${args.htmlSnippet}\n`,
+      },
+    ];
+
+    const response = await this.sendMessage(messages, {
+      model,
+      maxTokens: 300,
+      temperature: 0,
+      operation: 'project_topic_classification',
+      appId: args.appId,
+    });
+
+    const normalized = this.normalizeJsonResponse(response.content);
+    const parsed = JSON.parse(normalized) as Partial<{
+      primaryTopic: string;
+      topics: string[];
+      confidence: number;
+      summary: string;
+    }>;
+
+    const allowed = new Set(args.taxonomy.map((topic) => topic.toLowerCase()));
+    const primaryTopic = (parsed.primaryTopic || '').toLowerCase().trim();
+    const parsedTopics = Array.isArray(parsed.topics)
+      ? parsed.topics.map((topic) => String(topic).toLowerCase().trim()).filter((topic) => allowed.has(topic))
+      : [];
+    const normalizedPrimary = allowed.has(primaryTopic) ? primaryTopic : parsedTopics[0];
+    const topics = [...new Set([normalizedPrimary, ...parsedTopics].filter(Boolean))].slice(0, 4);
+
+    if (!normalizedPrimary || topics.length === 0) {
+      throw new Error('Claude topic classification returned invalid taxonomy values');
+    }
+
+    return {
+      primaryTopic: normalizedPrimary,
+      topics,
+      confidence:
+        typeof parsed.confidence === 'number' && Number.isFinite(parsed.confidence)
+          ? Math.max(0, Math.min(1, parsed.confidence))
+          : 0.65,
+      summary: typeof parsed.summary === 'string' ? parsed.summary.trim().slice(0, 160) : undefined,
+      model,
+    };
   }
 
   /**

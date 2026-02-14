@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PromptHistory, GeneratedAppConcept } from '../types/PromptHistory';
+import { TopicClassificationMetadata } from '../types/ProjectTopics';
 import { AppGenerationRequest } from './PromptGenerator';
 import { StorageLogger as log } from '../utils/Logger';
 
@@ -24,6 +25,9 @@ export interface StoredApp {
   baseUrl: string; // For WebView persistence
   model?: string; // Claude model used for generation
   isSample?: boolean; // Mark as sample app for seeding
+  primaryTopic?: string;
+  topics?: string[];
+  topicClassification?: TopicClassificationMetadata;
   lastRevision?: {
     at: number;
     model: string;
@@ -44,7 +48,50 @@ export interface StoredApp {
   }>;
 }
 
+export interface UpdateAppOptions {
+  skipTopicClassification?: boolean;
+}
+
 export class AppStorageService {
+  private static readonly TOPIC_TRIGGER_FIELDS: Array<keyof StoredApp> = [
+    'title',
+    'description',
+    'prompt',
+    'generatedPrompt',
+    'html',
+    'category',
+  ];
+
+  private static shouldTriggerTopicClassification(
+    currentApp: StoredApp,
+    nextApp: StoredApp,
+    updates: Partial<StoredApp>
+  ): boolean {
+    return this.TOPIC_TRIGGER_FIELDS.some((field) => {
+      if (!(field in updates)) return false;
+      const previous = currentApp[field];
+      const next = nextApp[field];
+
+      if (typeof previous === 'string' || typeof next === 'string') {
+        const previousValue = typeof previous === 'string' ? previous.trim() : '';
+        const nextValue = typeof next === 'string' ? next.trim() : '';
+        return previousValue !== nextValue;
+      }
+
+      return previous !== next;
+    });
+  }
+
+  private static scheduleTopicClassification(appId: string, reason: string): void {
+    void import('./TopicClassificationService')
+      .then(({ TopicClassificationService }) => {
+        TopicClassificationService.scheduleForApp(appId, { reason });
+      })
+      .catch((error: unknown) => {
+        log.warn('Failed to schedule topic classification:', { appId, reason, error });
+      });
+  }
+
   /**
    * Parse title and category from Claude's response format: "Title | Category"
    */
@@ -164,6 +211,8 @@ export class AppStorageService {
       log.debug('Saving to AsyncStorage...');
       await AsyncStorage.setItem(APPS_STORAGE_KEY, JSON.stringify(updatedApps));
       log.debug('Successfully saved to storage');
+
+      this.scheduleTopicClassification(appId, 'app_created');
       
       return newApp;
     } catch (error: any) {
@@ -369,7 +418,11 @@ export class AppStorageService {
   /**
    * Update an existing app
    */
-  static async updateApp(appId: string, updates: Partial<StoredApp>): Promise<boolean> {
+  static async updateApp(
+    appId: string,
+    updates: Partial<StoredApp>,
+    options: UpdateAppOptions = {}
+  ): Promise<boolean> {
     try {
       const apps = await this.getAllApps();
       const appIndex = apps.findIndex(app => app.id === appId);
@@ -378,8 +431,14 @@ export class AppStorageService {
         return false;
       }
       
-      apps[appIndex] = { ...apps[appIndex], ...updates };
+      const currentApp = apps[appIndex];
+      const nextApp = { ...currentApp, ...updates };
+      apps[appIndex] = nextApp;
       await AsyncStorage.setItem(APPS_STORAGE_KEY, JSON.stringify(apps));
+
+      if (!options.skipTopicClassification && this.shouldTriggerTopicClassification(currentApp, nextApp, updates)) {
+        this.scheduleTopicClassification(appId, 'app_updated');
+      }
       
       return true;
     } catch (error) {
