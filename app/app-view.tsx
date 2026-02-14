@@ -11,13 +11,9 @@ import {
   ActivityIndicator,
   Modal,
   TextInput,
-  ScrollView,
-  Pressable,
-  KeyboardAvoidingView,
-  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import * as ScreenOrientation from 'expo-screen-orientation';
@@ -29,17 +25,7 @@ import { ScreenshotService } from '../src/services/ScreenshotService';
 import { WebViewScreenshotService } from '../src/services/WebViewScreenshotService';
 import { emitScreenshotCaptured, emitScreenshotError, emitScreenshotLoading } from '../src/stores/ScreenshotStore';
 import { handleWebViewLiveActivityMessage, stopWebViewLiveActivitiesForApp } from '../src/services/WebViewLiveActivityBridge';
-import { SecureStorageService } from '../src/services/SecureStorageService';
-import { ClaudeApiService } from '../src/services/ClaudeApiService';
-import { PromptGenerator } from '../src/services/PromptGenerator';
 import { createLogger } from '../src/utils/Logger';
-import {
-  CLAUDE_MODEL_PICKER_OPTIONS,
-  MODEL_INFO,
-  PRICING_AS_OF_DISPLAY,
-  formatModelPricingShort,
-  resolveSupportedClaudeModel,
-} from '../src/types/ClaudeApi';
 
 const log = createLogger('AppView');
 
@@ -66,13 +52,7 @@ export default function AppViewPage() {
   const [screenshotMethod, setScreenshotMethod] = useState<'external' | 'webview'>('webview');
   const [showMenuModal, setShowMenuModal] = useState(false);
   const [showEditTitleModal, setShowEditTitleModal] = useState(false);
-  const [showEditPromptModal, setShowEditPromptModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [newPrompt, setNewPrompt] = useState(''); // updated prompt
-  const [fixNotes, setFixNotes] = useState(''); // user complaint / context
-  const [selectedModel, setSelectedModel] = useState<string>('');
-  const [showRevisionHistory, setShowRevisionHistory] = useState(false);
-  const [isRecreating, setIsRecreating] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   
   const webViewRef = useRef<WebView>(null);
@@ -87,6 +67,24 @@ export default function AppViewPage() {
       ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP);
     };
   }, [appId]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      let isActive = true;
+      const id = appId as string | undefined;
+      if (!id) return () => {};
+      void AppStorageService.getApp(id).then((stored) => {
+        if (!isActive) return;
+        if (stored) {
+          setApp(stored);
+          setNewTitle(stored.title);
+        }
+      });
+      return () => {
+        isActive = false;
+      };
+    }, [appId])
+  );
 
   useEffect(() => {
     const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -321,8 +319,6 @@ export default function AppViewPage() {
       if (storedApp) {
         setApp(storedApp);
         setNewTitle(storedApp.title);
-        setNewPrompt(storedApp.prompt || '');
-        setSelectedModel(storedApp.model || 'gpt-4');
         await AppStorageService.incrementAccessCount(id);
       } else {
         Alert.alert('Error', 'App not found', [
@@ -475,195 +471,11 @@ export default function AppViewPage() {
 
   const openEditPrompt = () => {
     setShowMenuModal(false);
-    if (app) {
-      setNewPrompt(app.prompt || '');
-      setFixNotes('');
-      setShowRevisionHistory(false);
-      void SecureStorageService.getConfig()
-        .then((config) => {
-          const preferred = app.model ? resolveSupportedClaudeModel(app.model) : config.model;
-          setSelectedModel(preferred);
-        })
-        .catch(() => {
-          if (app.model) setSelectedModel(resolveSupportedClaudeModel(app.model));
-        });
-    }
-    setShowEditPromptModal(true);
-  };
-
-  const savePromptAndRecreate = async () => {
     if (!app) return;
-    const updatedPrompt = newPrompt.trim();
-    if (!updatedPrompt) {
-      Alert.alert('Error', 'Please enter a prompt.');
-      return;
-    }
-
-    const notes = fixNotes.trim();
-
-    Alert.alert(
-      'Recreate App',
-      'This will regenerate the HTML using your updated prompt and notes, using the current HTML as context. Continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Recreate',
-          onPress: async () => {
-            const revisionId = `rev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-            const startedAt = Date.now();
-            try {
-              Keyboard.dismiss();
-              setIsRecreating(true);
-
-              const config = await SecureStorageService.getConfig();
-              const model = resolveSupportedClaudeModel(selectedModel || config.model);
-
-              const nextRevision = {
-                id: revisionId,
-                at: startedAt,
-                operation: 'app_revision' as const,
-                status: 'generating' as const,
-                model,
-                updatedPrompt,
-                userNotes: notes,
-              };
-              const nextRevisions = [nextRevision, ...(app.revisions || [])].slice(0, 25);
-
-              await AppStorageService.updateApp(app.id, {
-                prompt: updatedPrompt,
-                request: {
-                  description: updatedPrompt,
-                  style: (app.style as any) || 'modern',
-                  platform: 'mobile',
-                },
-                status: 'generating',
-                model,
-                lastRevision: {
-                  at: startedAt,
-                  model,
-                  updatedPrompt,
-                  userNotes: notes,
-                },
-                revisions: nextRevisions,
-              });
-
-              setApp((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      prompt: updatedPrompt,
-                      status: 'generating',
-                      model,
-                      lastRevision: {
-                        at: startedAt,
-                        model,
-                        updatedPrompt,
-                        userNotes: notes,
-                      },
-                      revisions: nextRevisions,
-                    }
-                  : prev
-              );
-
-              const prompt = PromptGenerator.generateHtmlRevisionPrompt({
-                originalPrompt: app.prompt || '',
-                updatedPrompt,
-                userNotes: notes,
-                originalHtml: app.html || '',
-              });
-
-              const claudeService = ClaudeApiService.getInstance();
-              await claudeService.initialize();
-
-              const response = await claudeService.generateAppConcept(prompt, {
-                model,
-                maxTokens: config.maxTokens,
-                temperature: config.temperature,
-                operation: 'app_revision',
-                appId: app.id,
-              });
-
-              let fixSummary: string[] | undefined;
-              try {
-                const match = response?.html?.match(/<script[^>]*id=["']droplets_debug["'][^>]*>([\s\S]*?)<\/script>/i);
-                if (match?.[1]) {
-                  const parsed = JSON.parse(match[1]);
-                  if (Array.isArray(parsed?.fixSummary)) {
-                    fixSummary = parsed.fixSummary.filter((x: any) => typeof x === 'string').slice(0, 6);
-                  }
-                }
-              } catch {
-                // ignore
-              }
-
-              const completedRevisions = nextRevisions.map((rev) =>
-                rev.id === revisionId
-                  ? { ...rev, status: 'completed' as const, fixSummary }
-                  : rev
-              );
-
-              await AppStorageService.updateApp(app.id, {
-                html: response.html,
-                status: 'completed',
-                model,
-                lastRevision: {
-                  at: Date.now(),
-                  model,
-                  updatedPrompt,
-                  userNotes: notes,
-                  fixSummary,
-                },
-                revisions: completedRevisions,
-              });
-
-              setApp((prev) =>
-                prev
-                  ? {
-                      ...prev,
-                      html: response.html,
-                      status: 'completed',
-                      model,
-                      lastRevision: {
-                        at: Date.now(),
-                        model,
-                        updatedPrompt,
-                        userNotes: notes,
-                        fixSummary,
-                      },
-                      revisions: completedRevisions,
-                    }
-                  : prev
-              );
-
-              Alert.alert('Success', 'App recreated successfully.');
-            } catch (error: any) {
-              log.error('Error recreating app:', error);
-              const errorMessage = typeof error?.message === 'string' ? error.message : 'Failed to recreate app';
-              try {
-                const existing = await AppStorageService.getApp(app.id);
-                const revisions = existing?.revisions || app.revisions || [];
-                const updatedRevisions = revisions.map((rev) =>
-                  rev.id === revisionId ? { ...rev, status: 'error' as const, errorMessage } : rev
-                );
-                await AppStorageService.updateApp(app.id, { status: 'error', revisions: updatedRevisions });
-              } catch {
-                // ignore
-              }
-              setApp((prev) => {
-                if (!prev) return prev;
-                const updatedRevisions = (prev.revisions || []).map((rev) =>
-                  rev.id === revisionId ? { ...rev, status: 'error' as const, errorMessage } : rev
-                );
-                return { ...prev, status: 'error', revisions: updatedRevisions };
-              });
-              Alert.alert('Error', errorMessage);
-            } finally {
-              setIsRecreating(false);
-            }
-          },
-        },
-      ]
-    );
+    router.push({
+      pathname: '/app-recreate',
+      params: { appId: app.id, mode: 'recreate' },
+    } as any);
   };
 
   const toggleFavorite = async () => {
@@ -716,11 +528,11 @@ export default function AppViewPage() {
 
   const fixApp = () => {
     setShowMenuModal(false);
-    if (app) {
-      setNewPrompt(app.prompt || '');
-      setFixNotes('');
-    }
-    openEditPrompt();
+    if (!app) return;
+    router.push({
+      pathname: '/app-recreate',
+      params: { appId: app.id, mode: 'fix' },
+    } as any);
   };
 
   if (isLoading) {
@@ -1074,236 +886,6 @@ export default function AppViewPage() {
           </View>
         </TouchableOpacity>
       </Modal>
-
-      {/* Edit Prompt Modal */}
-      <Modal
-        visible={showEditPromptModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => {
-          if (isRecreating) return;
-          setShowEditPromptModal(false);
-        }}
-	      >
-          <View style={styles.modalRoot}>
-            <Pressable
-              style={styles.modalBackdrop}
-              onPress={() => {
-                if (isRecreating) return;
-                Keyboard.dismiss();
-                setShowEditPromptModal(false);
-              }}
-            />
-
-            <KeyboardAvoidingView
-              style={styles.modalOverlayContent}
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
-            >
-              <Pressable style={styles.menuModal} onPress={() => Keyboard.dismiss()}>
-                <View style={styles.modalHeaderRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.menuTitle, { marginBottom: 6 }]}>Update Prompt & Recreate</Text>
-                    <Text style={[styles.menuSubtitle, { marginBottom: 0 }]}>
-                      Update the prompt and describe what to fix. We’ll regenerate the HTML using the existing HTML as context.
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.modalIconButton}
-                    onPress={() => Keyboard.dismiss()}
-                    accessibilityLabel="Hide keyboard"
-                  >
-                    <Ionicons name="chevron-down" size={20} color="rgba(0, 0, 0, 0.7)" />
-                  </TouchableOpacity>
-                </View>
-
-                <ScrollView
-                  style={styles.modalBody}
-                  contentContainerStyle={styles.modalBodyContent}
-                  keyboardShouldPersistTaps="handled"
-                  showsVerticalScrollIndicator={false}
-                >
-                  <Text style={styles.modelSectionTitle}>Select AI Model:</Text>
-                  <View style={{ gap: 8, marginBottom: 18 }}>
-                    {CLAUDE_MODEL_PICKER_OPTIONS.map((model) => {
-                      const isSelected = selectedModel === model;
-                      const status = MODEL_INFO[model]?.status;
-                      const isRetired = status === 'retired';
-                      return (
-                        <TouchableOpacity
-                          key={model}
-                          style={[
-                            styles.modelOption,
-                            isSelected && styles.selectedModelOption,
-                            isRetired && { opacity: 0.5 },
-                          ]}
-                          disabled={isRetired || isRecreating}
-                          onPress={() => setSelectedModel(model)}
-                        >
-                          <View style={{ flex: 1, paddingRight: 10 }}>
-                            <Text style={[styles.modelOptionText, isSelected && styles.selectedModelOptionText]}>
-                              {MODEL_INFO[model]?.name || model}
-                              {status === 'deprecated' ? ' (deprecated)' : status === 'retired' ? ' (retired)' : ''}
-                            </Text>
-                            <Text style={[styles.modelOptionSubtext, isSelected && styles.selectedModelOptionSubtext]}>
-                              {formatModelPricingShort(model) || 'Pricing unavailable'} (as of {PRICING_AS_OF_DISPLAY})
-                            </Text>
-                          </View>
-                          {isSelected && <Ionicons name="checkmark" size={16} color="white" />}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  <Text style={styles.modelSectionTitle}>Updated Prompt:</Text>
-                  <TextInput
-                    style={[styles.textInput, styles.multilineInput]}
-                    value={newPrompt}
-                    onChangeText={setNewPrompt}
-                    placeholder="Update the original prompt…"
-                    multiline={true}
-                    textAlignVertical="top"
-                    autoFocus={true}
-                    editable={!isRecreating}
-                  />
-
-                  <View style={styles.sectionHeaderRow}>
-                    <Text style={styles.modelSectionTitle}>Fix Request (optional):</Text>
-                    <TouchableOpacity
-                      style={styles.inlineActionButton}
-                      onPress={() => {
-                        const template =
-                          'Repro steps:\n- \n\nExpected:\n- \n\nActual:\n- \n\nDevice / screen:\n- \n\nConstraints:\n- Keep same functionality\n- Fix layout/overflow\n';
-                        setFixNotes((prev) => (prev.trim() ? `${prev.trim()}\n\n${template}` : template));
-                      }}
-                      disabled={isRecreating}
-                    >
-                      <Ionicons name="clipboard-outline" size={16} color="rgba(0, 0, 0, 0.7)" />
-                      <Text style={styles.inlineActionText}>Template</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <TextInput
-                    style={[styles.textInput, styles.multilineInput]}
-                    value={fixNotes}
-                    onChangeText={setFixNotes}
-                    placeholder="e.g., buttons overflow on small screens; spacing is off; scrolling is broken…"
-                    multiline={true}
-                    textAlignVertical="top"
-                    editable={!isRecreating}
-                  />
-
-                  <TouchableOpacity
-                    style={styles.historyToggle}
-                    onPress={() => setShowRevisionHistory((v) => !v)}
-                    disabled={isRecreating}
-                  >
-                    <Ionicons
-                      name={showRevisionHistory ? 'chevron-down' : 'chevron-forward'}
-                      size={18}
-                      color="rgba(0, 0, 0, 0.7)"
-                    />
-                    <Text style={styles.historyToggleText}>Generation History</Text>
-                  </TouchableOpacity>
-
-                  {showRevisionHistory && (
-                    <View style={styles.historyPanel}>
-                      {(() => {
-                        const fallbackFromLast =
-                          app.lastRevision && !app.revisions?.length
-                            ? [
-                                {
-                                  id: `last_${app.lastRevision.at}`,
-                                  at: app.lastRevision.at,
-                                  operation: 'app_revision' as const,
-                                  status: 'completed' as const,
-                                  model: app.lastRevision.model,
-                                  updatedPrompt: app.lastRevision.updatedPrompt,
-                                  userNotes: app.lastRevision.userNotes,
-                                  fixSummary: app.lastRevision.fixSummary,
-                                },
-                              ]
-                            : [];
-                        const history = ((app.revisions || []).length ? app.revisions || [] : fallbackFromLast).slice(0, 12);
-                        if (history.length === 0) {
-                          return (
-                            <Text style={styles.historyEmptyText}>
-                              No revision history yet. Recreates will appear here.
-                            </Text>
-                          );
-                        }
-
-                        return history.map((rev) => {
-                          const when = new Date(rev.at).toLocaleString();
-                          const statusIcon =
-                            rev.status === 'completed'
-                              ? 'checkmark-circle-outline'
-                              : rev.status === 'error'
-                                ? 'close-circle-outline'
-                                : 'time-outline';
-                          const statusColor =
-                            rev.status === 'completed'
-                              ? '#16A34A'
-                              : rev.status === 'error'
-                                ? '#EF4444'
-                                : '#F59E0B';
-                          const errorMessage =
-                            typeof (rev as any)?.errorMessage === 'string' ? ((rev as any).errorMessage as string) : undefined;
-                          return (
-                            <View key={rev.id} style={styles.historyRow}>
-                              <Ionicons name={statusIcon as any} size={18} color={statusColor} />
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.historyRowTitle}>
-                                  {when} • {MODEL_INFO[rev.model]?.name || rev.model}
-                                </Text>
-                                {!!rev.fixSummary?.length && (
-                                  <Text style={styles.historyRowSubtext}>
-                                    Fixes: {rev.fixSummary.join(' · ')}
-                                  </Text>
-                                )}
-                                {!!errorMessage && (
-                                  <Text style={[styles.historyRowSubtext, { color: '#EF4444' }]}>
-                                    {errorMessage}
-                                  </Text>
-                                )}
-                              </View>
-                              <TouchableOpacity
-                                style={styles.historyUseButton}
-                                onPress={() => {
-                                  setNewPrompt(rev.updatedPrompt);
-                                  setFixNotes(rev.userNotes || '');
-                                }}
-                                disabled={isRecreating}
-                              >
-                                <Text style={styles.historyUseButtonText}>Use</Text>
-                              </TouchableOpacity>
-                            </View>
-                          );
-                        });
-                      })()}
-                    </View>
-                  )}
-                </ScrollView>
-
-                <View style={styles.modalFooter}>
-                  <TouchableOpacity
-                    style={[styles.button, { backgroundColor: '#f0f0f0', flex: 1, marginTop: 0 }]}
-                    onPress={() => setShowEditPromptModal(false)}
-                    disabled={isRecreating}
-                  >
-                    <Text style={[styles.buttonText, { color: 'rgba(0, 0, 0, 0.6)' }]}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.button, { flex: 1, marginTop: 0 }]}
-                    onPress={savePromptAndRecreate}
-                    disabled={isRecreating}
-                  >
-                    <Text style={styles.buttonText}>{isRecreating ? 'Working…' : 'Recreate'}</Text>
-                  </TouchableOpacity>
-                </View>
-              </Pressable>
-            </KeyboardAvoidingView>
-          </View>
-	      </Modal>
 
 	      {isExporting && (
 	        <View style={styles.exportOverlay} pointerEvents="auto">

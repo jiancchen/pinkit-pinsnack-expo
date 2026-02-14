@@ -82,6 +82,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="welcome" options={{ headerShown: false }} />
           <Stack.Screen name="app-view" options={{ headerShown: false }} />
+          <Stack.Screen name="app-recreate" options={{ headerShown: false }} />
         </Stack>
         <GenerationLiveActivityController />
         <StatusBar style="light" translucent backgroundColor="transparent" />
