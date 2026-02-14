@@ -122,6 +122,7 @@ export default function UniversePage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUpdatingTopics, setIsUpdatingTopics] = useState(false);
   const [rotationPhaseDeg, setRotationPhaseDeg] = useState(0);
+  const [isScreenFocused, setIsScreenFocused] = useState(false);
   const backfillTriggeredRef = useRef(false);
   const isTopicManagerActive = ENABLE_TOPIC_PLANET_BUILDER && showTopicManager;
 
@@ -137,13 +138,16 @@ export default function UniversePage() {
   const panLimitY = Math.max(screenHeight * 2.1, 900);
 
   React.useEffect(() => {
-    if (isTopicFocused || isTopicManagerActive) return;
+    if (!isScreenFocused || isTopicFocused || isTopicManagerActive) return;
 
     const interval = setInterval(() => {
-      setRotationPhaseDeg((prev) => prev + 0.45);
+      setRotationPhaseDeg((prev) => {
+        const next = prev + 0.45;
+        return next >= 360000 ? next - 360000 : next;
+      });
     }, 40);
     return () => clearInterval(interval);
-  }, [isTopicFocused, isTopicManagerActive]);
+  }, [isScreenFocused, isTopicFocused, isTopicManagerActive]);
 
   const resetViewport = () => {
     scale.value = withTiming(1, { duration: 240 });
@@ -241,6 +245,15 @@ export default function UniversePage() {
 
   useFocusEffect(
     React.useCallback(() => {
+      setIsScreenFocused(true);
+      return () => {
+        setIsScreenFocused(false);
+      };
+    }, [])
+  );
+
+  useFocusEffect(
+    React.useCallback(() => {
       void loadApps();
     }, [loadApps])
   );
@@ -256,7 +269,11 @@ export default function UniversePage() {
     }
 
     return [...buckets.entries()]
-      .sort((a, b) => b[1].length - a[1].length)
+      .sort((a, b) => {
+        const countDiff = b[1].length - a[1].length;
+        if (countDiff !== 0) return countDiff;
+        return a[0].localeCompare(b[0]);
+      })
       .map(([topic, groupedApps], index) => ({
         topic,
         apps: sortMoons(groupedApps),
@@ -274,7 +291,6 @@ export default function UniversePage() {
   const mapHeight = clamp(availableHeight - 210, 280, 620);
   const centerX = mapWidth / 2;
   const centerY = mapHeight / 2;
-  const normalizedRotationDeg = ((rotationPhaseDeg % 360) + 360) % 360;
 
   const orbits = useMemo<OrbitConfig[]>(() => {
     if (topicGroups.length === 0) return [];
@@ -314,7 +330,7 @@ export default function UniversePage() {
       const orbit = orbits.find((item) => item.topic === topic);
       if (!orbit) return;
 
-      const angleDeg = orbit.phaseDeg + normalizedRotationDeg * orbit.speed;
+      const angleDeg = orbit.phaseDeg + rotationPhaseDeg * orbit.speed;
       const angle = (angleDeg * Math.PI) / 180;
       const planetX = centerX + Math.sin(angle) * orbit.radius;
       const planetY = centerY - Math.cos(angle) * orbit.radius;
@@ -331,7 +347,7 @@ export default function UniversePage() {
       translateX.value = withTiming(targetX - scaledPlanetX, { duration: 280 });
       translateY.value = withTiming(targetY - scaledPlanetY, { duration: 280 });
     },
-    [centerX, centerY, normalizedRotationDeg, orbits, scale, translateX, translateY]
+    [centerX, centerY, rotationPhaseDeg, orbits, scale, translateX, translateY]
   );
 
   const handleSyncTopics = async (reason = 'universe_manual_sync') => {
@@ -506,7 +522,7 @@ export default function UniversePage() {
                     </View>
 
                     {orbits.map((orbit) => {
-                      const angleDeg = orbit.phaseDeg + normalizedRotationDeg * orbit.speed;
+                      const angleDeg = orbit.phaseDeg + rotationPhaseDeg * orbit.speed;
                       const angle = (angleDeg * Math.PI) / 180;
                       const planetX = centerX + Math.sin(angle) * orbit.radius;
                       const planetY = centerY - Math.cos(angle) * orbit.radius;

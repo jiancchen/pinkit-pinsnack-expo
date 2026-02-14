@@ -153,7 +153,8 @@ export default function MyAppsPage() {
     setShowFavorites(false);
   };
 
-  const stackTopPadding = Math.max(170, insets.top * 2 + 118);
+  const searchBarTopPadding = insets.top + 56;
+  const stackTopPadding = Math.max(150, searchBarTopPadding + 70);
 
   return (
     <View style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]}>
@@ -188,7 +189,7 @@ export default function MyAppsPage() {
         favoriteItems={favoriteItems}
         mostUsedItems={mostUsedItems}
         onNavigateToApp={handleNavigateToApp}
-        style={{ paddingTop: insets.top + 30 }}
+        style={{ paddingTop: searchBarTopPadding }}
       />
     </View>
   );
