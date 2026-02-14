@@ -124,6 +124,8 @@ export default function CreatePage() {
   const [showPromptHistory, setShowPromptHistory] = useState(false);
   const [promptHistoryEntries, setPromptHistoryEntries] = useState<PromptHistoryEntry[]>([]);
   const [isLoadingPromptHistory, setIsLoadingPromptHistory] = useState(false);
+  const [showGenerateConfirm, setShowGenerateConfirm] = useState(false);
+  const [pendingCreateRequest, setPendingCreateRequest] = useState<AppGenerationRequest | null>(null);
   const [hasApiKey, setHasApiKey] = useState(false);
   const [isCheckingApiKey, setIsCheckingApiKey] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -397,26 +399,24 @@ export default function CreatePage() {
       return;
     }
 
-    const estimateText = t('create.confirm.body', {
-      cost: formatUsd(runEstimate?.estimatedMaxCost ?? 0),
-      model: getModelDisplayName(generationModel),
-      inputTokens: (runEstimate?.estimatedInputTokens ?? 0).toLocaleString(),
-      outputTokens: effectiveMaxTokens.toLocaleString(),
-    });
+    setPendingCreateRequest(request);
+    setShowGenerateConfirm(true);
+  };
 
-    Alert.alert(
-      t('create.confirm.title'),
-      estimateText,
-      [
-        { text: t('create.actions.cancel'), style: 'cancel' },
-        {
-          text: t('create.actions.create'),
-          onPress: () => {
-            void queueGeneration(request);
-          },
-        },
-      ]
-    );
+  const closeGenerateConfirm = () => {
+    setShowGenerateConfirm(false);
+    setPendingCreateRequest(null);
+  };
+
+  const confirmGenerate = () => {
+    if (!pendingCreateRequest) {
+      closeGenerateConfirm();
+      return;
+    }
+    const request = pendingCreateRequest;
+    setShowGenerateConfirm(false);
+    setPendingCreateRequest(null);
+    void queueGeneration(request);
   };
 
   const handleTemplateSelect = (template: typeof templates[0]) => {
@@ -541,6 +541,26 @@ export default function CreatePage() {
               textAlignVertical="top"
               editable={!isLoading}
             />
+
+            {runEstimate ? (
+              <View style={[styleSheet.inlineEstimateRow, isUniverseTheme ? styleSheet.inlineEstimateRowUniverse : undefined]}>
+                <Ionicons
+                  name="calculator-outline"
+                  size={15}
+                  color={isUniverseTheme ? 'rgba(201, 225, 250, 0.9)' : 'rgba(0, 0, 0, 0.65)'}
+                />
+                <Text
+                  style={[
+                    styleSheet.inlineEstimateText,
+                    isUniverseTheme ? styleSheet.inlineEstimateTextUniverse : undefined,
+                  ]}
+                >
+                  Est. max cost {formatUsd(runEstimate.estimatedMaxCost)} • Input ~
+                  {runEstimate.estimatedInputTokens.toLocaleString()} • Output up to{' '}
+                  {runEstimate.effectiveMaxTokens.toLocaleString()} ({getModelDisplayName(generationModel)})
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -1140,6 +1160,130 @@ export default function CreatePage() {
           </View>
         </Modal>
 
+        <Modal
+          visible={showGenerateConfirm}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={closeGenerateConfirm}
+        >
+          <View style={styleSheet.modalOverlay}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={closeGenerateConfirm} />
+
+            <View style={[styleSheet.confirmCard, isUniverseTheme ? styleSheet.confirmCardUniverse : undefined]}>
+              <Text style={[styleSheet.modalTitle, isUniverseTheme ? styleSheet.modalTitleUniverse : undefined]}>
+                {t('create.confirm.title')}
+              </Text>
+
+              <View style={styleSheet.confirmMetrics}>
+                <View style={styleSheet.confirmMetricRow}>
+                  <Text
+                    style={[
+                      styleSheet.confirmMetricLabel,
+                      isUniverseTheme ? styleSheet.confirmMetricLabelUniverse : undefined,
+                    ]}
+                  >
+                    {t('create.confirm.estimatedCost')}
+                  </Text>
+                  <Text
+                    style={[
+                      styleSheet.confirmMetricValue,
+                      isUniverseTheme ? styleSheet.confirmMetricValueUniverse : undefined,
+                    ]}
+                  >
+                    {formatUsd(runEstimate?.estimatedMaxCost ?? 0)}
+                  </Text>
+                </View>
+
+                <View style={styleSheet.confirmMetricRow}>
+                  <Text
+                    style={[
+                      styleSheet.confirmMetricLabel,
+                      isUniverseTheme ? styleSheet.confirmMetricLabelUniverse : undefined,
+                    ]}
+                  >
+                    {t('create.confirm.model')}
+                  </Text>
+                  <Text
+                    style={[
+                      styleSheet.confirmMetricValue,
+                      isUniverseTheme ? styleSheet.confirmMetricValueUniverse : undefined,
+                    ]}
+                  >
+                    {getModelDisplayName(generationModel)}
+                  </Text>
+                </View>
+
+                <View style={styleSheet.confirmMetricRow}>
+                  <Text
+                    style={[
+                      styleSheet.confirmMetricLabel,
+                      isUniverseTheme ? styleSheet.confirmMetricLabelUniverse : undefined,
+                    ]}
+                  >
+                    {t('create.confirm.inputTokens')}
+                  </Text>
+                  <Text
+                    style={[
+                      styleSheet.confirmMetricValue,
+                      isUniverseTheme ? styleSheet.confirmMetricValueUniverse : undefined,
+                    ]}
+                  >
+                    {(runEstimate?.estimatedInputTokens ?? 0).toLocaleString()}
+                  </Text>
+                </View>
+
+                <View style={styleSheet.confirmMetricRow}>
+                  <Text
+                    style={[
+                      styleSheet.confirmMetricLabel,
+                      isUniverseTheme ? styleSheet.confirmMetricLabelUniverse : undefined,
+                    ]}
+                  >
+                    {t('create.confirm.outputTokens')}
+                  </Text>
+                  <Text
+                    style={[
+                      styleSheet.confirmMetricValue,
+                      isUniverseTheme ? styleSheet.confirmMetricValueUniverse : undefined,
+                    ]}
+                  >
+                    {effectiveMaxTokens.toLocaleString()}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={[styleSheet.confirmDisclaimer, isUniverseTheme ? styleSheet.confirmDisclaimerUniverse : undefined]}>
+                {t('create.confirm.disclaimer')}
+              </Text>
+
+              <View style={styleSheet.modalButtonRow}>
+                <TouchableOpacity
+                  style={[
+                    styleSheet.modalButton,
+                    styleSheet.modalButtonSecondary,
+                    isUniverseTheme ? styleSheet.modalButtonSecondaryUniverse : undefined,
+                  ]}
+                  onPress={closeGenerateConfirm}
+                >
+                  <Text
+                    style={[
+                      styleSheet.modalButtonText,
+                      styleSheet.modalButtonTextSecondary,
+                      isUniverseTheme ? styleSheet.modalButtonTextSecondaryUniverse : undefined,
+                    ]}
+                  >
+                    {t('create.actions.cancel')}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styleSheet.modalButton} onPress={confirmGenerate}>
+                  <Text style={styleSheet.modalButtonText}>{t('create.actions.create')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
 	    </SafeAreaView>
 	  );
 	}
@@ -1315,6 +1459,30 @@ const styleSheet = StyleSheet.create({
     borderColor: 'rgba(125, 171, 222, 0.44)',
     color: 'rgba(227, 242, 255, 0.95)',
     backgroundColor: 'rgba(6, 23, 44, 0.92)',
+  },
+  inlineEstimateRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: -2,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.04)',
+  },
+  inlineEstimateRowUniverse: {
+    backgroundColor: 'rgba(8, 33, 58, 0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(123, 169, 220, 0.3)',
+  },
+  inlineEstimateText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
+    color: 'rgba(0, 0, 0, 0.68)',
+  },
+  inlineEstimateTextUniverse: {
+    color: 'rgba(205, 226, 248, 0.9)',
   },
   addTagButton: {
     borderRadius: 10,
@@ -1527,15 +1695,6 @@ const styleSheet = StyleSheet.create({
     backgroundColor: 'rgba(12, 37, 65, 0.82)',
     borderWidth: 1,
     borderColor: 'rgba(155, 196, 239, 0.34)',
-  },
-  costEstimateText: {
-    marginTop: 10,
-    fontSize: 12,
-    color: 'rgba(0, 0, 0, 0.65)',
-    textAlign: 'center',
-  },
-  costEstimateTextUniverse: {
-    color: 'rgba(207, 226, 248, 0.92)',
   },
   modalOverlay: {
     flex: 1,
@@ -1894,5 +2053,57 @@ const styleSheet = StyleSheet.create({
   },
   modalCancelButtonTextUniverse: {
     color: 'rgba(214, 233, 253, 0.92)',
+  },
+  confirmCard: {
+    width: '100%',
+    maxWidth: 560,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.08)',
+  },
+  confirmCardUniverse: {
+    backgroundColor: 'rgba(7, 20, 38, 0.98)',
+    borderColor: 'rgba(123, 169, 220, 0.4)',
+  },
+  confirmMetrics: {
+    marginTop: 12,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+    gap: 8,
+  },
+  confirmMetricRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  confirmMetricLabel: {
+    fontSize: 12,
+    color: 'rgba(0, 0, 0, 0.64)',
+    fontWeight: '700',
+  },
+  confirmMetricLabelUniverse: {
+    color: 'rgba(190, 216, 244, 0.84)',
+  },
+  confirmMetricValue: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: 'rgba(0, 0, 0, 0.86)',
+  },
+  confirmMetricValueUniverse: {
+    color: 'rgba(226, 240, 255, 0.96)',
+  },
+  confirmDisclaimer: {
+    marginTop: 12,
+    fontSize: 12,
+    lineHeight: 17,
+    color: 'rgba(0, 0, 0, 0.62)',
+  },
+  confirmDisclaimerUniverse: {
+    color: 'rgba(199, 224, 250, 0.84)',
   },
 });

@@ -23,6 +23,7 @@ interface Scrollable3DStackProps {
   onNavigateToApp: (id: string) => void;
   onShowSnackbar?: (message: string) => void;
   onFocusedItemChange?: (item: PromptHistory | null) => void;
+  topPadding?: number;
 }
 
 interface CardTransform {
@@ -39,6 +40,7 @@ export default function Scrollable3DStack({
   onNavigateToApp,
   onShowSnackbar,
   onFocusedItemChange,
+  topPadding = 100,
 }: Scrollable3DStackProps) {
   const appTheme = useUISettingsStore((s) => s.appTheme);
   const isUniverseTheme = appTheme === 'universe';
@@ -52,13 +54,15 @@ export default function Scrollable3DStack({
   const dateScale = useRef(new Animated.Value(0.95)).current;
   const dateTranslateY = useRef(new Animated.Value(8)).current;
 
+  const contentTopPadding = Math.max(0, topPadding);
+
   // Calculate 3D transforms based on scroll position
   const calculateCardTransform = useCallback((index: number): CardTransform => {
     const cardHeight = 184; // 160 card height + 24 margin
     const screenCenterY = screenHeight / 2;
     
     // Calculate card position relative to screen center
-    const cardCenterY = (index * cardHeight) + (cardHeight / 2) - scrollY + 100; // 100 is contentPadding
+    const cardCenterY = (index * cardHeight) + (cardHeight / 2) - scrollY + contentTopPadding;
     const distanceFromCenter = Math.abs(cardCenterY - screenCenterY) / screenCenterY;
     const normalizedDistance = Math.min(distanceFromCenter, 2);
 
@@ -78,18 +82,18 @@ export default function Scrollable3DStack({
       rotationY,
       centerIntensity,
     };
-  }, [scrollY]);
+  }, [scrollY, contentTopPadding]);
 
   const getNearestIndex = useCallback(
     (offsetY: number): number => {
       if (items.length === 0) return 0;
       const cardHeight = 184;
       const screenCenterY = screenHeight / 2;
-      const relative = (offsetY + screenCenterY - 100 - cardHeight / 2) / cardHeight;
+      const relative = (offsetY + screenCenterY - contentTopPadding - cardHeight / 2) / cardHeight;
       const nearest = Math.round(relative);
       return Math.max(0, Math.min(items.length - 1, nearest));
     },
-    [items.length]
+    [items.length, contentTopPadding]
   );
 
   const formatCreatedDate = useCallback((value?: Date | string): string => {
@@ -194,7 +198,10 @@ export default function Scrollable3DStack({
       <ScrollView
         ref={scrollViewRef}
         style={styles.scrollView}
-        contentContainerStyle={[styles.contentContainer, { paddingBottom: bottomPadding }]}
+        contentContainerStyle={[
+          styles.contentContainer,
+          { paddingTop: contentTopPadding, paddingBottom: bottomPadding },
+        ]}
         onScroll={handleScroll}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={false}
@@ -260,7 +267,6 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     alignItems: 'center',
-    paddingVertical: 100,
   },
   cardWrapper: {
     alignItems: 'center',

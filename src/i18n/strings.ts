@@ -39,8 +39,12 @@ const EN_US: StringMap = {
   'create.actions.create': 'Create',
   'create.error.emptyPrompt': 'Please enter an app description.',
   'create.confirm.title': 'Confirm App Generation',
-  'create.confirm.body':
-    'Estimated max cost: {cost}\\nModel: {model}\\nInput: ~{inputTokens} tokens\\nOutput: up to {outputTokens} tokens\\n\\nCharges are billed to your Claude API account. Proceed?',
+  'create.confirm.estimatedCost': 'Estimated max cost',
+  'create.confirm.model': 'Model',
+  'create.confirm.inputTokens': 'Input tokens (~)',
+  'create.confirm.outputTokens': 'Output tokens (max)',
+  'create.confirm.disclaimer':
+    'Charges are billed to your Claude API account. Continue only if you agree to proceed with this estimated usage.',
   'create.apiRequired.title': 'API Key Required',
   'create.apiRequired.body':
     'You need to set up your Claude API key to generate apps. Would you like to add one now?',
@@ -88,8 +92,12 @@ const ES_ES: StringMap = {
   'create.actions.create': 'Crear',
   'create.error.emptyPrompt': 'Escribe una descripción de la app.',
   'create.confirm.title': 'Confirmar generación de app',
-  'create.confirm.body':
-    'Coste máximo estimado: {cost}\\nModelo: {model}\\nEntrada: ~{inputTokens} tokens\\nSalida: hasta {outputTokens} tokens\\n\\nLos cargos se facturan a tu cuenta de API de Claude. ¿Continuar?',
+  'create.confirm.estimatedCost': 'Coste máximo estimado',
+  'create.confirm.model': 'Modelo',
+  'create.confirm.inputTokens': 'Tokens de entrada (~)',
+  'create.confirm.outputTokens': 'Tokens de salida (máx.)',
+  'create.confirm.disclaimer':
+    'Los cargos se facturan a tu cuenta de API de Claude. Continúa solo si aceptas este uso estimado.',
   'create.apiRequired.title': 'Se requiere API key',
   'create.apiRequired.body':
     'Necesitas configurar tu API key de Claude para generar apps. ¿Quieres añadirla ahora?',

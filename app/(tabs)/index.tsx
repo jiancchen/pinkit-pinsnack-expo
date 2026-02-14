@@ -153,6 +153,8 @@ export default function MyAppsPage() {
     setShowFavorites(false);
   };
 
+  const stackTopPadding = Math.max(170, insets.top * 2 + 118);
+
   return (
     <View style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]}>
       <StatusBar
@@ -173,6 +175,7 @@ export default function MyAppsPage() {
         items={filteredItems}
         onNavigateToApp={handleNavigateToApp}
         onShowSnackbar={handleShowSnackbar}
+        topPadding={stackTopPadding}
       />
 
       {/* Search Bar with Favorites */}

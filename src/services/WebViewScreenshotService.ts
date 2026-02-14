@@ -14,6 +14,7 @@ export class WebViewScreenshotService {
   private static readonly SCREENSHOT_WIDTH = 400;
   private static readonly SCREENSHOT_HEIGHT = 600;
   private static readonly SCREENSHOT_QUALITY = 0.7;
+  private static readonly PROCESSING_VERSION = 2;
 
   /**
    * Generate JavaScript code to inject into WebView for screenshot capture
@@ -166,17 +167,63 @@ export class WebViewScreenshotService {
         throw new Error('Invalid data URL format');
       }
 
-      // Process the image: resize and compress
+      // Process the image: center-crop to target aspect ratio, then resize and compress.
+      // This prevents horizontal/vertical distortion in card previews.
+      const sourceMeta = await manipulateAsync(
+        dataURL,
+        [],
+        {
+          compress: 1,
+          format: SaveFormat.JPEG,
+        }
+      );
+
+      const sourceWidth = sourceMeta.width;
+      const sourceHeight = sourceMeta.height;
+      if (!sourceWidth || !sourceHeight) {
+        throw new Error('Invalid image dimensions');
+      }
+
+      const targetAspect = this.SCREENSHOT_WIDTH / this.SCREENSHOT_HEIGHT;
+      const sourceAspect = sourceWidth / sourceHeight;
+
+      let cropWidth = sourceWidth;
+      let cropHeight = sourceHeight;
+      let cropOriginX = 0;
+      let cropOriginY = 0;
+
+      if (sourceAspect > targetAspect) {
+        cropWidth = Math.max(1, Math.round(sourceHeight * targetAspect));
+        cropOriginX = Math.max(0, Math.floor((sourceWidth - cropWidth) / 2));
+      } else if (sourceAspect < targetAspect) {
+        cropHeight = Math.max(1, Math.round(sourceWidth / targetAspect));
+        cropOriginY = Math.max(0, Math.floor((sourceHeight - cropHeight) / 2));
+      }
+
+      const actions: Array<
+        | { crop: { originX: number; originY: number; width: number; height: number } }
+        | { resize: { width: number; height: number } }
+      > = [];
+      if (cropWidth !== sourceWidth || cropHeight !== sourceHeight) {
+        actions.push({
+          crop: {
+            originX: cropOriginX,
+            originY: cropOriginY,
+            width: cropWidth,
+            height: cropHeight,
+          },
+        });
+      }
+      actions.push({
+        resize: {
+          width: this.SCREENSHOT_WIDTH,
+          height: this.SCREENSHOT_HEIGHT,
+        },
+      });
+
       const processedImage = await manipulateAsync(
         dataURL,
-        [
-          {
-            resize: {
-              width: this.SCREENSHOT_WIDTH,
-              height: this.SCREENSHOT_HEIGHT,
-            }
-          }
-        ],
+        actions,
         {
           compress: this.SCREENSHOT_QUALITY,
           format: SaveFormat.JPEG,
@@ -217,6 +264,7 @@ export class WebViewScreenshotService {
         base64: base64Data,
         timestamp: new Date().toISOString(),
         method,
+        processingVersion: this.PROCESSING_VERSION,
         dimensions: {
           width: this.SCREENSHOT_WIDTH,
           height: this.SCREENSHOT_HEIGHT
@@ -247,6 +295,16 @@ export class WebViewScreenshotService {
       }
 
       const screenshotData = JSON.parse(data);
+
+      if (screenshotData.processingVersion !== this.PROCESSING_VERSION && screenshotData.base64) {
+        log.debug('Migrating legacy screenshot for app:', appId);
+        const legacyDataURL = `data:image/jpeg;base64,${screenshotData.base64}`;
+        const migrated = await this.processWebViewScreenshot(appId, legacyDataURL, 'legacy_migrated');
+        if (migrated) {
+          return migrated;
+        }
+      }
+
       const base64Uri = `data:image/jpeg;base64,${screenshotData.base64}`;
       
       log.debug('Retrieved screenshot for app:', appId, 'method:', screenshotData.method);
