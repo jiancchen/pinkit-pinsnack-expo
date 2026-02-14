@@ -50,6 +50,7 @@ const TOPIC_COLORS = [
 
 const FOCUSED_PANEL_HEIGHT_FRACTION = 0.75;
 const ENABLE_TOPIC_PLANET_BUILDER = false;
+const FOCUSED_PLANET_TARGET_Y_FRACTION = (1 - FOCUSED_PANEL_HEIGHT_FRACTION) / 2;
 
 type TopicGroup = {
   topic: string;
@@ -336,7 +337,13 @@ export default function UniversePage() {
       const planetY = centerY - Math.cos(angle) * orbit.radius;
       const targetScale = 1.65;
       const targetX = centerX;
-      const targetY = centerY;
+      const topBandHeight = mapHeight * (1 - FOCUSED_PANEL_HEIGHT_FRACTION);
+      const rawTargetY = mapHeight * FOCUSED_PLANET_TARGET_Y_FRACTION;
+      const targetY = clamp(
+        rawTargetY,
+        orbit.size / 2 + 4,
+        topBandHeight - orbit.size / 2 - 4
+      );
 
       // The scale transform is centered on the scene center, not top-left.
       // Account for that pivot so the selected planet lands exactly at targetX/Y.
@@ -347,7 +354,7 @@ export default function UniversePage() {
       translateX.value = withTiming(targetX - scaledPlanetX, { duration: 280 });
       translateY.value = withTiming(targetY - scaledPlanetY, { duration: 280 });
     },
-    [centerX, centerY, rotationPhaseDeg, orbits, scale, translateX, translateY]
+    [centerX, centerY, mapHeight, rotationPhaseDeg, orbits, scale, translateX, translateY]
   );
 
   const handleSyncTopics = async (reason = 'universe_manual_sync') => {

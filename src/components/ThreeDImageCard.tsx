@@ -18,6 +18,8 @@ import { useStrings } from '../i18n/strings';
 const log = createLogger('ThreeDImageCard');
 
 const { width: screenWidth } = Dimensions.get('window');
+const MAIN_CARD_OPACITY = 0.82;
+const BACK_CARD_OPACITY = 0.22;
 
 interface ThreeDImageCardProps {
   historyItem: PromptHistory;
@@ -109,7 +111,7 @@ export default function ThreeDImageCard({
           styles.backgroundCard,
           {
             backgroundColor: backgroundColor,
-            opacity: alpha * 0.8,
+            opacity: alpha * BACK_CARD_OPACITY,
             transform: backgroundTransform,
           },
         ]}
@@ -122,7 +124,7 @@ export default function ThreeDImageCard({
         style={[
           styles.mainCard,
           {
-            opacity: alpha,
+            opacity: alpha * MAIN_CARD_OPACITY,
             transform: cardTransform,
           },
         ]}
