@@ -11,17 +11,105 @@ import { ClaudeApiService } from '../src/services/ClaudeApiService';
 import { GenerationQueueService } from '../src/services/GenerationQueueService';
 import { NotificationService } from '../src/services/NotificationService';
 import { SeedService } from '../src/services/SeedService';
+import { RuntimeLogService } from '../src/services/RuntimeLogService';
 import { AppColors } from '../src/constants/AppColors';
 import { createLogger } from '../src/utils/Logger';
 import GenerationLiveActivityController from '../src/components/GenerationLiveActivityController';
 
 const log = createLogger('RootLayout');
 
+type GlobalErrorHandler = (error: unknown, isFatal?: boolean) => void;
+
+type ErrorUtilsLike = {
+  getGlobalHandler?: () => GlobalErrorHandler;
+  setGlobalHandler?: (handler: GlobalErrorHandler) => void;
+};
+
+function normalizeError(error: unknown): { name?: string; message: string; stack?: string } {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message || 'Unknown error',
+      stack: error.stack,
+    };
+  }
+
+  if (typeof error === 'string') {
+    return { message: error };
+  }
+
+  try {
+    return { message: JSON.stringify(error) };
+  } catch {
+    return { message: String(error) };
+  }
+}
+
 export default function RootLayout() {
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   // Flag to force showing main app without API key requirement
   const FORCE_MAIN_APP = true;
+
+  useEffect(() => {
+    const globalScope = globalThis as typeof globalThis & {
+      ErrorUtils?: ErrorUtilsLike;
+      addEventListener?: (
+        type: string,
+        listener: (event: { reason?: unknown }) => void
+      ) => void;
+      removeEventListener?: (
+        type: string,
+        listener: (event: { reason?: unknown }) => void
+      ) => void;
+    };
+
+    const errorUtils = globalScope.ErrorUtils;
+    const previousHandler = errorUtils?.getGlobalHandler?.();
+
+    if (errorUtils?.setGlobalHandler) {
+      errorUtils.setGlobalHandler((error: unknown, isFatal?: boolean) => {
+        const normalized = normalizeError(error);
+        void RuntimeLogService.appendCrash({
+          source: 'global.ErrorUtils',
+          isFatal: Boolean(isFatal),
+          name: normalized.name,
+          message: normalized.message,
+          stack: normalized.stack,
+        });
+        previousHandler?.(error, isFatal);
+      });
+    }
+
+    const hasRejectionEventAPI =
+      typeof globalScope.addEventListener === 'function' &&
+      typeof globalScope.removeEventListener === 'function';
+
+    const unhandledRejectionHandler = (event: { reason?: unknown }) => {
+      const normalized = normalizeError(event.reason ?? event);
+      void RuntimeLogService.appendCrash({
+        source: 'unhandledrejection',
+        isFatal: false,
+        name: normalized.name,
+        message: normalized.message,
+        stack: normalized.stack,
+      });
+    };
+
+    if (hasRejectionEventAPI) {
+      globalScope.addEventListener?.('unhandledrejection', unhandledRejectionHandler);
+    }
+
+    return () => {
+      if (previousHandler && errorUtils?.setGlobalHandler) {
+        errorUtils.setGlobalHandler(previousHandler);
+      }
+
+      if (hasRejectionEventAPI) {
+        globalScope.removeEventListener?.('unhandledrejection', unhandledRejectionHandler);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     NotificationService.configureForegroundBehavior();
@@ -83,6 +171,7 @@ export default function RootLayout() {
           <Stack.Screen name="welcome" options={{ headerShown: false }} />
           <Stack.Screen name="app-view" options={{ headerShown: false }} />
           <Stack.Screen name="app-recreate" options={{ headerShown: false }} />
+          <Stack.Screen name="runtime-logs" options={{ headerShown: false }} />
         </Stack>
         <GenerationLiveActivityController />
         <StatusBar style="light" translucent backgroundColor="transparent" />

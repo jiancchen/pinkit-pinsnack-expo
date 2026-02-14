@@ -19,11 +19,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
-  Easing,
-  SharedValue,
   useAnimatedStyle,
   useSharedValue,
-  withRepeat,
   withTiming,
 } from 'react-native-reanimated';
 import { AppColors } from '../../src/constants/AppColors';
@@ -79,11 +76,6 @@ function formatTopicLabel(topic: string): string {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
-function formatSortTime(timestamp?: number): string {
-  if (!timestamp) return 'never';
-  return new Date(timestamp).toLocaleString();
-}
-
 function getPrimaryTopic(app: StoredApp): string {
   if (app.primaryTopic && app.primaryTopic.trim()) return app.primaryTopic.trim();
   if (Array.isArray(app.topics) && app.topics.length > 0) return app.topics[0];
@@ -112,103 +104,6 @@ function sortMoons(apps: StoredApp[]): StoredApp[] {
   });
 }
 
-type OrbitPlanetProps = {
-  centerX: number;
-  centerY: number;
-  orbit: OrbitConfig;
-  isSelected: boolean;
-  rotationProgress: SharedValue<number>;
-  onPress: (topic: string) => void;
-};
-
-function OrbitPlanet({
-  centerX,
-  centerY,
-  orbit,
-  isSelected,
-  rotationProgress,
-  onPress,
-}: OrbitPlanetProps) {
-  const orbitAnimatedStyle = useAnimatedStyle(() => {
-    const angle = orbit.phaseDeg + rotationProgress.value * 360 * orbit.speed;
-    return {
-      transform: [{ rotate: `${angle}deg` }],
-    };
-  });
-
-  const ringAnimatedStyle = useAnimatedStyle(() => {
-    const pulse = isSelected ? 1 + Math.sin(rotationProgress.value * Math.PI * 2) * 0.02 : 1;
-    return {
-      transform: [{ scale: pulse }],
-      opacity: isSelected ? 0.9 : 0.55,
-    };
-  });
-
-  return (
-    <>
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.orbitRing,
-          {
-            width: orbit.radius * 2,
-            height: orbit.radius * 2,
-            borderColor: `${orbit.color}${isSelected ? '99' : '44'}`,
-            left: centerX - orbit.radius,
-            top: centerY - orbit.radius,
-          },
-          ringAnimatedStyle,
-        ]}
-      />
-
-      <Animated.View style={[styles.orbitLayer, orbitAnimatedStyle]} pointerEvents="box-none">
-        <TouchableOpacity
-          activeOpacity={0.9}
-          style={[
-            styles.planet,
-            {
-              width: orbit.size,
-              height: orbit.size,
-              borderRadius: orbit.size / 2,
-              left: centerX - orbit.size / 2,
-              top: centerY - orbit.radius - orbit.size / 2,
-              borderColor: isSelected ? '#ffffff' : `${orbit.color}BB`,
-            },
-          ]}
-          onPress={() => onPress(orbit.topic)}
-        >
-          <LinearGradient
-            colors={[orbit.color, '#101820']}
-            start={{ x: 0.15, y: 0.1 }}
-            end={{ x: 0.9, y: 0.9 }}
-            style={styles.planetGradient}
-          >
-            <Text style={styles.planetCount}>{orbit.appCount}</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </Animated.View>
-
-      <Animated.View style={[styles.orbitLabelContainer, orbitAnimatedStyle]} pointerEvents="none">
-        <View
-          style={[
-            styles.orbitLabel,
-            {
-              left: centerX - 56,
-              top: centerY - orbit.radius - orbit.size / 2 - 28,
-              borderColor: `${orbit.color}88`,
-              backgroundColor: isSelected ? 'rgba(255,255,255,0.14)' : 'rgba(2,12,27,0.55)',
-            },
-          ]}
-        >
-          <Text style={styles.orbitLabelText} numberOfLines={1}>
-            {formatTopicLabel(orbit.topic)}
-          </Text>
-        </View>
-      </Animated.View>
-    </>
-  );
-}
-
 export default function UniversePage() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -217,17 +112,16 @@ export default function UniversePage() {
   const [apps, setApps] = useState<StoredApp[]>([]);
   const [customTopics, setCustomTopics] = useState<string[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
-  const [modalTopic, setModalTopic] = useState<string | null>(null);
   const [showTopicManager, setShowTopicManager] = useState(false);
   const [newCustomTopic, setNewCustomTopic] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isUpdatingTopics, setIsUpdatingTopics] = useState(false);
+  const [rotationPhaseDeg, setRotationPhaseDeg] = useState(0);
   const backfillTriggeredRef = useRef(false);
 
   const scrollContentPaddingBottom = getLiquidGlassTabBarContentPaddingBottom(insets.bottom, 28);
 
-  const rotationProgress = useSharedValue(0);
   const scale = useSharedValue(1);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -236,15 +130,11 @@ export default function UniversePage() {
   const pinchStartScale = useSharedValue(1);
 
   React.useEffect(() => {
-    rotationProgress.value = withRepeat(
-      withTiming(1, {
-        duration: 28000,
-        easing: Easing.linear,
-      }),
-      -1,
-      false
-    );
-  }, [rotationProgress]);
+    const interval = setInterval(() => {
+      setRotationPhaseDeg((prev) => (prev + 0.45) % 360);
+    }, 40);
+    return () => clearInterval(interval);
+  }, []);
 
   const resetViewport = () => {
     scale.value = withTiming(1, { duration: 240 });
@@ -253,13 +143,17 @@ export default function UniversePage() {
   };
 
   const panGesture = Gesture.Pan()
+    .minDistance(12)
     .onStart(() => {
       panStartX.value = translateX.value;
       panStartY.value = translateY.value;
     })
     .onUpdate((event) => {
-      translateX.value = panStartX.value + event.translationX;
-      translateY.value = panStartY.value + event.translationY;
+      const nextX = panStartX.value + event.translationX;
+      const nextY = panStartY.value + event.translationY;
+      if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) return;
+      translateX.value = nextX;
+      translateY.value = nextY;
     });
 
   const pinchGesture = Gesture.Pinch()
@@ -268,13 +162,14 @@ export default function UniversePage() {
     })
     .onUpdate((event) => {
       const next = pinchStartScale.value * event.scale;
+      if (!Number.isFinite(next)) return;
       scale.value = clamp(next, 0.65, 2.6);
     });
 
   const mapGesture = Gesture.Simultaneous(panGesture, pinchGesture);
 
   const mapTransformStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { scale: scale.value }],
+    transform: [{ scale: scale.value }, { translateX: translateX.value }, { translateY: translateY.value }],
   }));
 
   const loadApps = React.useCallback(async (showLoading = true): Promise<void> => {
@@ -350,11 +245,6 @@ export default function UniversePage() {
     [topicGroups, selectedTopic]
   );
 
-  const modalGroup = useMemo(
-    () => topicGroups.find((group) => group.topic === modalTopic) || null,
-    [topicGroups, modalTopic]
-  );
-
   const mapWidth = Math.max(screenWidth - 24, 340);
   const mapHeight = Math.max(480, Math.min(660, 320 + topicGroups.length * 22));
   const centerX = mapWidth / 2;
@@ -393,6 +283,24 @@ export default function UniversePage() {
     });
   }, [mapHeight, mapWidth]);
 
+  const focusOnTopic = React.useCallback(
+    (topic: string) => {
+      const orbit = orbits.find((item) => item.topic === topic);
+      if (!orbit) return;
+
+      const angleDeg = orbit.phaseDeg + rotationPhaseDeg * orbit.speed;
+      const angle = (angleDeg * Math.PI) / 180;
+      const planetX = centerX + Math.sin(angle) * orbit.radius;
+      const planetY = centerY - Math.cos(angle) * orbit.radius;
+      const targetScale = 1.55;
+
+      scale.value = withTiming(targetScale, { duration: 280 });
+      translateX.value = withTiming(centerX - planetX * targetScale, { duration: 280 });
+      translateY.value = withTiming(centerY - planetY * targetScale, { duration: 280 });
+    },
+    [centerX, centerY, orbits, rotationPhaseDeg, scale, translateX, translateY]
+  );
+
   const handleSyncTopics = async (reason = 'universe_manual_sync') => {
     try {
       setIsSyncing(true);
@@ -415,7 +323,7 @@ export default function UniversePage() {
 
   const handleTopicPress = (topic: string): void => {
     setSelectedTopic(topic);
-    setModalTopic(topic);
+    focusOnTopic(topic);
   };
 
   const openProject = (appId: string): void => {
@@ -487,7 +395,7 @@ export default function UniversePage() {
           <View style={styles.headerMain}>
             <Text style={styles.title}>Galaxy Universe</Text>
             <Text style={styles.subtitle}>
-              {topicGroups.length} orbiting topic planets around your project core
+              {topicGroups.length} orbiting topic planets. Tap one to zoom and reveal its moons.
             </Text>
           </View>
           <View style={styles.headerActions}>
@@ -558,17 +466,74 @@ export default function UniversePage() {
                     </LinearGradient>
                   </View>
 
-                  {orbits.map((orbit) => (
-                    <OrbitPlanet
-                      key={orbit.topic}
-                      centerX={centerX}
-                      centerY={centerY}
-                      orbit={orbit}
-                      isSelected={selectedGroup?.topic === orbit.topic}
-                      rotationProgress={rotationProgress}
-                      onPress={handleTopicPress}
-                    />
-                  ))}
+                  {orbits.map((orbit) => {
+                    const angleDeg = orbit.phaseDeg + rotationPhaseDeg * orbit.speed;
+                    const angle = (angleDeg * Math.PI) / 180;
+                    const planetX = centerX + Math.sin(angle) * orbit.radius;
+                    const planetY = centerY - Math.cos(angle) * orbit.radius;
+                    const isSelected = selectedGroup?.topic === orbit.topic;
+
+                    return (
+                      <React.Fragment key={orbit.topic}>
+                        <View
+                          pointerEvents="none"
+                          style={[
+                            styles.orbitRing,
+                            {
+                              width: orbit.radius * 2,
+                              height: orbit.radius * 2,
+                              borderColor: `${orbit.color}${isSelected ? '99' : '44'}`,
+                              left: centerX - orbit.radius,
+                              top: centerY - orbit.radius,
+                              opacity: isSelected ? 0.92 : 0.58,
+                            },
+                          ]}
+                        />
+
+                        <TouchableOpacity
+                          activeOpacity={0.9}
+                          style={[
+                            styles.planet,
+                            {
+                              width: orbit.size,
+                              height: orbit.size,
+                              borderRadius: orbit.size / 2,
+                              left: planetX - orbit.size / 2,
+                              top: planetY - orbit.size / 2,
+                              borderColor: isSelected ? '#ffffff' : `${orbit.color}BB`,
+                            },
+                          ]}
+                          onPress={() => handleTopicPress(orbit.topic)}
+                        >
+                          <LinearGradient
+                            colors={[orbit.color, '#101820']}
+                            start={{ x: 0.15, y: 0.1 }}
+                            end={{ x: 0.9, y: 0.9 }}
+                            style={styles.planetGradient}
+                          >
+                            <Text style={styles.planetCount}>{orbit.appCount}</Text>
+                          </LinearGradient>
+                        </TouchableOpacity>
+
+                        <View
+                          pointerEvents="none"
+                          style={[
+                            styles.orbitLabel,
+                            {
+                              left: planetX - 56,
+                              top: planetY - orbit.size / 2 - 28,
+                              borderColor: `${orbit.color}88`,
+                              backgroundColor: isSelected ? 'rgba(255,255,255,0.14)' : 'rgba(2,12,27,0.55)',
+                            },
+                          ]}
+                        >
+                          <Text style={styles.orbitLabelText} numberOfLines={1}>
+                            {formatTopicLabel(orbit.topic)}
+                          </Text>
+                        </View>
+                      </React.Fragment>
+                    );
+                  })}
                 </Animated.View>
               </GestureDetector>
             </View>
@@ -598,7 +563,7 @@ export default function UniversePage() {
                 {selectedGroup ? `${formatTopicLabel(selectedGroup.topic)} Moons` : 'No Topic Selected'}
               </Text>
               {selectedGroup && selectedGroup.apps.length > 0 ? (
-                selectedGroup.apps.slice(0, 6).map((app, index) => (
+                selectedGroup.apps.slice(0, 20).map((app, index) => (
                   <TouchableOpacity
                     key={app.id}
                     style={styles.moonRow}
@@ -622,73 +587,15 @@ export default function UniversePage() {
         )}
       </ScrollView>
 
-      <Modal visible={!!modalGroup} animationType="slide" transparent onRequestClose={() => setModalTopic(null)}>
-        <Pressable style={styles.modalBackdrop} onPress={() => setModalTopic(null)}>
-          <Pressable style={styles.modalCard} onPress={() => {}}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>
-                  {modalGroup ? formatTopicLabel(modalGroup.topic) : 'Topic Orbit'}
-                </Text>
-                <Text style={styles.modalSubtitle}>Moons sorted by what you use most</Text>
-              </View>
-              <TouchableOpacity style={styles.modalClose} onPress={() => setModalTopic(null)}>
-                <Ionicons name="close" size={22} color="#e7eef6" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
-              {modalGroup?.apps.map((app, index) => {
-                const history = (app.topicSortHistory || []).slice(0, 5);
-                return (
-                  <View key={app.id} style={styles.modalMoonCard}>
-                    <View style={styles.modalMoonHeader}>
-                      <View style={styles.modalMoonRank}>
-                        <Text style={styles.modalMoonRankText}>{index + 1}</Text>
-                      </View>
-                      <View style={styles.modalMoonMain}>
-                        <Text style={styles.modalMoonTitle}>{app.title}</Text>
-                        <Text style={styles.modalMoonMeta}>
-                          Uses {app.accessCount || 0} • {app.favorite ? 'Favorite' : 'Standard'}
-                        </Text>
-                      </View>
-                      <TouchableOpacity style={styles.modalOpenButton} onPress={() => openProject(app.id)}>
-                        <Ionicons name="open-outline" size={16} color="#fff" />
-                      </TouchableOpacity>
-                    </View>
-
-                    <Text style={styles.modalMoonSummary}>
-                      Latest sort: {formatSortTime(app.topicClassification?.classifiedAt)} • confidence{' '}
-                      {Math.round((app.topicClassification?.confidence || 0) * 100)}%
-                    </Text>
-
-                    {history.length > 0 && (
-                      <View style={styles.historyWrap}>
-                        <Text style={styles.historyTitle}>Last 5 sorts</Text>
-                        {history.map((entry, entryIndex) => (
-                          <Text key={`${app.id}-sort-${entryIndex}`} style={styles.historyLine}>
-                            {entryIndex + 1}. {formatTopicLabel(entry.primaryTopic)} • {Math.round(entry.confidence * 100)}% •{' '}
-                            {formatSortTime(entry.sortedAt)}
-                          </Text>
-                        ))}
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-            </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
       <Modal
         visible={showTopicManager}
         animationType="slide"
         transparent
         onRequestClose={() => setShowTopicManager(false)}
       >
-        <Pressable style={styles.modalBackdrop} onPress={() => setShowTopicManager(false)}>
-          <Pressable style={styles.modalCard} onPress={() => {}}>
+        <View style={styles.modalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowTopicManager(false)} />
+          <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Planet Builder</Text>
@@ -745,8 +652,8 @@ export default function UniversePage() {
                 Shopping, Business, Utilities, Creative, Developer Tools, Other
               </Text>
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -854,12 +761,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderStyle: 'dashed',
     borderRadius: 999,
-  },
-  orbitLayer: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  orbitLabelContainer: {
-    ...StyleSheet.absoluteFillObject,
   },
   orbitLabel: {
     position: 'absolute',

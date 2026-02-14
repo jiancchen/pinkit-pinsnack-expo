@@ -410,6 +410,10 @@ export default function SettingsPage() {
     Alert.alert('Debug Mode', 'Enable debugging features', [{ text: 'OK' }]);
   };
 
+  const handleRuntimeLogs = () => {
+    router.push('/runtime-logs');
+  };
+
   const handlePrivacyPolicy = () => {
     Alert.alert('Privacy Policy', 'Learn how we protect your data', [{ text: 'OK' }]);
   };
@@ -520,6 +524,15 @@ export default function SettingsPage() {
               title="Debug Mode"
               description="Enable debugging features"
               onPress={handleDebugMode}
+            />
+
+            <View style={styles.separator} />
+
+            <SettingsItem
+              title="Runtime Logs"
+              description="View crash/error logs saved on this device"
+              onPress={handleRuntimeLogs}
+              icon="bug-outline"
             />
           </SettingsCard>
         </View>

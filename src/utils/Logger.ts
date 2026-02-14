@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { RuntimeLogLevel, RuntimeLogService } from '../services/RuntimeLogService';
 
 export enum LogLevel {
   NONE = 0,
@@ -153,6 +154,59 @@ function sanitizeArgsForLog(args: unknown[]): unknown[] {
   return args.map((arg) => sanitizeForLog(arg, 0, seen));
 }
 
+function stringifyForRuntimeLog(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+  if (value === null || value === undefined) return String(value);
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function toRuntimeLogDetails(args: unknown[]): { message: string; details?: string } {
+  if (args.length === 0) {
+    return { message: '(no message)' };
+  }
+
+  const [first, ...rest] = args;
+  const message = stringifyForRuntimeLog(first).trim() || '(no message)';
+  if (rest.length === 0) {
+    return { message };
+  }
+
+  const details = rest
+    .map((item) => stringifyForRuntimeLog(item))
+    .filter((item) => item.trim().length > 0)
+    .join(' | ');
+
+  return {
+    message,
+    details: details || undefined,
+  };
+}
+
+function toRuntimeLevel(level: LogLevel): RuntimeLogLevel {
+  switch (level) {
+    case LogLevel.ERROR:
+      return 'ERROR';
+    case LogLevel.WARN:
+      return 'WARN';
+    case LogLevel.INFO:
+      return 'INFO';
+    case LogLevel.DEBUG:
+      return 'DEBUG';
+    case LogLevel.VERBOSE:
+      return 'VERBOSE';
+    default:
+      return 'INFO';
+  }
+}
+
 class LoggerManager {
   private static instance: LoggerManager;
   private config: LoggerConfig = DEFAULT_CONFIG;
@@ -233,6 +287,7 @@ class LoggerManager {
       const emoji = getEmoji(level);
       const fullPrefix = emoji ? `${emoji} ${prefix.join(' ')}` : prefix.join(' ');
       const safeArgs = sanitizeArgsForLog(args);
+      const runtimePayload = toRuntimeLogDetails(safeArgs);
       
       switch (level) {
         case LogLevel.ERROR:
@@ -244,6 +299,13 @@ class LoggerManager {
         default:
           console.log(fullPrefix, ...safeArgs);
       }
+
+      void RuntimeLogService.append({
+        level: toRuntimeLevel(level),
+        tag,
+        message: runtimePayload.message,
+        details: runtimePayload.details,
+      });
     };
 
     const logger: LoggerInstance = {
