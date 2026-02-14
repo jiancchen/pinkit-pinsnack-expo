@@ -307,9 +307,14 @@ export default function UniversePage() {
       const targetX = centerX;
       const targetY = centerY;
 
+      // The scale transform is centered on the scene center, not top-left.
+      // Account for that pivot so the selected planet lands exactly at targetX/Y.
+      const scaledPlanetX = (planetX - centerX) * targetScale + centerX;
+      const scaledPlanetY = (planetY - centerY) * targetScale + centerY;
+
       scale.value = withTiming(targetScale, { duration: 280 });
-      translateX.value = withTiming(targetX - planetX * targetScale, { duration: 280 });
-      translateY.value = withTiming(targetY - planetY * targetScale, { duration: 280 });
+      translateX.value = withTiming(targetX - scaledPlanetX, { duration: 280 });
+      translateY.value = withTiming(targetY - scaledPlanetY, { duration: 280 });
     },
     [centerX, centerY, orbits, rotationPhaseDeg, scale, translateX, translateY]
   );
