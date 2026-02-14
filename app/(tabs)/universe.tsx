@@ -135,7 +135,7 @@ export default function UniversePage() {
     if (isTopicFocused) return;
 
     const interval = setInterval(() => {
-      setRotationPhaseDeg((prev) => (prev + 0.45) % 360);
+      setRotationPhaseDeg((prev) => prev + 0.45);
     }, 40);
     return () => clearInterval(interval);
   }, [isTopicFocused]);
@@ -295,25 +295,19 @@ export default function UniversePage() {
       const orbit = orbits.find((item) => item.topic === topic);
       if (!orbit) return;
 
-      const targetRotationPhase = ((-orbit.phaseDeg / orbit.speed) % 360 + 360) % 360;
-      setRotationPhaseDeg(targetRotationPhase);
-
-      const angleDeg = orbit.phaseDeg + targetRotationPhase * orbit.speed;
+      const angleDeg = orbit.phaseDeg + rotationPhaseDeg * orbit.speed;
       const angle = (angleDeg * Math.PI) / 180;
       const planetX = centerX + Math.sin(angle) * orbit.radius;
       const planetY = centerY - Math.cos(angle) * orbit.radius;
-      const targetScale = 1.55;
-      const targetX = mapWidth / 2;
-
-      // Keep the selected planet centered inside the top 25% viewport band.
-      const topBandHeight = mapHeight * (1 - FOCUSED_PANEL_HEIGHT_FRACTION);
-      const targetY = topBandHeight / 2;
+      const targetScale = 1.65;
+      const targetX = centerX;
+      const targetY = centerY;
 
       scale.value = withTiming(targetScale, { duration: 280 });
       translateX.value = withTiming(targetX - planetX * targetScale, { duration: 280 });
       translateY.value = withTiming(targetY - planetY * targetScale, { duration: 280 });
     },
-    [centerX, centerY, mapHeight, mapWidth, orbits, scale, translateX, translateY]
+    [centerX, centerY, orbits, rotationPhaseDeg, scale, translateX, translateY]
   );
 
   const handleSyncTopics = async (reason = 'universe_manual_sync') => {
@@ -918,7 +912,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(129,178,233,0.44)',
-    backgroundColor: 'rgba(7, 18, 40, 0.94)',
+    backgroundColor: 'rgba(7, 18, 40, 0.68)',
     padding: 10,
     gap: 8,
   },
