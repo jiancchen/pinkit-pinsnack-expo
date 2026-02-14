@@ -174,8 +174,12 @@ export default function UniversePage() {
 
   const mapGesture = Gesture.Simultaneous(panGesture, pinchGesture);
 
-  const mapTransformStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }, { translateX: translateX.value }, { translateY: translateY.value }],
+  const mapTranslateStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }, { translateY: translateY.value }],
+  }));
+
+  const mapScaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
   }));
 
   const loadApps = React.useCallback(async (showLoading = true): Promise<void> => {
@@ -479,86 +483,88 @@ export default function UniversePage() {
               ))}
 
               <GestureDetector gesture={mapGesture}>
-                <Animated.View style={[styles.galaxyScene, mapTransformStyle]}>
-                  <View style={[styles.coreSun, { left: centerX - 34, top: centerY - 34 }]}>
-                    <LinearGradient
-                      colors={['#8FE3FF', '#38A3FF', '#2B5ECF']}
-                      start={{ x: 0.15, y: 0.12 }}
-                      end={{ x: 0.82, y: 0.92 }}
-                      style={styles.coreSunGradient}
-                    >
-                      <Ionicons name="apps" size={20} color="#eaf7ff" />
-                    </LinearGradient>
-                  </View>
+                <Animated.View style={[styles.galaxyScene, mapTranslateStyle]}>
+                  <Animated.View style={[styles.galaxySceneInner, mapScaleStyle]}>
+                    <View style={[styles.coreSun, { left: centerX - 34, top: centerY - 34 }]}>
+                      <LinearGradient
+                        colors={['#8FE3FF', '#38A3FF', '#2B5ECF']}
+                        start={{ x: 0.15, y: 0.12 }}
+                        end={{ x: 0.82, y: 0.92 }}
+                        style={styles.coreSunGradient}
+                      >
+                        <Ionicons name="apps" size={20} color="#eaf7ff" />
+                      </LinearGradient>
+                    </View>
 
-                  {orbits.map((orbit) => {
-                    const angleDeg = orbit.phaseDeg + rotationPhaseDeg * orbit.speed;
-                    const angle = (angleDeg * Math.PI) / 180;
-                    const planetX = centerX + Math.sin(angle) * orbit.radius;
-                    const planetY = centerY - Math.cos(angle) * orbit.radius;
-                    const isSelected = selectedGroup?.topic === orbit.topic;
+                    {orbits.map((orbit) => {
+                      const angleDeg = orbit.phaseDeg + rotationPhaseDeg * orbit.speed;
+                      const angle = (angleDeg * Math.PI) / 180;
+                      const planetX = centerX + Math.sin(angle) * orbit.radius;
+                      const planetY = centerY - Math.cos(angle) * orbit.radius;
+                      const isSelected = selectedGroup?.topic === orbit.topic;
 
-                    return (
-                      <React.Fragment key={orbit.topic}>
-                        <View
-                          pointerEvents="none"
-                          style={[
-                            styles.orbitRing,
-                            {
-                              width: orbit.radius * 2,
-                              height: orbit.radius * 2,
-                              borderColor: `${orbit.color}${isSelected ? '99' : '44'}`,
-                              left: centerX - orbit.radius,
-                              top: centerY - orbit.radius,
-                              opacity: isSelected ? 0.92 : 0.58,
-                            },
-                          ]}
-                        />
+                      return (
+                        <React.Fragment key={orbit.topic}>
+                          <View
+                            pointerEvents="none"
+                            style={[
+                              styles.orbitRing,
+                              {
+                                width: orbit.radius * 2,
+                                height: orbit.radius * 2,
+                                borderColor: `${orbit.color}${isSelected ? '99' : '44'}`,
+                                left: centerX - orbit.radius,
+                                top: centerY - orbit.radius,
+                                opacity: isSelected ? 0.92 : 0.58,
+                              },
+                            ]}
+                          />
 
-                        <TouchableOpacity
-                          activeOpacity={0.9}
-                          style={[
-                            styles.planet,
-                            {
-                              width: orbit.size,
-                              height: orbit.size,
-                              borderRadius: orbit.size / 2,
-                              left: planetX - orbit.size / 2,
-                              top: planetY - orbit.size / 2,
-                              borderColor: isSelected ? '#ffffff' : `${orbit.color}BB`,
-                            },
-                          ]}
-                          onPress={() => handleTopicPress(orbit.topic)}
-                        >
-                          <LinearGradient
-                            colors={[orbit.color, '#101820']}
-                            start={{ x: 0.15, y: 0.1 }}
-                            end={{ x: 0.9, y: 0.9 }}
-                            style={styles.planetGradient}
+                          <TouchableOpacity
+                            activeOpacity={0.9}
+                            style={[
+                              styles.planet,
+                              {
+                                width: orbit.size,
+                                height: orbit.size,
+                                borderRadius: orbit.size / 2,
+                                left: planetX - orbit.size / 2,
+                                top: planetY - orbit.size / 2,
+                                borderColor: isSelected ? '#ffffff' : `${orbit.color}BB`,
+                              },
+                            ]}
+                            onPress={() => handleTopicPress(orbit.topic)}
                           >
-                            <Text style={styles.planetCount}>{orbit.appCount}</Text>
-                          </LinearGradient>
-                        </TouchableOpacity>
+                            <LinearGradient
+                              colors={[orbit.color, '#101820']}
+                              start={{ x: 0.15, y: 0.1 }}
+                              end={{ x: 0.9, y: 0.9 }}
+                              style={styles.planetGradient}
+                            >
+                              <Text style={styles.planetCount}>{orbit.appCount}</Text>
+                            </LinearGradient>
+                          </TouchableOpacity>
 
-                        <View
-                          pointerEvents="none"
-                          style={[
-                            styles.orbitLabel,
-                            {
-                              left: planetX - 56,
-                              top: planetY - orbit.size / 2 - 28,
-                              borderColor: `${orbit.color}88`,
-                              backgroundColor: isSelected ? 'rgba(255,255,255,0.14)' : 'rgba(2,12,27,0.55)',
-                            },
-                          ]}
-                        >
-                          <Text style={styles.orbitLabelText} numberOfLines={1}>
-                            {formatTopicLabel(orbit.topic)}
-                          </Text>
-                        </View>
-                      </React.Fragment>
-                    );
-                  })}
+                          <View
+                            pointerEvents="none"
+                            style={[
+                              styles.orbitLabel,
+                              {
+                                left: planetX - 56,
+                                top: planetY - orbit.size / 2 - 28,
+                                borderColor: `${orbit.color}88`,
+                                backgroundColor: isSelected ? 'rgba(255,255,255,0.14)' : 'rgba(2,12,27,0.55)',
+                              },
+                            ]}
+                          >
+                            <Text style={styles.orbitLabelText} numberOfLines={1}>
+                              {formatTopicLabel(orbit.topic)}
+                            </Text>
+                          </View>
+                        </React.Fragment>
+                      );
+                    })}
+                  </Animated.View>
                 </Animated.View>
               </GestureDetector>
 
@@ -817,6 +823,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   galaxyScene: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  galaxySceneInner: {
     ...StyleSheet.absoluteFillObject,
   },
   star: {
