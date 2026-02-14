@@ -151,7 +151,11 @@ export default function MyAppsPage() {
 
   return (
     <View style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]}>
-      <StatusBar translucent backgroundColor="transparent" />
+      <StatusBar
+        translucent
+        backgroundColor="transparent"
+        barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
+      />
       <AppThemeBackground />
       
       {/* Main 3D Stack */}

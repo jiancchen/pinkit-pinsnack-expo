@@ -535,7 +535,11 @@ export default function SettingsPage() {
 
   return (
     <SafeAreaView style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]} edges={[]}>
-      <StatusBar translucent backgroundColor="transparent" />
+      <StatusBar
+        translucent
+        backgroundColor="transparent"
+        barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
+      />
       <AppThemeBackground />
       
       {/* Header */}

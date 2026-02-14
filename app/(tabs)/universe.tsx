@@ -411,7 +411,7 @@ export default function UniversePage() {
 
   return (
     <SafeAreaView style={styles.container} edges={[]}>
-      <StatusBar translucent backgroundColor="transparent" />
+      <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
       <LinearGradient
         colors={['#01030a', '#040919', '#06122a', '#071a34', '#08142a']}
         start={{ x: 0.1, y: 0 }}

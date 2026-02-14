@@ -15,6 +15,7 @@ import { RuntimeLogService } from '../src/services/RuntimeLogService';
 import { AppColors } from '../src/constants/AppColors';
 import { createLogger } from '../src/utils/Logger';
 import GenerationLiveActivityController from '../src/components/GenerationLiveActivityController';
+import { useUISettingsStore } from '../src/stores/UISettingsStore';
 
 const log = createLogger('RootLayout');
 
@@ -48,6 +49,8 @@ function normalizeError(error: unknown): { name?: string; message: string; stack
 export default function RootLayout() {
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const appTheme = useUISettingsStore((s) => s.appTheme);
+  const isUniverseTheme = appTheme === 'universe';
   // Flag to force showing main app without API key requirement
   const FORCE_MAIN_APP = true;
 
@@ -160,7 +163,7 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <SystemBars style="light" />
+      <SystemBars style={isUniverseTheme ? 'light' : 'dark'} />
       <GestureHandlerRootView style={{ flex: 1 }}>
         <Stack
           screenOptions={{
@@ -174,7 +177,11 @@ export default function RootLayout() {
           <Stack.Screen name="runtime-logs" options={{ headerShown: false }} />
         </Stack>
         <GenerationLiveActivityController />
-        <StatusBar style="light" translucent backgroundColor="transparent" />
+        <StatusBar
+          style={isUniverseTheme ? 'light' : 'dark'}
+          translucent
+          backgroundColor="transparent"
+        />
       </GestureHandlerRootView>
     </SafeAreaProvider>
   );

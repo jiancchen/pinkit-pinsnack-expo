@@ -316,7 +316,11 @@ export default function CreatePage() {
       style={[styleSheet.container, isUniverseTheme ? styleSheet.containerUniverse : undefined]}
       edges={[]}
     >
-      <StatusBar translucent backgroundColor="transparent" />
+      <StatusBar
+        translucent
+        backgroundColor="transparent"
+        barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
+      />
       <AppThemeBackground />
       
       {/* Header */}
