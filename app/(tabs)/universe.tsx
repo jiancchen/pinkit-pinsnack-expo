@@ -23,7 +23,6 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { AppColors } from '../../src/constants/AppColors';
 import { getLiquidGlassTabBarContentPaddingBottom } from '../../src/constants/LiquidGlassTabBarLayout';
 import { AppStorageService, StoredApp } from '../../src/services/AppStorageService';
 import { TopicClassificationService } from '../../src/services/TopicClassificationService';
@@ -107,12 +106,13 @@ function sortMoons(apps: StoredApp[]): StoredApp[] {
 export default function UniversePage() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
   const [apps, setApps] = useState<StoredApp[]>([]);
   const [customTopics, setCustomTopics] = useState<string[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [showTopicManager, setShowTopicManager] = useState(false);
+  const [showTopicOverlay, setShowTopicOverlay] = useState(false);
   const [newCustomTopic, setNewCustomTopic] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -120,7 +120,7 @@ export default function UniversePage() {
   const [rotationPhaseDeg, setRotationPhaseDeg] = useState(0);
   const backfillTriggeredRef = useRef(false);
 
-  const scrollContentPaddingBottom = getLiquidGlassTabBarContentPaddingBottom(insets.bottom, 28);
+  const screenBottomPadding = getLiquidGlassTabBarContentPaddingBottom(insets.bottom, 12);
 
   const scale = useSharedValue(1);
   const translateX = useSharedValue(0);
@@ -246,7 +246,8 @@ export default function UniversePage() {
   );
 
   const mapWidth = Math.max(screenWidth - 24, 340);
-  const mapHeight = Math.max(480, Math.min(660, 320 + topicGroups.length * 22));
+  const availableHeight = screenHeight - insets.top - screenBottomPadding;
+  const mapHeight = clamp(availableHeight - 190, 320, 560);
   const centerX = mapWidth / 2;
   const centerY = mapHeight / 2;
 
@@ -324,9 +325,11 @@ export default function UniversePage() {
   const handleTopicPress = (topic: string): void => {
     setSelectedTopic(topic);
     focusOnTopic(topic);
+    setShowTopicOverlay(true);
   };
 
   const openProject = (appId: string): void => {
+    setShowTopicOverlay(false);
     router.push(`/app-view?appId=${appId}`);
   };
 
@@ -386,16 +389,26 @@ export default function UniversePage() {
   return (
     <SafeAreaView style={styles.container} edges={[]}>
       <StatusBar translucent backgroundColor="transparent" />
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollContentPaddingBottom }]}
-        showsVerticalScrollIndicator={false}
+      <LinearGradient
+        colors={['#01030a', '#040919', '#06122a', '#071a34', '#08142a']}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View pointerEvents="none" style={styles.nebulaGlowTop} />
+      <View pointerEvents="none" style={styles.nebulaGlowBottom} />
+
+      <View
+        style={[
+          styles.screenContent,
+          { paddingTop: insets.top + 10, paddingBottom: screenBottomPadding },
+        ]}
       >
         <View style={styles.headerCard}>
           <View style={styles.headerMain}>
             <Text style={styles.title}>Galaxy Universe</Text>
             <Text style={styles.subtitle}>
-              {topicGroups.length} orbiting topic planets. Tap one to zoom and reveal its moons.
+              {topicGroups.length} orbiting topic planets. Tap a planet to open a moon overlay.
             </Text>
           </View>
           <View style={styles.headerActions}>
@@ -421,13 +434,13 @@ export default function UniversePage() {
         </View>
 
         {isLoading ? (
-          <View style={styles.loadingState}>
+          <View style={[styles.loadingState, { height: mapHeight }]}>
             <ActivityIndicator size="large" color="#fff" />
             <Text style={styles.loadingText}>Spinning up your planetary system...</Text>
           </View>
         ) : (
           <>
-            <View style={[styles.galaxyCard, { height: mapHeight }]}> 
+            <View style={[styles.galaxyCard, { height: mapHeight }]}>
               <LinearGradient
                 colors={['#020b1f', '#041a33', '#07223f', '#0b1d2e']}
                 start={{ x: 0, y: 0 }}
@@ -457,12 +470,12 @@ export default function UniversePage() {
                 <Animated.View style={[styles.galaxyScene, mapTransformStyle]}>
                   <View style={[styles.coreSun, { left: centerX - 34, top: centerY - 34 }]}>
                     <LinearGradient
-                      colors={['#FFE27A', '#FF9F1C', '#FB5607']}
+                      colors={['#8FE3FF', '#38A3FF', '#2B5ECF']}
                       start={{ x: 0.15, y: 0.12 }}
                       end={{ x: 0.82, y: 0.92 }}
                       style={styles.coreSunGradient}
                     >
-                      <Ionicons name="apps" size={20} color="#111" />
+                      <Ionicons name="apps" size={20} color="#eaf7ff" />
                     </LinearGradient>
                   </View>
 
@@ -538,7 +551,14 @@ export default function UniversePage() {
               </GestureDetector>
             </View>
 
-            <View style={styles.topicSelectorRow}>
+            <Text style={styles.legendHint}>Pinch to zoom, pan to move, tap any planet for moon details.</Text>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.topicSelectorScroll}
+              contentContainerStyle={styles.topicSelectorRow}
+            >
               {topicGroups.map((group) => (
                 <TouchableOpacity
                   key={group.topic}
@@ -546,7 +566,8 @@ export default function UniversePage() {
                     styles.topicChip,
                     {
                       borderColor: `${group.color}AA`,
-                      backgroundColor: selectedGroup?.topic === group.topic ? `${group.color}66` : 'rgba(255,255,255,0.08)',
+                      backgroundColor:
+                        selectedGroup?.topic === group.topic ? `${group.color}66` : 'rgba(255,255,255,0.08)',
                     },
                   ]}
                   onPress={() => handleTopicPress(group.topic)}
@@ -556,19 +577,38 @@ export default function UniversePage() {
                   </Text>
                 </TouchableOpacity>
               ))}
+            </ScrollView>
+          </>
+        )}
+      </View>
+
+      <Modal
+        visible={showTopicOverlay && !!selectedGroup}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTopicOverlay(false)}
+      >
+        <View style={styles.topicOverlayBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowTopicOverlay(false)} />
+          <View style={styles.topicOverlayCard}>
+            <View style={styles.topicOverlayHeader}>
+              <View style={styles.topicOverlayHeaderMain}>
+                <Text style={styles.topicOverlayTitle}>
+                  {selectedGroup ? `${formatTopicLabel(selectedGroup.topic)} Moons` : 'Topic Moons'}
+                </Text>
+                <Text style={styles.topicOverlaySubtitle}>
+                  {selectedGroup ? `${selectedGroup.apps.length} projects in orbit` : '0 projects in orbit'}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.topicOverlayClose} onPress={() => setShowTopicOverlay(false)}>
+                <Ionicons name="close" size={22} color="#e7eef6" />
+              </TouchableOpacity>
             </View>
 
-            <View style={styles.selectedPanel}>
-              <Text style={styles.selectedPanelTitle}>
-                {selectedGroup ? `${formatTopicLabel(selectedGroup.topic)} Moons` : 'No Topic Selected'}
-              </Text>
+            <ScrollView style={styles.topicOverlayList} showsVerticalScrollIndicator={false}>
               {selectedGroup && selectedGroup.apps.length > 0 ? (
-                selectedGroup.apps.slice(0, 20).map((app, index) => (
-                  <TouchableOpacity
-                    key={app.id}
-                    style={styles.moonRow}
-                    onPress={() => openProject(app.id)}
-                  >
+                selectedGroup.apps.slice(0, 30).map((app, index) => (
+                  <TouchableOpacity key={app.id} style={styles.moonRow} onPress={() => openProject(app.id)}>
                     <View style={styles.moonBullet}>
                       <Text style={styles.moonBulletText}>{index + 1}</Text>
                     </View>
@@ -582,10 +622,10 @@ export default function UniversePage() {
               ) : (
                 <Text style={styles.emptyText}>No moons in this orbit yet.</Text>
               )}
-            </View>
-          </>
-        )}
-      </ScrollView>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={showTopicManager}
@@ -662,13 +702,28 @@ export default function UniversePage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: AppColors.Primary,
+    backgroundColor: '#01030a',
   },
-  scroll: {
+  nebulaGlowTop: {
+    position: 'absolute',
+    width: 320,
+    height: 320,
+    borderRadius: 160,
+    top: -120,
+    right: -90,
+    backgroundColor: 'rgba(66, 141, 255, 0.2)',
+  },
+  nebulaGlowBottom: {
+    position: 'absolute',
+    width: 340,
+    height: 340,
+    borderRadius: 170,
+    bottom: -150,
+    left: -90,
+    backgroundColor: 'rgba(166, 76, 255, 0.18)',
+  },
+  screenContent: {
     flex: 1,
-  },
-  scrollContent: {
-    paddingTop: 56,
     paddingHorizontal: 12,
     gap: 14,
   },
@@ -676,9 +731,9 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: '#081526',
+    backgroundColor: 'rgba(9, 20, 42, 0.74)',
     borderWidth: 1,
-    borderColor: 'rgba(145,187,222,0.22)',
+    borderColor: 'rgba(145,187,222,0.35)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -710,7 +765,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(200,230,255,0.36)',
-    backgroundColor: 'rgba(14,41,69,0.9)',
+    backgroundColor: 'rgba(14,41,69,0.96)',
   },
   syncButton: {
     borderRadius: 17,
@@ -746,7 +801,7 @@ const styles = StyleSheet.create({
   galaxyCard: {
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(112,165,223,0.35)',
+    borderColor: 'rgba(112,165,223,0.48)',
     overflow: 'hidden',
   },
   galaxyScene: {
@@ -784,7 +839,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 2,
     borderColor: 'rgba(255,255,255,0.45)',
-    shadowColor: '#FFC857',
+    shadowColor: '#38a3ff',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.55,
     shadowRadius: 14,
@@ -810,35 +865,31 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '900',
   },
+  legendHint: {
+    marginTop: -2,
+    fontSize: 12,
+    color: 'rgba(219, 236, 255, 0.76)',
+    textAlign: 'center',
+  },
+  topicSelectorScroll: {
+    maxHeight: 44,
+  },
   topicSelectorRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
+    paddingRight: 10,
   },
   topicChip: {
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
+    justifyContent: 'center',
   },
   topicChipText: {
     color: '#f8fbff',
     fontSize: 12,
     fontWeight: '700',
-  },
-  selectedPanel: {
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(121,169,224,0.35)',
-    backgroundColor: '#091a2f',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  selectedPanelTitle: {
-    color: '#f7fbff',
-    fontSize: 17,
-    fontWeight: '900',
   },
   moonRow: {
     flexDirection: 'row',
@@ -876,6 +927,56 @@ const styles = StyleSheet.create({
     color: 'rgba(204,228,252,0.85)',
     marginTop: 1,
     fontSize: 11,
+  },
+  topicOverlayBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 9, 24, 0.58)',
+    justifyContent: 'flex-end',
+  },
+  topicOverlayCard: {
+    maxHeight: '64%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(121,169,224,0.42)',
+    backgroundColor: 'rgba(6, 18, 38, 0.97)',
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 20,
+    gap: 10,
+  },
+  topicOverlayHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  topicOverlayHeaderMain: {
+    flex: 1,
+  },
+  topicOverlayTitle: {
+    color: '#f4f9ff',
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  topicOverlaySubtitle: {
+    color: 'rgba(203,227,249,0.8)',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  topicOverlayClose: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(182,215,247,0.3)',
+    backgroundColor: 'rgba(10,36,63,0.95)',
+  },
+  topicOverlayList: {
+    flex: 1,
+    gap: 8,
   },
   modalBackdrop: {
     flex: 1,
