@@ -46,6 +46,8 @@ const TOPIC_COLORS = [
   '#00A8E8',
 ];
 
+const FOCUSED_PANEL_HEIGHT_FRACTION = 0.75;
+
 type TopicGroup = {
   topic: string;
   apps: StoredApp[];
@@ -300,15 +302,18 @@ export default function UniversePage() {
       const angle = (angleDeg * Math.PI) / 180;
       const planetX = centerX + Math.sin(angle) * orbit.radius;
       const planetY = centerY - Math.cos(angle) * orbit.radius;
-      const targetScale = 1.7;
-      const targetX = centerX;
-      const targetY = Math.max(78, mapHeight * 0.24);
+      const targetScale = 1.55;
+      const targetX = mapWidth / 2;
+
+      // Keep the selected planet centered inside the top 25% viewport band.
+      const topBandHeight = mapHeight * (1 - FOCUSED_PANEL_HEIGHT_FRACTION);
+      const targetY = topBandHeight / 2;
 
       scale.value = withTiming(targetScale, { duration: 280 });
       translateX.value = withTiming(targetX - planetX * targetScale, { duration: 280 });
       translateY.value = withTiming(targetY - planetY * targetScale, { duration: 280 });
     },
-    [centerX, centerY, mapHeight, orbits, scale, translateX, translateY]
+    [centerX, centerY, mapHeight, mapWidth, orbits, scale, translateX, translateY]
   );
 
   const handleSyncTopics = async (reason = 'universe_manual_sync') => {
@@ -587,8 +592,12 @@ export default function UniversePage() {
                             <Text style={styles.moonBulletText}>{index + 1}</Text>
                           </View>
                           <View style={styles.moonTextWrap}>
-                            <Text style={styles.moonTitle}>{app.title}</Text>
-                            <Text style={styles.moonMeta}>Uses {app.accessCount || 0} • {app.status}</Text>
+                            <Text style={styles.moonTitle} numberOfLines={1}>
+                              {app.title}
+                            </Text>
+                            <Text style={styles.moonMeta} numberOfLines={1}>
+                              Uses {app.accessCount || 0} • {app.status}
+                            </Text>
                           </View>
                           <Ionicons name="chevron-forward" size={17} color="rgba(255,255,255,0.7)" />
                         </TouchableOpacity>
@@ -905,7 +914,7 @@ const styles = StyleSheet.create({
     left: 10,
     right: 10,
     bottom: 10,
-    maxHeight: '58%',
+    height: `${FOCUSED_PANEL_HEIGHT_FRACTION * 100}%`,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(129,178,233,0.44)',
@@ -949,11 +958,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 9,
+    height: 56,
     borderWidth: 1,
     borderColor: 'rgba(110,160,219,0.26)',
     borderRadius: 12,
     paddingHorizontal: 9,
-    paddingVertical: 8,
+    marginBottom: 8,
     backgroundColor: 'rgba(10,35,62,0.9)',
   },
   moonBullet: {
@@ -971,6 +981,7 @@ const styles = StyleSheet.create({
   },
   moonTextWrap: {
     flex: 1,
+    justifyContent: 'center',
   },
   moonTitle: {
     color: '#f7fbff',
