@@ -162,6 +162,18 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
     }
   };
 
+  const handleFavoriteAppPress = React.useCallback(
+    (appId: string) => {
+      // Ensure taps on cards navigate immediately even when keyboard is open.
+      Keyboard.dismiss();
+      onNavigateToApp(appId);
+      if (showFavorites) {
+        onToggleFavorites();
+      }
+    },
+    [onNavigateToApp, onToggleFavorites, showFavorites]
+  );
+
   return (
     <View
       style={[
@@ -273,13 +285,14 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.horizontalScrollContent}
+                    keyboardShouldPersistTaps="always"
                   >
                     {favoriteItems.map((item) => (
                       <FavoriteAppCard
                         key={item.id}
                         historyItem={item}
                         isUniverseTheme={isUniverseTheme}
-                        onNavigateToApp={onNavigateToApp}
+                        onNavigateToApp={handleFavoriteAppPress}
                       />
                     ))}
                   </ScrollView>
@@ -304,13 +317,14 @@ const SearchBarWithFavorites: React.FC<SearchBarWithFavoritesProps> = ({
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.horizontalScrollContent}
+                    keyboardShouldPersistTaps="always"
                   >
                     {mostUsedItems.map((item) => (
                       <MostUsedAppCard
                         key={item.id}
                         historyItem={item}
                         isUniverseTheme={isUniverseTheme}
-                        onNavigateToApp={onNavigateToApp}
+                        onNavigateToApp={handleFavoriteAppPress}
                       />
                     ))}
                   </ScrollView>
