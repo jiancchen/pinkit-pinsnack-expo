@@ -36,6 +36,7 @@ export interface StoredApp {
     updatedPrompt: string;
     userNotes: string;
     fixSummary?: string[];
+    parentRevisionId?: string | null;
   };
   revisions?: Array<{
     id: string;
@@ -47,6 +48,7 @@ export interface StoredApp {
     userNotes: string;
     fixSummary?: string[];
     errorMessage?: string;
+    parentRevisionId?: string | null;
   }>;
 }
 

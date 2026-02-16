@@ -168,6 +168,9 @@ export default function RootLayout() {
         <Stack
           screenOptions={{
             headerShown: false,
+            contentStyle: {
+              backgroundColor: isUniverseTheme ? '#01030a' : AppColors.Primary,
+            },
           }}
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

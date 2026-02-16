@@ -4,9 +4,11 @@ import {
   Alert,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -29,14 +31,33 @@ import {
   formatModelPricingShort,
   resolveSupportedClaudeModel,
 } from '../src/types/ClaudeApi';
+import { useUISettingsStore } from '../src/stores/UISettingsStore';
+import AppThemeBackground from '../src/components/AppThemeBackground';
 
 const log = createLogger('AppRecreate');
 
 type Mode = 'recreate' | 'fix';
+type RevisionRecord = NonNullable<StoredApp['revisions']>[number];
+
+function normalizeRevisionsWithParents(revisions: RevisionRecord[]): RevisionRecord[] {
+  const idSet = new Set(revisions.map((rev) => rev.id));
+  return revisions.map((rev, index) => {
+    const parentRevisionId =
+      typeof rev.parentRevisionId === 'string' && idSet.has(rev.parentRevisionId)
+        ? rev.parentRevisionId
+        : revisions[index + 1]?.id || null;
+    return {
+      ...rev,
+      parentRevisionId,
+    };
+  });
+}
 
 export default function AppRecreatePage() {
   const router = useRouter();
   const { appId, mode } = useLocalSearchParams<{ appId?: string; mode?: string }>();
+  const appTheme = useUISettingsStore((s) => s.appTheme);
+  const isUniverseTheme = appTheme === 'universe';
 
   const safeGoBack = () => {
     const canGoBack = (router as any)?.canGoBack?.();
@@ -56,7 +77,9 @@ export default function AppRecreatePage() {
   const [newPrompt, setNewPrompt] = useState('');
   const [fixNotes, setFixNotes] = useState('');
   const [selectedModel, setSelectedModel] = useState<string>('');
+  const [showModelPicker, setShowModelPicker] = useState(false);
   const [showRevisionHistory, setShowRevisionHistory] = useState(resolvedMode === 'fix');
+  const [baseRevisionId, setBaseRevisionId] = useState<string | null>(null);
 
   const newPromptRef = useRef<TextInput>(null);
   const fixNotesRef = useRef<TextInput>(null);
@@ -79,6 +102,10 @@ export default function AppRecreatePage() {
       setTimeout(() => newPromptRef.current?.focus(), 250);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app?.id]);
+
+  useEffect(() => {
+    setBaseRevisionId(null);
   }, [app?.id]);
 
   const loadApp = async (id: string) => {
@@ -109,9 +136,11 @@ export default function AppRecreatePage() {
     }
   };
 
-  const revisionHistory = useMemo(() => {
+  const revisionHistory = useMemo<RevisionRecord[]>(() => {
     if (!app) return [];
-    if (app.revisions?.length) return app.revisions.slice(0, 12);
+    if (app.revisions?.length) {
+      return normalizeRevisionsWithParents(app.revisions.slice(0, 25));
+    }
     if (app.lastRevision) {
       return [
         {
@@ -123,11 +152,50 @@ export default function AppRecreatePage() {
           updatedPrompt: app.lastRevision.updatedPrompt,
           userNotes: app.lastRevision.userNotes,
           fixSummary: app.lastRevision.fixSummary,
+          parentRevisionId: app.lastRevision.parentRevisionId || null,
         },
       ];
     }
     return [];
   }, [app]);
+
+  const activeBaseRevisionId = useMemo(() => {
+    if (!revisionHistory.length) return null;
+    if (baseRevisionId && revisionHistory.some((rev) => rev.id === baseRevisionId)) return baseRevisionId;
+    const latestCompleted = revisionHistory.find((rev) => rev.status === 'completed');
+    return latestCompleted?.id || revisionHistory[0]?.id || null;
+  }, [baseRevisionId, revisionHistory]);
+
+  const revisionTree = useMemo(() => {
+    const chronological = [...revisionHistory].sort((a, b) => a.at - b.at);
+    const byId = new Map(chronological.map((rev) => [rev.id, rev]));
+    const depthCache = new Map<string, number>();
+
+    const getDepth = (rev: RevisionRecord, seen: Set<string> = new Set()): number => {
+      const cached = depthCache.get(rev.id);
+      if (typeof cached === 'number') return cached;
+      const parentId = rev.parentRevisionId || null;
+      if (!parentId || !byId.has(parentId) || seen.has(parentId)) {
+        depthCache.set(rev.id, 0);
+        return 0;
+      }
+      seen.add(rev.id);
+      const parent = byId.get(parentId)!;
+      const depth = getDepth(parent, seen) + 1;
+      depthCache.set(rev.id, depth);
+      return depth;
+    };
+
+    return chronological.map((rev) => {
+      const parent = rev.parentRevisionId ? byId.get(rev.parentRevisionId) : undefined;
+      return {
+        ...rev,
+        depth: getDepth(rev),
+        parentAt: parent?.at,
+        parentModel: parent?.model,
+      };
+    });
+  }, [revisionHistory]);
 
   const onRecreate = async () => {
     if (!app || isRecreating) return;
@@ -138,14 +206,21 @@ export default function AppRecreatePage() {
     }
 
     const notes = fixNotes.trim();
+    const parentRevisionId = activeBaseRevisionId;
+    const actionLabel = resolvedMode === 'fix' ? 'Fix' : 'Recreate';
+    const confirmTitle = resolvedMode === 'fix' ? 'Fix App' : 'Recreate App';
+    const confirmBody =
+      resolvedMode === 'fix'
+        ? 'This sends the full current HTML, original prompt, updated prompt, and your fix notes to Claude. Claude returns a complete replacement HTML file. Continue?'
+        : 'This sends the full current HTML plus your updated prompt/notes to Claude, then replaces the app with a complete returned HTML file. Continue?';
 
     Alert.alert(
-      'Recreate App',
-      'This will regenerate the HTML using your updated prompt and notes, using the current HTML as context. Continue?',
+      confirmTitle,
+      confirmBody,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Recreate',
+          text: actionLabel,
           onPress: async () => {
             const revisionId = `rev_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
             const startedAt = Date.now();
@@ -164,6 +239,7 @@ export default function AppRecreatePage() {
                 model,
                 updatedPrompt,
                 userNotes: notes,
+                parentRevisionId,
               };
               const nextRevisions = [nextRevision, ...(app.revisions || [])].slice(0, 25);
 
@@ -181,6 +257,7 @@ export default function AppRecreatePage() {
                   model,
                   updatedPrompt,
                   userNotes: notes,
+                  parentRevisionId,
                 },
                 revisions: nextRevisions,
               });
@@ -197,6 +274,7 @@ export default function AppRecreatePage() {
                         model,
                         updatedPrompt,
                         userNotes: notes,
+                        parentRevisionId,
                       },
                       revisions: nextRevisions,
                     }
@@ -250,6 +328,7 @@ export default function AppRecreatePage() {
                   updatedPrompt,
                   userNotes: notes,
                   fixSummary,
+                  parentRevisionId,
                 },
                 revisions: completedRevisions,
               });
@@ -267,11 +346,14 @@ export default function AppRecreatePage() {
                         updatedPrompt,
                         userNotes: notes,
                         fixSummary,
+                        parentRevisionId,
                       },
                       revisions: completedRevisions,
                     }
                   : prev
               );
+
+              setBaseRevisionId(revisionId);
 
               Alert.alert('Success', 'App recreated successfully.', [{ text: 'OK', onPress: safeGoBack }]);
             } catch (error: any) {
@@ -306,10 +388,16 @@ export default function AppRecreatePage() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.center}>
+      <SafeAreaView style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]}>
+        <StatusBar
+          translucent
+          backgroundColor="transparent"
+          barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
+        />
+        <AppThemeBackground />
+        <View style={[styles.center, isUniverseTheme ? styles.centerUniverse : undefined]}>
           <ActivityIndicator size="large" color={AppColors.FABMain} />
-          <Text style={styles.centerText}>Loading…</Text>
+          <Text style={[styles.centerText, isUniverseTheme ? styles.centerTextUniverse : undefined]}>Loading…</Text>
         </View>
       </SafeAreaView>
     );
@@ -317,9 +405,17 @@ export default function AppRecreatePage() {
 
   if (!app) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.center}>
-          <Text style={styles.centerText}>App not found.</Text>
+      <SafeAreaView style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]}>
+        <StatusBar
+          translucent
+          backgroundColor="transparent"
+          barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
+        />
+        <AppThemeBackground />
+        <View style={[styles.center, isUniverseTheme ? styles.centerUniverse : undefined]}>
+          <Text style={[styles.centerText, isUniverseTheme ? styles.centerTextUniverse : undefined]}>
+            App not found.
+          </Text>
           <TouchableOpacity style={styles.primaryButton} onPress={safeGoBack}>
             <Text style={styles.primaryButtonText}>Go Back</Text>
           </TouchableOpacity>
@@ -328,88 +424,155 @@ export default function AppRecreatePage() {
     );
   }
 
+  const primaryHeaderActionLabel = resolvedMode === 'fix' ? 'Fix' : 'Recreate';
+  const fullHtmlExplainer =
+    resolvedMode === 'fix'
+      ? 'Fix mode sends the app\'s full current HTML + prompt + your notes to Claude, then replaces the app with the returned full HTML.'
+      : 'Recreate sends the full current HTML + updated prompt/notes to Claude and replaces the app with a complete returned HTML file.';
+  const selectedModelName = MODEL_INFO[selectedModel]?.name || selectedModel || 'Select Claude Model';
+  const selectedModelPricing =
+    (selectedModel && formatModelPricingShort(selectedModel)) || 'Pricing unavailable';
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]} edges={['top', 'bottom']}>
+      <StatusBar
+        translucent
+        backgroundColor="transparent"
+        barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
+      />
+      <AppThemeBackground />
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
       >
-        <View style={styles.header}>
+        <View style={[styles.header, isUniverseTheme ? styles.headerUniverse : undefined]}>
           <TouchableOpacity
-            style={styles.headerIconButton}
+            style={[styles.headerIconButton, isUniverseTheme ? styles.headerIconButtonUniverse : undefined]}
             onPress={safeGoBack}
             disabled={isRecreating}
             accessibilityLabel="Back"
           >
-            <Ionicons name="chevron-back" size={22} color="rgba(0, 0, 0, 0.8)" />
+            <Ionicons
+              name="chevron-back"
+              size={22}
+              color={isUniverseTheme ? 'rgba(226, 240, 255, 0.92)' : 'rgba(0, 0, 0, 0.8)'}
+            />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle}>Update Prompt & Recreate</Text>
-            <Text style={styles.headerSubtitle} numberOfLines={1}>
+            <Text style={[styles.headerTitle, isUniverseTheme ? styles.headerTitleUniverse : undefined]}>
+              Update Prompt & Recreate
+            </Text>
+            <Text
+              style={[styles.headerSubtitle, isUniverseTheme ? styles.headerSubtitleUniverse : undefined]}
+              numberOfLines={1}
+            >
               {app.title}
             </Text>
           </View>
-          <TouchableOpacity
-            style={styles.headerIconButton}
-            onPress={() => Keyboard.dismiss()}
-            accessibilityLabel="Hide keyboard"
-          >
-            <Ionicons name="chevron-down" size={20} color="rgba(0, 0, 0, 0.65)" />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={[styles.headerIconButton, isUniverseTheme ? styles.headerIconButtonUniverse : undefined]}
+              onPress={() => Keyboard.dismiss()}
+              accessibilityLabel="Hide keyboard"
+            >
+              <Ionicons
+                name="chevron-down"
+                size={20}
+                color={isUniverseTheme ? 'rgba(226, 240, 255, 0.92)' : 'rgba(0, 0, 0, 0.65)'}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.headerPrimaryAction,
+                isUniverseTheme ? styles.headerPrimaryActionUniverse : undefined,
+                isRecreating ? styles.headerPrimaryActionDisabled : undefined,
+              ]}
+              onPress={onRecreate}
+              disabled={isRecreating}
+              accessibilityLabel={primaryHeaderActionLabel}
+            >
+              {isRecreating ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.headerPrimaryActionText}>{primaryHeaderActionLabel}</Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         <ScrollView
-          style={styles.body}
+          style={[styles.body, isUniverseTheme ? styles.bodyUniverse : undefined]}
           contentContainerStyle={styles.bodyContent}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.sectionTitle}>Select AI Model</Text>
-          <View style={{ gap: 8 }}>
-            {CLAUDE_MODEL_PICKER_OPTIONS.map((model) => {
-              const isSelected = selectedModel === model;
-              const status = MODEL_INFO[model]?.status;
-              const isRetired = status === 'retired';
-              return (
-                <TouchableOpacity
-                  key={model}
-                  style={[styles.modelOption, isSelected && styles.modelOptionSelected, isRetired && { opacity: 0.5 }]}
-                  disabled={isRetired || isRecreating}
-                  onPress={() => setSelectedModel(model)}
-                >
-                  <View style={{ flex: 1, paddingRight: 10 }}>
-                    <Text style={[styles.modelName, isSelected && styles.modelNameSelected]}>
-                      {MODEL_INFO[model]?.name || model}
-                      {status === 'deprecated' ? ' (deprecated)' : status === 'retired' ? ' (retired)' : ''}
-                    </Text>
-                    <Text style={[styles.modelPrice, isSelected && styles.modelPriceSelected]}>
-                      {formatModelPricingShort(model) || 'Pricing unavailable'} (as of {PRICING_AS_OF_DISPLAY})
-                    </Text>
-                  </View>
-                  {isSelected && <Ionicons name="checkmark" size={16} color="white" />}
-                </TouchableOpacity>
-              );
-            })}
+          <View style={[styles.explainerCard, isUniverseTheme ? styles.explainerCardUniverse : undefined]}>
+            <Ionicons
+              name="information-circle-outline"
+              size={18}
+              color={isUniverseTheme ? 'rgba(210, 233, 255, 0.9)' : 'rgba(0, 0, 0, 0.7)'}
+            />
+            <Text style={[styles.explainerText, isUniverseTheme ? styles.explainerTextUniverse : undefined]}>
+              {fullHtmlExplainer}
+            </Text>
           </View>
 
-          <Text style={styles.sectionTitle}>Updated Prompt</Text>
+          <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
+            Select AI Model
+          </Text>
+          <TouchableOpacity
+            style={[styles.modelPickerTrigger, isUniverseTheme ? styles.modelPickerTriggerUniverse : undefined]}
+            onPress={() => setShowModelPicker(true)}
+            disabled={isRecreating}
+          >
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <Text style={[styles.modelName, isUniverseTheme ? styles.modelNameUniverse : undefined]}>
+                {selectedModelName}
+              </Text>
+              <Text style={[styles.modelPrice, isUniverseTheme ? styles.modelPriceUniverse : undefined]}>
+                {selectedModelPricing} (as of {PRICING_AS_OF_DISPLAY})
+              </Text>
+            </View>
+            <Ionicons
+              name="chevron-down"
+              size={18}
+              color={isUniverseTheme ? 'rgba(220, 238, 255, 0.9)' : 'rgba(0, 0, 0, 0.6)'}
+            />
+          </TouchableOpacity>
+
+          <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
+            Updated Prompt
+          </Text>
           <TextInput
             ref={newPromptRef}
-            style={[styles.textInput, styles.multiline]}
+            style={[
+              styles.textInput,
+              isUniverseTheme ? styles.textInputUniverse : styles.textInputYellow,
+              styles.multiline,
+            ]}
             value={newPrompt}
             onChangeText={setNewPrompt}
             placeholder="Update the original prompt…"
+            placeholderTextColor={isUniverseTheme ? 'rgba(191, 216, 243, 0.66)' : 'rgba(0, 0, 0, 0.45)'}
             multiline={true}
             textAlignVertical="top"
             editable={!isRecreating}
           />
 
           <View style={styles.sectionHeaderRow}>
-            <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Fix Request (optional)</Text>
+            <Text
+              style={[
+                styles.sectionTitle,
+                isUniverseTheme ? styles.sectionTitleUniverse : undefined,
+                { marginBottom: 0 },
+              ]}
+            >
+              Fix Request (optional)
+            </Text>
             <TouchableOpacity
-              style={styles.inlineActionButton}
+              style={[styles.inlineActionButton, isUniverseTheme ? styles.inlineActionButtonUniverse : undefined]}
               onPress={() => {
                 const template =
                   'Repro steps:\n- \n\nExpected:\n- \n\nActual:\n- \n\nDevice / screen:\n- \n\nConstraints:\n- Keep same functionality\n- Fix layout/overflow\n';
@@ -417,40 +580,58 @@ export default function AppRecreatePage() {
               }}
               disabled={isRecreating}
             >
-              <Ionicons name="clipboard-outline" size={16} color="rgba(0, 0, 0, 0.7)" />
-              <Text style={styles.inlineActionText}>Template</Text>
+              <Ionicons
+                name="clipboard-outline"
+                size={16}
+                color={isUniverseTheme ? 'rgba(206, 228, 251, 0.86)' : 'rgba(0, 0, 0, 0.7)'}
+              />
+              <Text style={[styles.inlineActionText, isUniverseTheme ? styles.inlineActionTextUniverse : undefined]}>
+                Template
+              </Text>
             </TouchableOpacity>
           </View>
           <TextInput
             ref={fixNotesRef}
-            style={[styles.textInput, styles.multiline]}
+            style={[
+              styles.textInput,
+              isUniverseTheme ? styles.textInputUniverse : styles.textInputYellow,
+              styles.multiline,
+            ]}
             value={fixNotes}
             onChangeText={setFixNotes}
             placeholder="e.g., buttons overflow on small screens; spacing is off; scrolling is broken…"
+            placeholderTextColor={isUniverseTheme ? 'rgba(191, 216, 243, 0.66)' : 'rgba(0, 0, 0, 0.45)'}
             multiline={true}
             textAlignVertical="top"
             editable={!isRecreating}
           />
 
           <TouchableOpacity
-            style={styles.historyToggle}
+            style={[styles.historyToggle, isUniverseTheme ? styles.historyToggleUniverse : undefined]}
             onPress={() => setShowRevisionHistory((v) => !v)}
             disabled={isRecreating}
           >
             <Ionicons
               name={showRevisionHistory ? 'chevron-down' : 'chevron-forward'}
               size={18}
-              color="rgba(0, 0, 0, 0.7)"
+              color={isUniverseTheme ? 'rgba(210, 233, 255, 0.85)' : 'rgba(0, 0, 0, 0.7)'}
             />
-            <Text style={styles.historyToggleText}>Generation History</Text>
+            <Text style={[styles.historyToggleText, isUniverseTheme ? styles.historyToggleTextUniverse : undefined]}>
+              Generation History
+            </Text>
           </TouchableOpacity>
 
           {showRevisionHistory && (
-            <View style={styles.historyPanel}>
-              {revisionHistory.length === 0 ? (
-                <Text style={styles.historyEmptyText}>No revision history yet.</Text>
+            <View style={[styles.historyPanel, isUniverseTheme ? styles.historyPanelUniverse : undefined]}>
+              <Text style={[styles.historyLegend, isUniverseTheme ? styles.historyLegendUniverse : undefined]}>
+                Tree view (oldest to newest). Tap "Use as Base" to fork from any revision.
+              </Text>
+              {revisionTree.length === 0 ? (
+                <Text style={[styles.historyEmptyText, isUniverseTheme ? styles.historyEmptyTextUniverse : undefined]}>
+                  No revision history yet.
+                </Text>
               ) : (
-                revisionHistory.map((rev) => {
+                revisionTree.map((rev) => {
                   const when = new Date(rev.at).toLocaleString();
                   const statusIcon =
                     rev.status === 'completed'
@@ -462,29 +643,69 @@ export default function AppRecreatePage() {
                     rev.status === 'completed' ? '#16A34A' : rev.status === 'error' ? '#EF4444' : '#F59E0B';
                   const errorMessage =
                     typeof (rev as any)?.errorMessage === 'string' ? ((rev as any).errorMessage as string) : undefined;
+                  const depthPrefix = rev.depth === 0 ? '●' : `${'│ '.repeat(Math.max(0, rev.depth - 1))}└─`;
+                  const parentLabel = rev.parentAt
+                    ? `Forked from ${new Date(rev.parentAt).toLocaleString()}${rev.parentModel ? ` • ${MODEL_INFO[rev.parentModel]?.name || rev.parentModel}` : ''}`
+                    : 'Root revision';
+                  const isBase = activeBaseRevisionId === rev.id;
                   return (
-                    <View key={rev.id} style={styles.historyRow}>
+                    <View
+                      key={rev.id}
+                      style={[
+                        styles.historyRow,
+                        isBase ? styles.historyRowBase : undefined,
+                        isBase && isUniverseTheme ? styles.historyRowBaseUniverse : undefined,
+                      ]}
+                    >
+                      <Text style={[styles.historyTreePrefix, isUniverseTheme ? styles.historyTreePrefixUniverse : undefined]}>
+                        {depthPrefix}
+                      </Text>
                       <Ionicons name={statusIcon as any} size={18} color={statusColor} />
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.historyRowTitle}>
+                        <Text
+                          style={[styles.historyRowTitle, isUniverseTheme ? styles.historyRowTitleUniverse : undefined]}
+                        >
                           {when} • {MODEL_INFO[rev.model]?.name || rev.model}
                         </Text>
+                        <Text
+                          style={[
+                            styles.historyRowSubtext,
+                            isUniverseTheme ? styles.historyRowSubtextUniverse : undefined,
+                          ]}
+                        >
+                          {parentLabel}
+                        </Text>
                         {!!rev.fixSummary?.length && (
-                          <Text style={styles.historyRowSubtext}>Fixes: {rev.fixSummary.join(' · ')}</Text>
+                          <Text
+                            style={[
+                              styles.historyRowSubtext,
+                              isUniverseTheme ? styles.historyRowSubtextUniverse : undefined,
+                            ]}
+                          >
+                            Fixes: {rev.fixSummary.join(' · ')}
+                          </Text>
                         )}
                         {!!errorMessage && (
                           <Text style={[styles.historyRowSubtext, { color: '#EF4444' }]}>{errorMessage}</Text>
                         )}
                       </View>
                       <TouchableOpacity
-                        style={styles.historyUseButton}
+                        style={[styles.historyUseButton, isUniverseTheme ? styles.historyUseButtonUniverse : undefined]}
                         onPress={() => {
                           setNewPrompt(rev.updatedPrompt);
                           setFixNotes(rev.userNotes || '');
+                          setBaseRevisionId(rev.id);
                         }}
                         disabled={isRecreating}
                       >
-                        <Text style={styles.historyUseButtonText}>Use</Text>
+                        <Text
+                          style={[
+                            styles.historyUseButtonText,
+                            isUniverseTheme ? styles.historyUseButtonTextUniverse : undefined,
+                          ]}
+                        >
+                          {isBase ? 'Base' : 'Use as Base'}
+                        </Text>
                       </TouchableOpacity>
                     </View>
                   );
@@ -493,29 +714,92 @@ export default function AppRecreatePage() {
             </View>
           )}
 
-          <View style={{ height: 90 }} />
+          <View style={{ height: 26 }} />
         </ScrollView>
-
-        <View style={styles.footer}>
-          <Pressable
-            style={[styles.footerButton, styles.footerButtonSecondary]}
-            onPress={safeGoBack}
-            disabled={isRecreating}
-          >
-            <Text style={styles.footerButtonSecondaryText}>Cancel</Text>
-          </Pressable>
-          <Pressable style={[styles.footerButton, styles.footerButtonPrimary]} onPress={onRecreate} disabled={isRecreating}>
-            {isRecreating ? (
-              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                <ActivityIndicator size="small" color="white" />
-                <Text style={styles.footerButtonPrimaryText}>Working…</Text>
-              </View>
-            ) : (
-              <Text style={styles.footerButtonPrimaryText}>Recreate</Text>
-            )}
-          </Pressable>
-        </View>
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={showModelPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowModelPicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowModelPicker(false)} />
+          <View style={[styles.modalContent, isUniverseTheme ? styles.modalContentUniverse : undefined]}>
+            <Text style={[styles.modalTitle, isUniverseTheme ? styles.modalTitleUniverse : undefined]}>
+              Select AI Model
+            </Text>
+            <Text style={[styles.modalSubtitle, isUniverseTheme ? styles.modalSubtitleUniverse : undefined]}>
+              Prices as of {PRICING_AS_OF_DISPLAY} (USD per MTok)
+            </Text>
+
+            <ScrollView
+              style={styles.modelOptionsScroll}
+              contentContainerStyle={styles.modelOptionsScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {CLAUDE_MODEL_PICKER_OPTIONS.map((model) => {
+                const status = MODEL_INFO[model]?.status;
+                const isRetired = status === 'retired';
+                const isSelected = selectedModel === model;
+                return (
+                  <TouchableOpacity
+                    key={model}
+                    style={[
+                      styles.modelOption,
+                      isUniverseTheme ? styles.modelOptionUniverse : undefined,
+                      isSelected && styles.modelOptionSelected,
+                      isSelected && isUniverseTheme ? styles.modelOptionSelectedUniverse : undefined,
+                      isRetired && styles.modelOptionDisabled,
+                    ]}
+                    disabled={isRetired}
+                    onPress={() => {
+                      setSelectedModel(model);
+                      setShowModelPicker(false);
+                    }}
+                  >
+                    <View style={{ flex: 1, paddingRight: 10 }}>
+                      <Text
+                        style={[
+                          styles.modelName,
+                          isUniverseTheme ? styles.modelNameUniverse : undefined,
+                          isSelected ? styles.modelNameSelected : undefined,
+                          isRetired ? styles.modelNameDisabled : undefined,
+                        ]}
+                      >
+                        {MODEL_INFO[model]?.name || model}
+                        {status === 'deprecated' ? ' (deprecated)' : status === 'retired' ? ' (retired)' : ''}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.modelPrice,
+                          isUniverseTheme ? styles.modelPriceUniverse : undefined,
+                          isSelected ? styles.modelPriceSelected : undefined,
+                        ]}
+                      >
+                        {formatModelPricingShort(model) || 'Pricing unavailable'}
+                      </Text>
+                    </View>
+                    {isSelected && <Ionicons name="checkmark-circle" size={20} color={AppColors.FABMain} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.modalCancelButton, isUniverseTheme ? styles.modalCancelButtonUniverse : undefined]}
+              onPress={() => setShowModelPicker(false)}
+            >
+              <Text
+                style={[styles.modalCancelButtonText, isUniverseTheme ? styles.modalCancelButtonTextUniverse : undefined]}
+              >
+                Done
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -525,6 +809,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: AppColors.Primary,
   },
+  containerUniverse: {
+    backgroundColor: 'transparent',
+  },
   center: {
     flex: 1,
     alignItems: 'center',
@@ -532,10 +819,16 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 10,
   },
+  centerUniverse: {
+    backgroundColor: 'rgba(4, 14, 30, 0.88)',
+  },
   centerText: {
     fontSize: 14,
     color: 'rgba(0, 0, 0, 0.7)',
     textAlign: 'center',
+  },
+  centerTextUniverse: {
+    color: 'rgba(214, 233, 253, 0.9)',
   },
   primaryButton: {
     marginTop: 10,
@@ -555,6 +848,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     gap: 10,
   },
+  headerUniverse: {
+    backgroundColor: 'rgba(8, 22, 42, 0.9)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(123, 169, 220, 0.32)',
+  },
   headerIconButton: {
     width: 38,
     height: 38,
@@ -563,29 +861,111 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.06)',
   },
+  headerIconButtonUniverse: {
+    backgroundColor: 'rgba(10, 34, 61, 0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(140, 185, 235, 0.3)',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerPrimaryAction: {
+    minWidth: 82,
+    height: 38,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AppColors.FABMain,
+  },
+  headerPrimaryActionUniverse: {
+    backgroundColor: '#0f7cff',
+  },
+  headerPrimaryActionDisabled: {
+    opacity: 0.6,
+  },
+  headerPrimaryActionText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '900',
+  },
   headerTitle: {
     fontSize: 16,
     fontWeight: '800',
     color: 'rgba(0, 0, 0, 0.85)',
+  },
+  headerTitleUniverse: {
+    color: 'rgba(233, 246, 255, 0.95)',
   },
   headerSubtitle: {
     marginTop: 2,
     fontSize: 12,
     color: 'rgba(0, 0, 0, 0.55)',
   },
+  headerSubtitleUniverse: {
+    color: 'rgba(190, 216, 244, 0.86)',
+  },
   body: {
     flex: 1,
     paddingHorizontal: 12,
   },
+  bodyUniverse: {
+    backgroundColor: 'transparent',
+  },
   bodyContent: {
     paddingBottom: 14,
     gap: 14,
+  },
+  explainerCard: {
+    marginTop: 2,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.14)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  explainerCardUniverse: {
+    borderColor: 'rgba(123, 169, 220, 0.3)',
+    backgroundColor: 'rgba(8, 26, 48, 0.86)',
+  },
+  explainerText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    color: 'rgba(0, 0, 0, 0.72)',
+  },
+  explainerTextUniverse: {
+    color: 'rgba(205, 226, 248, 0.9)',
   },
   sectionTitle: {
     fontSize: 15,
     fontWeight: '800',
     color: 'rgba(0, 0, 0, 0.82)',
     marginBottom: 6,
+  },
+  sectionTitleUniverse: {
+    color: 'rgba(223, 238, 255, 0.94)',
+  },
+  modelPickerTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.18)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  modelPickerTriggerUniverse: {
+    borderColor: 'rgba(123, 169, 220, 0.34)',
+    backgroundColor: 'rgba(7, 24, 45, 0.9)',
   },
   textInput: {
     borderWidth: 1,
@@ -594,7 +974,17 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     color: 'rgba(0, 0, 0, 0.85)',
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    backgroundColor: '#fff',
+  },
+  textInputYellow: {
+    borderColor: 'rgba(0, 0, 0, 0.14)',
+    backgroundColor: '#fff',
+    color: 'rgba(0, 0, 0, 0.86)',
+  },
+  textInputUniverse: {
+    borderColor: 'rgba(123, 169, 220, 0.34)',
+    backgroundColor: 'rgba(7, 24, 45, 0.92)',
+    color: 'rgba(227, 242, 255, 0.95)',
   },
   multiline: {
     minHeight: 120,
@@ -608,20 +998,37 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.18)',
-    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     gap: 10,
+  },
+  modelOptionUniverse: {
+    borderColor: 'rgba(123, 169, 220, 0.34)',
+    backgroundColor: 'rgba(7, 24, 45, 0.9)',
   },
   modelOptionSelected: {
     backgroundColor: AppColors.FABMain,
     borderColor: AppColors.FABMain,
+  },
+  modelOptionSelectedUniverse: {
+    backgroundColor: '#0f7cff',
+    borderColor: '#0f7cff',
+  },
+  modelOptionDisabled: {
+    opacity: 0.5,
   },
   modelName: {
     fontSize: 13,
     fontWeight: '800',
     color: 'rgba(0, 0, 0, 0.82)',
   },
+  modelNameUniverse: {
+    color: 'rgba(224, 240, 255, 0.94)',
+  },
   modelNameSelected: {
     color: 'white',
+  },
+  modelNameDisabled: {
+    color: 'rgba(0, 0, 0, 0.5)',
   },
   modelPrice: {
     marginTop: 3,
@@ -629,6 +1036,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: 'rgba(0, 0, 0, 0.55)',
     lineHeight: 14,
+  },
+  modelPriceUniverse: {
+    color: 'rgba(190, 216, 244, 0.84)',
   },
   modelPriceSelected: {
     color: 'rgba(255, 255, 255, 0.9)',
@@ -648,10 +1058,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: 'rgba(0, 0, 0, 0.06)',
   },
+  inlineActionButtonUniverse: {
+    backgroundColor: 'rgba(10, 34, 61, 0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(140, 185, 235, 0.3)',
+  },
   inlineActionText: {
     fontSize: 12,
     fontWeight: '800',
     color: 'rgba(0, 0, 0, 0.7)',
+  },
+  inlineActionTextUniverse: {
+    color: 'rgba(214, 233, 253, 0.92)',
   },
   historyToggle: {
     flexDirection: 'row',
@@ -660,34 +1078,81 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+  },
+  historyToggleUniverse: {
+    backgroundColor: 'rgba(7, 24, 45, 0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(123, 169, 220, 0.3)',
   },
   historyToggleText: {
     fontSize: 14,
     fontWeight: '800',
     color: 'rgba(0, 0, 0, 0.8)',
   },
+  historyToggleTextUniverse: {
+    color: 'rgba(223, 238, 255, 0.94)',
+  },
   historyPanel: {
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.12)',
-    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
     padding: 12,
     gap: 10,
+  },
+  historyPanelUniverse: {
+    borderColor: 'rgba(123, 169, 220, 0.3)',
+    backgroundColor: 'rgba(8, 26, 48, 0.86)',
+  },
+  historyLegend: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: 'rgba(0, 0, 0, 0.65)',
+  },
+  historyLegendUniverse: {
+    color: 'rgba(190, 216, 244, 0.84)',
   },
   historyEmptyText: {
     fontSize: 13,
     color: 'rgba(0, 0, 0, 0.6)',
   },
+  historyEmptyTextUniverse: {
+    color: 'rgba(190, 216, 244, 0.84)',
+  },
   historyRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+  },
+  historyRowBase: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+  },
+  historyRowBaseUniverse: {
+    backgroundColor: 'rgba(23, 74, 128, 0.35)',
+    borderColor: 'rgba(140, 185, 235, 0.45)',
+  },
+  historyTreePrefix: {
+    minWidth: 22,
+    fontSize: 12,
+    lineHeight: 18,
+    color: 'rgba(0, 0, 0, 0.45)',
+  },
+  historyTreePrefixUniverse: {
+    color: 'rgba(176, 208, 240, 0.75)',
   },
   historyRowTitle: {
     fontSize: 12,
     fontWeight: '800',
     color: 'rgba(0, 0, 0, 0.78)',
+  },
+  historyRowTitleUniverse: {
+    color: 'rgba(224, 240, 255, 0.94)',
   },
   historyRowSubtext: {
     marginTop: 3,
@@ -695,48 +1160,92 @@ const styles = StyleSheet.create({
     color: 'rgba(0, 0, 0, 0.55)',
     lineHeight: 16,
   },
+  historyRowSubtextUniverse: {
+    color: 'rgba(190, 216, 244, 0.84)',
+  },
   historyUseButton: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 12,
     backgroundColor: 'rgba(0, 0, 0, 0.06)',
   },
+  historyUseButtonUniverse: {
+    backgroundColor: 'rgba(10, 34, 61, 0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(140, 185, 235, 0.3)',
+  },
   historyUseButtonText: {
     fontSize: 12,
     fontWeight: '800',
     color: 'rgba(0, 0, 0, 0.75)',
   },
-  footer: {
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.08)',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    flexDirection: 'row',
-    gap: 12,
+  historyUseButtonTextUniverse: {
+    color: 'rgba(214, 233, 253, 0.92)',
   },
-  footerButton: {
+  modalOverlay: {
     flex: 1,
-    borderRadius: 14,
-    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
   },
-  footerButtonPrimary: {
-    backgroundColor: AppColors.FABMain,
+  modalContent: {
+    width: '100%',
+    maxWidth: 560,
+    maxHeight: '84%',
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 20,
+    padding: 20,
   },
-  footerButtonPrimaryText: {
-    color: 'white',
-    fontSize: 14,
-    fontWeight: '900',
+  modalContentUniverse: {
+    backgroundColor: 'rgba(7, 20, 38, 0.98)',
+    borderWidth: 1,
+    borderColor: 'rgba(123, 169, 220, 0.4)',
   },
-  footerButtonSecondary: {
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: 'rgba(0, 0, 0, 0.85)',
+  },
+  modalTitleUniverse: {
+    color: 'rgba(225, 239, 255, 0.95)',
+  },
+  modalSubtitle: {
+    marginTop: 6,
+    marginBottom: 12,
+    fontSize: 12,
+    lineHeight: 16,
+    color: 'rgba(0, 0, 0, 0.6)',
+  },
+  modalSubtitleUniverse: {
+    color: 'rgba(190, 216, 244, 0.84)',
+  },
+  modelOptionsScroll: {
+    maxHeight: 360,
+  },
+  modelOptionsScrollContent: {
+    gap: 8,
+    paddingBottom: 6,
+  },
+  modalCancelButton: {
+    marginTop: 12,
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.06)',
   },
-  footerButtonSecondaryText: {
-    color: 'rgba(0, 0, 0, 0.7)',
+  modalCancelButtonUniverse: {
+    backgroundColor: 'rgba(10, 34, 61, 0.88)',
+    borderWidth: 1,
+    borderColor: 'rgba(140, 185, 235, 0.3)',
+  },
+  modalCancelButtonText: {
     fontSize: 14,
-    fontWeight: '900',
+    fontWeight: '800',
+    color: 'rgba(0, 0, 0, 0.75)',
+  },
+  modalCancelButtonTextUniverse: {
+    color: 'rgba(214, 233, 253, 0.92)',
   },
 });

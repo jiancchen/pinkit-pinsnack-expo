@@ -52,6 +52,7 @@ export default function AppViewPage() {
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [dimensions, setDimensions] = useState(Dimensions.get('window'));
   const [webViewError, setWebViewError] = useState(false);
+  const [isWebViewLoading, setIsWebViewLoading] = useState(true);
   const [isCapturingScreenshot, setIsCapturingScreenshot] = useState(false);
   const [screenshotMethod, setScreenshotMethod] = useState<'external' | 'webview'>('webview');
   const [showMenuModal, setShowMenuModal] = useState(false);
@@ -551,7 +552,7 @@ export default function AppViewPage() {
     return (
       <SafeAreaView style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]}>
         <AppThemeBackground />
-        <View style={styles.loadingContainer}>
+        <View style={[styles.loadingContainer, isUniverseTheme ? styles.loadingContainerUniverse : undefined]}>
           <ActivityIndicator size="large" color={AppColors.FABMain} />
           <Text style={[styles.loadingText, isUniverseTheme ? styles.loadingTextUniverse : undefined]}>
             Loading app...
@@ -581,7 +582,8 @@ export default function AppViewPage() {
   const webViewStyle = {
     flex: 1,
     width: dimensions.width,
-    height: isFullscreen ? dimensions.height : dimensions.height - (Platform.OS === 'ios' ? 160 : 140)
+    height: isFullscreen ? dimensions.height : dimensions.height - (Platform.OS === 'ios' ? 160 : 140),
+    backgroundColor: isUniverseTheme ? '#020b1f' : '#ffffff',
   };
 
   return (
@@ -664,7 +666,10 @@ export default function AppViewPage() {
         </SafeAreaView>
       )}
 
-      <View style={styles.webViewContainer} ref={webViewContainerRef}>
+      <View
+        style={[styles.webViewContainer, isUniverseTheme ? styles.webViewContainerUniverse : undefined]}
+        ref={webViewContainerRef}
+      >
         {webViewError ? (
           <View style={styles.errorContainer}>
             <Ionicons name="alert-circle" size={48} color="#EF4444" />
@@ -689,8 +694,15 @@ export default function AppViewPage() {
             mixedContentMode="compatibility"
             allowsInlineMediaPlayback={true}
             mediaPlaybackRequiresUserAction={false}
-            onError={() => setWebViewError(true)}
+            onLoadStart={() => {
+              setIsWebViewLoading(true);
+            }}
+            onError={() => {
+              setWebViewError(true);
+              setIsWebViewLoading(false);
+            }}
             onLoadEnd={() => {
+              setIsWebViewLoading(false);
               setWebViewError(false);
               const delay = Platform.OS === 'ios' ? 1500 : 1000;
               setTimeout(() => {
@@ -698,7 +710,7 @@ export default function AppViewPage() {
               }, delay);
             }}
             renderLoading={() => (
-              <View style={styles.webViewLoading}>
+              <View style={[styles.webViewLoading, isUniverseTheme ? styles.webViewLoadingUniverse : undefined]}>
                 <ActivityIndicator size="large" color={AppColors.FABMain} />
               </View>
             )}
@@ -830,6 +842,10 @@ export default function AppViewPage() {
             }}
           />
         )}
+
+        {isUniverseTheme && isWebViewLoading && !webViewError ? (
+          <View pointerEvents="none" style={styles.webViewLoadingShield} />
+        ) : null}
         
         {!webViewError && (
           <View style={styles.screenshotOverlay} pointerEvents="none">
@@ -1028,6 +1044,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
+  webViewContainerUniverse: {
+    backgroundColor: '#020b1f',
+  },
   webViewLoading: {
     position: 'absolute',
     top: 0,
@@ -1038,11 +1057,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
   },
+  webViewLoadingUniverse: {
+    backgroundColor: 'rgba(3, 12, 27, 0.9)',
+  },
+  webViewLoadingShield: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#020b1f',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: AppColors.Primary,
+  },
+  loadingContainerUniverse: {
+    backgroundColor: 'rgba(4, 14, 30, 0.92)',
   },
   loadingText: {
     marginTop: 16,
