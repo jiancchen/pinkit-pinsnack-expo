@@ -53,9 +53,31 @@ function normalizeRevisionsWithParents(revisions: RevisionRecord[]): RevisionRec
   });
 }
 
+function buildRootRevision(app: StoredApp, fallbackModel?: string, fallbackPrompt?: string): RevisionRecord | null {
+  const htmlSnapshot = typeof app.html === 'string' ? app.html : '';
+  if (!htmlSnapshot.trim()) return null;
+  const createdAt = new Date(app.timestamp).getTime();
+  return {
+    id: `root_${app.id}`,
+    at: Number.isFinite(createdAt) ? createdAt : Date.now(),
+    operation: 'create',
+    status: 'completed',
+    model: resolveSupportedClaudeModel(app.model || fallbackModel || undefined),
+    updatedPrompt: (app.prompt || fallbackPrompt || app.description || '').trim(),
+    userNotes: 'Initial generated version',
+    fixSummary: ['Initial generated version'],
+    parentRevisionId: null,
+    htmlSnapshot,
+  };
+}
+
 export default function AppRecreatePage() {
   const router = useRouter();
-  const { appId, mode } = useLocalSearchParams<{ appId?: string; mode?: string }>();
+  const { appId, mode, showHistory } = useLocalSearchParams<{
+    appId?: string;
+    mode?: string;
+    showHistory?: string;
+  }>();
   const appTheme = useUISettingsStore((s) => s.appTheme);
   const isUniverseTheme = appTheme === 'universe';
 
@@ -69,6 +91,7 @@ export default function AppRecreatePage() {
   };
 
   const resolvedMode: Mode = mode === 'fix' ? 'fix' : 'recreate';
+  const shouldStartInHistory = showHistory === '1' || showHistory === 'true';
 
   const [app, setApp] = useState<StoredApp | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -78,7 +101,7 @@ export default function AppRecreatePage() {
   const [fixNotes, setFixNotes] = useState('');
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [showModelPicker, setShowModelPicker] = useState(false);
-  const [showRevisionHistory, setShowRevisionHistory] = useState(resolvedMode === 'fix');
+  const [showRevisionHistory, setShowRevisionHistory] = useState(resolvedMode === 'fix' || shouldStartInHistory);
   const [baseRevisionId, setBaseRevisionId] = useState<string | null>(null);
 
   const newPromptRef = useRef<TextInput>(null);
@@ -96,13 +119,20 @@ export default function AppRecreatePage() {
 
   useEffect(() => {
     if (!app) return;
+    if (shouldStartInHistory) return;
     if (resolvedMode === 'fix') {
       setTimeout(() => fixNotesRef.current?.focus(), 250);
     } else {
       setTimeout(() => newPromptRef.current?.focus(), 250);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app?.id]);
+  }, [app?.id, shouldStartInHistory]);
+
+  useEffect(() => {
+    if (shouldStartInHistory) {
+      setShowRevisionHistory(true);
+    }
+  }, [shouldStartInHistory]);
 
   useEffect(() => {
     setBaseRevisionId(null);
@@ -139,7 +169,7 @@ export default function AppRecreatePage() {
   const revisionHistory = useMemo<RevisionRecord[]>(() => {
     if (!app) return [];
     if (app.revisions?.length) {
-      return normalizeRevisionsWithParents(app.revisions.slice(0, 25));
+      return normalizeRevisionsWithParents(app.revisions);
     }
     if (app.lastRevision) {
       return [
@@ -153,8 +183,13 @@ export default function AppRecreatePage() {
           userNotes: app.lastRevision.userNotes,
           fixSummary: app.lastRevision.fixSummary,
           parentRevisionId: app.lastRevision.parentRevisionId || null,
+          htmlSnapshot: app.html || '',
         },
       ];
+    }
+    const rootRevision = buildRootRevision(app);
+    if (rootRevision) {
+      return [rootRevision];
     }
     return [];
   }, [app]);
@@ -206,7 +241,6 @@ export default function AppRecreatePage() {
     }
 
     const notes = fixNotes.trim();
-    const parentRevisionId = activeBaseRevisionId;
     const actionLabel = resolvedMode === 'fix' ? 'Fix' : 'Recreate';
     const confirmTitle = resolvedMode === 'fix' ? 'Fix App' : 'Recreate App';
     const confirmBody =
@@ -230,6 +264,12 @@ export default function AppRecreatePage() {
 
               const config = await SecureStorageService.getConfig();
               const model = resolveSupportedClaudeModel(selectedModel || config.model);
+              const existingRevisions = Array.isArray(app.revisions) ? [...app.revisions] : [];
+              const hasRootRevision = existingRevisions.some((rev) => rev.operation === 'create');
+              const rootRevision = hasRootRevision ? null : buildRootRevision(app, model, updatedPrompt);
+              const revisionsWithRoot = rootRevision ? [rootRevision, ...existingRevisions] : existingRevisions;
+              const resolvedParentRevisionId =
+                activeBaseRevisionId || app.mainRevisionId || revisionsWithRoot[0]?.id || null;
 
               const nextRevision = {
                 id: revisionId,
@@ -239,9 +279,9 @@ export default function AppRecreatePage() {
                 model,
                 updatedPrompt,
                 userNotes: notes,
-                parentRevisionId,
+                parentRevisionId: resolvedParentRevisionId,
               };
-              const nextRevisions = [nextRevision, ...(app.revisions || [])].slice(0, 25);
+              const nextRevisions = [nextRevision, ...revisionsWithRoot];
 
               await AppStorageService.updateApp(app.id, {
                 prompt: updatedPrompt,
@@ -257,7 +297,7 @@ export default function AppRecreatePage() {
                   model,
                   updatedPrompt,
                   userNotes: notes,
-                  parentRevisionId,
+                  parentRevisionId: resolvedParentRevisionId,
                 },
                 revisions: nextRevisions,
               });
@@ -274,7 +314,7 @@ export default function AppRecreatePage() {
                         model,
                         updatedPrompt,
                         userNotes: notes,
-                        parentRevisionId,
+                        parentRevisionId: resolvedParentRevisionId,
                       },
                       revisions: nextRevisions,
                     }
@@ -315,20 +355,23 @@ export default function AppRecreatePage() {
               }
 
               const completedRevisions = nextRevisions.map((rev) =>
-                rev.id === revisionId ? { ...rev, status: 'completed' as const, fixSummary } : rev
+                rev.id === revisionId
+                  ? { ...rev, status: 'completed' as const, fixSummary, htmlSnapshot: response.html }
+                  : rev
               );
 
               await AppStorageService.updateApp(app.id, {
                 html: response.html,
                 status: 'completed',
                 model,
+                mainRevisionId: revisionId,
                 lastRevision: {
                   at: Date.now(),
                   model,
                   updatedPrompt,
                   userNotes: notes,
                   fixSummary,
-                  parentRevisionId,
+                  parentRevisionId: resolvedParentRevisionId,
                 },
                 revisions: completedRevisions,
               });
@@ -340,13 +383,14 @@ export default function AppRecreatePage() {
                       html: response.html,
                       status: 'completed',
                       model,
+                      mainRevisionId: revisionId,
                       lastRevision: {
                         at: Date.now(),
                         model,
                         updatedPrompt,
                         userNotes: notes,
                         fixSummary,
-                        parentRevisionId,
+                        parentRevisionId: resolvedParentRevisionId,
                       },
                       revisions: completedRevisions,
                     }
@@ -384,6 +428,71 @@ export default function AppRecreatePage() {
         },
       ]
     );
+  };
+
+  const onTryRevision = async (revision: RevisionRecord) => {
+    if (!app) return;
+    if (revision.status !== 'completed') {
+      Alert.alert('Revision not ready', 'This revision is still generating or failed.');
+      return;
+    }
+
+    const htmlSnapshot = revision.htmlSnapshot;
+    if (!htmlSnapshot) {
+      Alert.alert(
+        'Snapshot unavailable',
+        'This older revision was created before snapshot support. Regenerate from this base to create a runnable snapshot.'
+      );
+      return;
+    }
+
+    const appliedLastRevision = {
+      at: revision.at,
+      model: revision.model,
+      updatedPrompt: revision.updatedPrompt,
+      userNotes: revision.userNotes || '',
+      fixSummary: revision.fixSummary,
+      parentRevisionId: revision.parentRevisionId || null,
+    };
+
+    try {
+      await AppStorageService.updateApp(app.id, {
+        html: htmlSnapshot,
+        prompt: revision.updatedPrompt,
+        request: {
+          description: revision.updatedPrompt,
+          style: (app.style as any) || 'modern',
+          platform: 'mobile',
+        },
+        status: 'completed',
+        model: revision.model,
+        mainRevisionId: revision.id,
+        lastRevision: appliedLastRevision,
+      });
+
+      setApp((prev) =>
+        prev
+          ? {
+              ...prev,
+              html: htmlSnapshot,
+              prompt: revision.updatedPrompt,
+              status: 'completed',
+              model: revision.model,
+              mainRevisionId: revision.id,
+              lastRevision: appliedLastRevision,
+            }
+          : prev
+      );
+      setNewPrompt(revision.updatedPrompt);
+      setFixNotes(revision.userNotes || '');
+      setBaseRevisionId(revision.id);
+      setSelectedModel(resolveSupportedClaudeModel(revision.model));
+
+      router.push(`/app-view?appId=${app.id}`);
+    } catch (error) {
+      log.error('Error applying revision snapshot:', error);
+      Alert.alert('Error', 'Failed to open revision snapshot.');
+    }
   };
 
   if (isLoading) {
@@ -442,7 +551,7 @@ export default function AppRecreatePage() {
       />
       <AppThemeBackground />
       <KeyboardAvoidingView
-        style={styles.container}
+        style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
       >
@@ -648,6 +757,10 @@ export default function AppRecreatePage() {
                     ? `Forked from ${new Date(rev.parentAt).toLocaleString()}${rev.parentModel ? ` • ${MODEL_INFO[rev.parentModel]?.name || rev.parentModel}` : ''}`
                     : 'Root revision';
                   const isBase = activeBaseRevisionId === rev.id;
+                  const canTry =
+                    rev.status === 'completed' &&
+                    typeof rev.htmlSnapshot === 'string' &&
+                    rev.htmlSnapshot.trim().length > 0;
                   return (
                     <View
                       key={rev.id}
@@ -689,24 +802,44 @@ export default function AppRecreatePage() {
                           <Text style={[styles.historyRowSubtext, { color: '#EF4444' }]}>{errorMessage}</Text>
                         )}
                       </View>
-                      <TouchableOpacity
-                        style={[styles.historyUseButton, isUniverseTheme ? styles.historyUseButtonUniverse : undefined]}
-                        onPress={() => {
-                          setNewPrompt(rev.updatedPrompt);
-                          setFixNotes(rev.userNotes || '');
-                          setBaseRevisionId(rev.id);
-                        }}
-                        disabled={isRecreating}
-                      >
-                        <Text
-                          style={[
-                            styles.historyUseButtonText,
-                            isUniverseTheme ? styles.historyUseButtonTextUniverse : undefined,
-                          ]}
+                      <View style={styles.historyActions}>
+                        <TouchableOpacity
+                          style={[styles.historyUseButton, isUniverseTheme ? styles.historyUseButtonUniverse : undefined]}
+                          onPress={() => {
+                            setNewPrompt(rev.updatedPrompt);
+                            setFixNotes(rev.userNotes || '');
+                            setBaseRevisionId(rev.id);
+                          }}
+                          disabled={isRecreating}
                         >
-                          {isBase ? 'Base' : 'Use as Base'}
-                        </Text>
-                      </TouchableOpacity>
+                          <Text
+                            style={[
+                              styles.historyUseButtonText,
+                              isUniverseTheme ? styles.historyUseButtonTextUniverse : undefined,
+                            ]}
+                          >
+                            {isBase ? 'Base' : 'Use as Base'}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.historyTryButton,
+                            isUniverseTheme ? styles.historyTryButtonUniverse : undefined,
+                            !canTry ? styles.historyTryButtonDisabled : undefined,
+                          ]}
+                          onPress={() => void onTryRevision(rev)}
+                          disabled={isRecreating || !canTry}
+                        >
+                          <Text
+                            style={[
+                              styles.historyTryButtonText,
+                              isUniverseTheme ? styles.historyTryButtonTextUniverse : undefined,
+                            ]}
+                          >
+                            Try
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   );
                 })
@@ -847,6 +980,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 10,
+    backgroundColor: AppColors.Primary,
   },
   headerUniverse: {
     backgroundColor: 'rgba(8, 22, 42, 0.9)',
@@ -859,7 +993,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
   },
   headerIconButtonUniverse: {
     backgroundColor: 'rgba(10, 34, 61, 0.88)',
@@ -892,8 +1026,8 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   headerTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: 'bold',
     color: 'rgba(0, 0, 0, 0.85)',
   },
   headerTitleUniverse: {
@@ -902,7 +1036,7 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     marginTop: 2,
     fontSize: 12,
-    color: 'rgba(0, 0, 0, 0.55)',
+    color: 'rgba(0, 0, 0, 0.6)',
   },
   headerSubtitleUniverse: {
     color: 'rgba(190, 216, 244, 0.86)',
@@ -916,6 +1050,7 @@ const styles = StyleSheet.create({
   },
   bodyContent: {
     paddingBottom: 14,
+    paddingTop: 10,
     gap: 14,
   },
   explainerCard: {
@@ -923,12 +1058,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.14)',
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    paddingHorizontal: 10,
-    paddingVertical: 9,
+    borderColor: 'rgba(0, 0, 0, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   explainerCardUniverse: {
     borderColor: 'rgba(123, 169, 220, 0.3)',
@@ -944,8 +1079,8 @@ const styles = StyleSheet.create({
     color: 'rgba(205, 226, 248, 0.9)',
   },
   sectionTitle: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: 'bold',
     color: 'rgba(0, 0, 0, 0.82)',
     marginBottom: 6,
   },
@@ -957,8 +1092,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.18)',
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderColor: 'rgba(128, 128, 128, 0.35)',
+    backgroundColor: '#fff',
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 10,
@@ -969,17 +1104,17 @@ const styles = StyleSheet.create({
   },
   textInput: {
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.18)',
+    borderColor: 'rgba(128, 128, 128, 0.5)',
     borderRadius: 12,
     padding: 12,
     fontSize: 16,
-    color: 'rgba(0, 0, 0, 0.85)',
+    color: 'rgba(0, 0, 0, 0.8)',
     backgroundColor: '#fff',
   },
   textInputYellow: {
-    borderColor: 'rgba(0, 0, 0, 0.14)',
+    borderColor: 'rgba(128, 128, 128, 0.5)',
     backgroundColor: '#fff',
-    color: 'rgba(0, 0, 0, 0.86)',
+    color: 'rgba(0, 0, 0, 0.8)',
   },
   textInputUniverse: {
     borderColor: 'rgba(123, 169, 220, 0.34)',
@@ -997,8 +1132,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.18)',
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderColor: 'rgba(128, 128, 128, 0.35)',
+    backgroundColor: '#fff',
     gap: 10,
   },
   modelOptionUniverse: {
@@ -1056,7 +1191,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: 'rgba(0, 0, 0, 0.04)',
   },
   inlineActionButtonUniverse: {
     backgroundColor: 'rgba(10, 34, 61, 0.88)',
@@ -1078,7 +1213,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
   },
   historyToggleUniverse: {
     backgroundColor: 'rgba(7, 24, 45, 0.88)',
@@ -1097,7 +1232,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.12)',
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     padding: 12,
     gap: 10,
   },
@@ -1129,9 +1264,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   historyRowBase: {
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    backgroundColor: 'rgba(95, 15, 64, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.35)',
+    borderColor: 'rgba(95, 15, 64, 0.34)',
   },
   historyRowBaseUniverse: {
     backgroundColor: 'rgba(23, 74, 128, 0.35)',
@@ -1167,7 +1302,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+    backgroundColor: 'rgba(0, 0, 0, 0.04)',
   },
   historyUseButtonUniverse: {
     backgroundColor: 'rgba(10, 34, 61, 0.88)',
@@ -1181,6 +1316,32 @@ const styles = StyleSheet.create({
   },
   historyUseButtonTextUniverse: {
     color: 'rgba(214, 233, 253, 0.92)',
+  },
+  historyActions: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  historyTryButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(95, 15, 64, 0.14)',
+  },
+  historyTryButtonUniverse: {
+    backgroundColor: 'rgba(15, 124, 255, 0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(129, 183, 246, 0.4)',
+  },
+  historyTryButtonDisabled: {
+    opacity: 0.45,
+  },
+  historyTryButtonText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: AppColors.FABMain,
+  },
+  historyTryButtonTextUniverse: {
+    color: 'rgba(214, 233, 253, 0.95)',
   },
   modalOverlay: {
     flex: 1,

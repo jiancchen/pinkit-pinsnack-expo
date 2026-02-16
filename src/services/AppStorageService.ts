@@ -30,6 +30,7 @@ export interface StoredApp {
   topics?: string[];
   topicClassification?: TopicClassificationMetadata;
   topicSortHistory?: TopicSortHistoryEntry[];
+  mainRevisionId?: string | null;
   lastRevision?: {
     at: number;
     model: string;
@@ -49,6 +50,7 @@ export interface StoredApp {
     fixSummary?: string[];
     errorMessage?: string;
     parentRevisionId?: string | null;
+    htmlSnapshot?: string;
   }>;
 }
 
@@ -212,7 +214,28 @@ export class AppStorageService {
         baseUrl: `https://sandbox/${appId}/`,
         model: model || 'unknown',
         titleEditedByUser: false,
+        mainRevisionId: null,
       };
+
+      if (newApp.status === 'completed' && typeof newApp.html === 'string' && newApp.html.trim()) {
+        const rootRevisionId = `root_${appId}`;
+        const createdAt = new Date(newApp.timestamp).getTime();
+        newApp.revisions = [
+          {
+            id: rootRevisionId,
+            at: Number.isFinite(createdAt) ? createdAt : Date.now(),
+            operation: 'create',
+            status: 'completed',
+            model: newApp.model || 'unknown',
+            updatedPrompt: newApp.prompt || newApp.description || '',
+            userNotes: 'Initial generated version',
+            fixSummary: ['Initial generated version'],
+            parentRevisionId: null,
+            htmlSnapshot: newApp.html,
+          },
+        ];
+        newApp.mainRevisionId = rootRevisionId;
+      }
       
       log.verbose('Created app object:', {
         id: newApp.id,
@@ -554,6 +577,26 @@ export class AppStorageService {
       
       if (model) {
         updateData.model = model;
+      }
+
+      if (currentApp && (!currentApp.revisions || currentApp.revisions.length === 0) && html?.trim()) {
+        const rootRevisionId = `root_${appId}`;
+        const createdAt = new Date(currentApp.timestamp).getTime();
+        updateData.revisions = [
+          {
+            id: rootRevisionId,
+            at: Number.isFinite(createdAt) ? createdAt : Date.now(),
+            operation: 'create',
+            status: 'completed',
+            model: model || currentApp.model || 'unknown',
+            updatedPrompt: currentApp.prompt || currentApp.description || '',
+            userNotes: 'Initial generated version',
+            fixSummary: ['Initial generated version'],
+            parentRevisionId: null,
+            htmlSnapshot: html,
+          },
+        ];
+        updateData.mainRevisionId = rootRevisionId;
       }
       
       log.verbose('Update data prepared:', {

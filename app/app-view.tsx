@@ -491,6 +491,15 @@ export default function AppViewPage() {
     } as any);
   };
 
+  const openRevisions = () => {
+    setShowMenuModal(false);
+    if (!app) return;
+    router.push({
+      pathname: '/app-revisions',
+      params: { appId: app.id },
+    } as any);
+  };
+
   const toggleFavorite = async () => {
     if (!app) return;
     
@@ -894,6 +903,11 @@ export default function AppViewPage() {
             <TouchableOpacity style={styles.menuItem} onPress={openEditPrompt}>
               <Ionicons name="refresh-outline" size={24} color={AppColors.FABMain} />
               <Text style={styles.menuItemText}>Update Prompt & Recreate</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={openRevisions}>
+              <Ionicons name="git-branch-outline" size={24} color="#0f7cff" />
+              <Text style={styles.menuItemText}>Revisions</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.menuItem} onPress={toggleFavorite}>
