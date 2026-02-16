@@ -11,8 +11,75 @@ export type GenerationNotificationData = {
   status: 'started' | 'completed' | 'failed';
 };
 
+type GenerationNotificationFilter = Partial<Pick<GenerationNotificationData, 'appId' | 'jobId' | 'status'>>;
+
 export class NotificationService {
   private static configured = false;
+
+  private static parseGenerationNotificationData(raw: unknown): GenerationNotificationData | null {
+    let value: unknown = raw;
+    if (typeof value === 'string') {
+      try {
+        value = JSON.parse(value);
+      } catch {
+        return null;
+      }
+    }
+
+    if (!value || typeof value !== 'object') return null;
+    const candidate = value as Record<string, unknown>;
+    if (candidate.type !== 'generation') return null;
+    if (typeof candidate.appId !== 'string' || typeof candidate.jobId !== 'string') return null;
+    if (candidate.status !== 'started' && candidate.status !== 'completed' && candidate.status !== 'failed') {
+      return null;
+    }
+
+    return candidate as GenerationNotificationData;
+  }
+
+  private static matchesGenerationFilter(
+    data: GenerationNotificationData,
+    filter: GenerationNotificationFilter
+  ): boolean {
+    if (filter.appId && data.appId !== filter.appId) return false;
+    if (filter.jobId && data.jobId !== filter.jobId) return false;
+    if (filter.status && data.status !== filter.status) return false;
+    return true;
+  }
+
+  private static async clearGenerationNotifications(filter: GenerationNotificationFilter): Promise<void> {
+    try {
+      const presented = await Notifications.getPresentedNotificationsAsync();
+      const presentedToDismiss = presented.filter((notification) => {
+        const data = this.parseGenerationNotificationData(notification.request.content.data);
+        return data ? this.matchesGenerationFilter(data, filter) : false;
+      });
+
+      await Promise.all(
+        presentedToDismiss.map((notification) =>
+          Notifications.dismissNotificationAsync(notification.request.identifier).catch(() => undefined)
+        )
+      );
+    } catch (error) {
+      log.warn('Failed to clear presented generation notifications:', error);
+    }
+
+    try {
+      const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+      const scheduledToCancel = scheduled.filter((notification) => {
+        const data = this.parseGenerationNotificationData(notification.content.data);
+        return data ? this.matchesGenerationFilter(data, filter) : false;
+      });
+
+      await Promise.all(
+        scheduledToCancel.map((notification) =>
+          Notifications.cancelScheduledNotificationAsync(notification.identifier).catch(() => undefined)
+        )
+      );
+    } catch (error) {
+      log.warn('Failed to clear scheduled generation notifications:', error);
+    }
+  }
 
   static configureForegroundBehavior(): void {
     if (this.configured) return;
@@ -62,6 +129,9 @@ export class NotificationService {
     if (!allowed) return;
 
     try {
+      // Keep only one generation notification stream per app to avoid stacking.
+      await this.clearGenerationNotifications({ appId: params.appId });
+
       await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Generating app…',
@@ -90,6 +160,9 @@ export class NotificationService {
     if (!allowed) return;
 
     try {
+      // Remove any lingering "Generating..." alerts for this app/job.
+      await this.clearGenerationNotifications({ appId: params.appId, jobId: params.jobId });
+
       await Notifications.scheduleNotificationAsync({
         content: {
           title: 'App ready',
@@ -119,6 +192,9 @@ export class NotificationService {
     if (!allowed) return;
 
     try {
+      // Ensure in-progress notification does not linger after failure.
+      await this.clearGenerationNotifications({ appId: params.appId, jobId: params.jobId });
+
       await Notifications.scheduleNotificationAsync({
         content: {
           title: 'Generation failed',
@@ -136,5 +212,9 @@ export class NotificationService {
     } catch (error) {
       log.warn('Failed to schedule failure notification:', error);
     }
+  }
+
+  static async clearAllInProgressGenerationNotifications(): Promise<void> {
+    await this.clearGenerationNotifications({ status: 'started' });
   }
 }

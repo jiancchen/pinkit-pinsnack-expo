@@ -82,6 +82,7 @@ export default function AppViewPage() {
       });
       return () => {
         isActive = false;
+        void stopWebViewLiveActivitiesForApp(id);
       };
     }, [appId])
   );

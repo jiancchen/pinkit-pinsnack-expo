@@ -181,6 +181,9 @@ export class GenerationQueueService {
 
         await this.runJob(nextJob);
       }
+
+      // If nothing is pending, remove stale "Generating app..." notifications from prior runs.
+      await NotificationService.clearAllInProgressGenerationNotifications();
     } catch (error) {
       log.error('Worker crashed:', error);
     } finally {
