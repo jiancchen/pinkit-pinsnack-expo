@@ -26,12 +26,16 @@ import { WebViewScreenshotService } from '../src/services/WebViewScreenshotServi
 import { emitScreenshotCaptured, emitScreenshotError, emitScreenshotLoading } from '../src/stores/ScreenshotStore';
 import { handleWebViewLiveActivityMessage, stopWebViewLiveActivitiesForApp } from '../src/services/WebViewLiveActivityBridge';
 import { createLogger } from '../src/utils/Logger';
+import { useUISettingsStore } from '../src/stores/UISettingsStore';
+import AppThemeBackground from '../src/components/AppThemeBackground';
 
 const log = createLogger('AppView');
 
 export default function AppViewPage() {
   const router = useRouter();
   const { appId } = useLocalSearchParams<{ appId: string }>();
+  const appTheme = useUISettingsStore((s) => s.appTheme);
+  const isUniverseTheme = appTheme === 'universe';
 
   const safeGoBack = () => {
     const canGoBack = (router as any)?.canGoBack?.();
@@ -545,10 +549,13 @@ export default function AppViewPage() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]}>
+        <AppThemeBackground />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={AppColors.FABMain} />
-          <Text style={styles.loadingText}>Loading app...</Text>
+          <Text style={[styles.loadingText, isUniverseTheme ? styles.loadingTextUniverse : undefined]}>
+            Loading app...
+          </Text>
         </View>
       </SafeAreaView>
     );
@@ -556,10 +563,13 @@ export default function AppViewPage() {
 
   if (!app) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]}>
+        <AppThemeBackground />
         <View style={styles.errorContainer}>
           <Ionicons name="alert-circle" size={64} color="#EF4444" />
-          <Text style={styles.errorText}>App not found</Text>
+          <Text style={[styles.errorText, isUniverseTheme ? styles.errorTextUniverse : undefined]}>
+            App not found
+          </Text>
           <TouchableOpacity style={styles.button} onPress={safeGoBack}>
             <Text style={styles.buttonText}>Go Back</Text>
           </TouchableOpacity>
@@ -575,34 +585,79 @@ export default function AppViewPage() {
   };
 
   return (
-    <View style={[styles.container, isFullscreen && styles.fullscreenContainer]}>
+    <View
+      style={[
+        styles.container,
+        isUniverseTheme ? styles.containerUniverse : undefined,
+        isFullscreen && styles.fullscreenContainer,
+      ]}
+    >
+      <AppThemeBackground />
       <StatusBar 
-        barStyle={isFullscreen ? "light-content" : "dark-content"}
-        backgroundColor={isFullscreen ? "#000" : AppColors.Primary}
+        barStyle={isFullscreen || isUniverseTheme ? "light-content" : "dark-content"}
+        backgroundColor={isFullscreen ? "#000" : isUniverseTheme ? "transparent" : AppColors.Primary}
         hidden={isFullscreen}
       />
       
       {!isFullscreen && (
-        <SafeAreaView>
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.headerButton} onPress={safeGoBack}>
-              <Ionicons name="arrow-back" size={24} color="rgba(0, 0, 0, 0.8)" />
+        <SafeAreaView
+          edges={['top']}
+          style={[styles.headerSafeArea, isUniverseTheme ? styles.headerSafeAreaUniverse : undefined]}
+        >
+          <View style={[styles.header, isUniverseTheme ? styles.headerUniverse : undefined]}>
+            <TouchableOpacity
+              style={[styles.headerButton, isUniverseTheme ? styles.headerButtonUniverse : undefined]}
+              onPress={safeGoBack}
+            >
+              <Ionicons
+                name="arrow-back"
+                size={24}
+                color={isUniverseTheme ? 'rgba(226, 240, 255, 0.92)' : 'rgba(0, 0, 0, 0.8)'}
+              />
             </TouchableOpacity>
             
             <View style={styles.headerContent}>
-              <Text style={styles.headerTitle} numberOfLines={1}>{app.title}</Text>
-              <Text style={styles.headerSubtitle}>{app.style} • {app.category}</Text>
+              <Text
+                style={[styles.headerTitle, isUniverseTheme ? styles.headerTitleUniverse : undefined]}
+                numberOfLines={1}
+              >
+                {app.title}
+              </Text>
+              <Text style={[styles.headerSubtitle, isUniverseTheme ? styles.headerSubtitleUniverse : undefined]}>
+                {app.style} • {app.category}
+              </Text>
             </View>
 
             <View style={styles.headerActions}>
-              <TouchableOpacity style={styles.headerButton} onPress={openMenu}>
-                <Ionicons name="ellipsis-vertical" size={24} color="rgba(0, 0, 0, 0.8)" />
+              <TouchableOpacity
+                style={[styles.headerButton, isUniverseTheme ? styles.headerButtonUniverse : undefined]}
+                onPress={openMenu}
+              >
+                <Ionicons
+                  name="ellipsis-vertical"
+                  size={24}
+                  color={isUniverseTheme ? 'rgba(226, 240, 255, 0.92)' : 'rgba(0, 0, 0, 0.8)'}
+                />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.headerButton} onPress={showAppInfo}>
-                <Ionicons name="information-circle" size={24} color="rgba(0, 0, 0, 0.8)" />
+              <TouchableOpacity
+                style={[styles.headerButton, isUniverseTheme ? styles.headerButtonUniverse : undefined]}
+                onPress={showAppInfo}
+              >
+                <Ionicons
+                  name="information-circle"
+                  size={24}
+                  color={isUniverseTheme ? 'rgba(226, 240, 255, 0.92)' : 'rgba(0, 0, 0, 0.8)'}
+                />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.headerButton} onPress={shareApp}>
-                <Ionicons name="share" size={24} color="rgba(0, 0, 0, 0.8)" />
+              <TouchableOpacity
+                style={[styles.headerButton, isUniverseTheme ? styles.headerButtonUniverse : undefined]}
+                onPress={shareApp}
+              >
+                <Ionicons
+                  name="share"
+                  size={24}
+                  color={isUniverseTheme ? 'rgba(226, 240, 255, 0.92)' : 'rgba(0, 0, 0, 0.8)'}
+                />
               </TouchableOpacity>
             </View>
           </View>
@@ -912,18 +967,39 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: AppColors.Primary,
   },
+  containerUniverse: {
+    backgroundColor: 'transparent',
+  },
   fullscreenContainer: {
     backgroundColor: '#000',
+  },
+  headerSafeArea: {
+    backgroundColor: AppColors.Primary,
+  },
+  headerSafeAreaUniverse: {
+    backgroundColor: 'transparent',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 8,
+    paddingBottom: 6,
     backgroundColor: AppColors.Primary,
+  },
+  headerUniverse: {
+    backgroundColor: 'transparent',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(123, 169, 220, 0.28)',
   },
   headerButton: {
     padding: 8,
+    borderRadius: 10,
+  },
+  headerButtonUniverse: {
+    backgroundColor: 'rgba(11, 36, 64, 0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(140, 185, 235, 0.32)',
   },
   headerContent: {
     flex: 1,
@@ -934,10 +1010,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'rgba(0, 0, 0, 0.8)',
   },
+  headerTitleUniverse: {
+    color: 'rgba(233, 246, 255, 0.95)',
+  },
   headerSubtitle: {
     fontSize: 12,
     color: 'rgba(0, 0, 0, 0.6)',
     marginTop: 2,
+  },
+  headerSubtitleUniverse: {
+    color: 'rgba(190, 216, 244, 0.86)',
   },
   headerActions: {
     flexDirection: 'row',
@@ -967,6 +1049,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: 'rgba(0, 0, 0, 0.6)',
   },
+  loadingTextUniverse: {
+    color: 'rgba(214, 233, 253, 0.9)',
+  },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -979,6 +1064,9 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     marginTop: 16,
     textAlign: 'center',
+  },
+  errorTextUniverse: {
+    color: '#ff7a7a',
   },
   errorSubtext: {
     fontSize: 14,
