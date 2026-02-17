@@ -224,7 +224,7 @@ export default function AssistantPage() {
 
   const scrollContentPaddingBottom = getLiquidGlassTabBarContentPaddingBottom(insets.bottom, 32);
   const tabBarOverlapHeight = getLiquidGlassTabBarOverlapHeight(insets.bottom);
-  const composerBottomOffset = keyboardVisible ? 0 : tabBarOverlapHeight;
+  const composerBottomOffset = keyboardVisible ? 8 : tabBarOverlapHeight + 12;
   const assistantModelLabel = useMemo(() => getModelLabel(assistantModel), [assistantModel]);
   const cheapestModel = useMemo(() => getCheapestAssistantModel(), []);
   const availableAssistantModels = useMemo(
@@ -803,11 +803,23 @@ export default function AssistantPage() {
             maxLength={1200}
           />
           <TouchableOpacity
-            style={[styles.sendButton, (!inputValue.trim() || isSending) && styles.sendButtonDisabled]}
+            style={[
+              styles.sendButton,
+              isUniverseTheme ? styles.sendButtonUniverse : undefined,
+              (!inputValue.trim() || isSending) && styles.sendButtonDisabled,
+            ]}
             onPress={() => void sendMessage()}
             disabled={!inputValue.trim() || isSending}
           >
-            {isSending ? <ActivityIndicator size="small" color="#fff" /> : <Ionicons name="send" size={16} color="#fff" />}
+            {isSending ? (
+              <ActivityIndicator size="small" color={isUniverseTheme ? 'rgba(226, 240, 255, 0.96)' : '#0f7cff'} />
+            ) : (
+              <Ionicons
+                name="send"
+                size={16}
+                color={isUniverseTheme ? 'rgba(226, 240, 255, 0.96)' : '#0f7cff'}
+              />
+            )}
           </TouchableOpacity>
         </View>
 
@@ -1155,34 +1167,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 8,
     paddingBottom: 10,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.08)',
-    backgroundColor: 'rgba(255,255,255,0.78)',
+    borderTopWidth: 0,
+    backgroundColor: 'transparent',
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
   },
   inputBarUniverse: {
-    borderTopColor: 'rgba(123, 169, 220, 0.28)',
-    backgroundColor: 'rgba(6, 20, 36, 0.72)',
+    backgroundColor: 'transparent',
   },
   input: {
     flex: 1,
     minHeight: 42,
     maxHeight: 118,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.16)',
+    borderColor: 'rgba(0,0,0,0.26)',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
     color: 'rgba(0,0,0,0.84)',
-    backgroundColor: '#fff',
+    backgroundColor: 'transparent',
   },
   inputUniverse: {
     borderColor: 'rgba(125, 171, 222, 0.44)',
     color: 'rgba(227, 242, 255, 0.95)',
-    backgroundColor: 'rgba(6, 23, 44, 0.92)',
+    backgroundColor: 'transparent',
   },
   sendButton: {
     width: 42,
@@ -1190,7 +1200,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0f7cff',
+    borderWidth: 1,
+    borderColor: 'rgba(15, 124, 255, 0.38)',
+    backgroundColor: 'transparent',
+  },
+  sendButtonUniverse: {
+    borderColor: 'rgba(144, 194, 242, 0.42)',
+    backgroundColor: 'transparent',
   },
   sendButtonDisabled: {
     opacity: 0.5,
