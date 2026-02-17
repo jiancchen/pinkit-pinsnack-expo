@@ -32,5 +32,7 @@ export interface PromptHistory {
   style?: string;
   category?: string;
   status?: 'new' | 'generating' | 'completed' | 'error';
+  isSample?: boolean;
+  sampleKey?: string;
   generatedConcept?: GeneratedAppConcept;
 }

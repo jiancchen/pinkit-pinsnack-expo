@@ -9,6 +9,7 @@ import AppThemeBackground from '../../src/components/AppThemeBackground';
 import { PromptHistory } from '../../src/types/PromptHistory';
 import { AppColors } from '../../src/constants/AppColors';
 import { AppStorageService, StoredApp } from '../../src/services/AppStorageService';
+import { SeedService } from '../../src/services/SeedService';
 import { useGenerationStatusStore } from '../../src/stores/GenerationStatusStore';
 import { useUISettingsStore } from '../../src/stores/UISettingsStore';
 import { createLogger } from '../../src/utils/Logger';
@@ -32,6 +33,7 @@ export default function MyAppsPage() {
   const loadApps = async () => {
     try {
       setIsLoading(true);
+      await SeedService.initializeSeeding();
       const storedApps = await AppStorageService.getAllApps();
       
       // Convert StoredApp to PromptHistory format for the 3D stack
@@ -46,6 +48,8 @@ export default function MyAppsPage() {
         style: app.style,
         category: app.category,
         status: app.status,
+        isSample: app.isSample === true || typeof app.sampleKey === 'string' || app.id.startsWith('sample_'),
+        sampleKey: app.sampleKey,
         generatedConcept: app.generatedConcept
       }));
       

@@ -200,6 +200,7 @@ export default function AssistantPage() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const appTheme = useUISettingsStore((s) => s.appTheme);
+  const debugAllowWithoutApiKey = useUISettingsStore((s) => s.debugAllowWithoutApiKey);
   const isUniverseTheme = appTheme === 'universe';
 
   const [inputValue, setInputValue] = useState('');
@@ -221,6 +222,7 @@ export default function AssistantPage() {
   );
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const hasApiAccess = hasApiKey || debugAllowWithoutApiKey;
 
   const scrollContentPaddingBottom = getLiquidGlassTabBarContentPaddingBottom(insets.bottom, 32);
   const tabBarOverlapHeight = getLiquidGlassTabBarOverlapHeight(insets.bottom);
@@ -501,11 +503,22 @@ export default function AssistantPage() {
     const text = (typeof rawText === 'string' ? rawText : inputValue).trim();
     if (!text || isSending) return;
 
-    if (!hasApiKey) {
+    if (!hasApiAccess) {
       Alert.alert('Claude API key required', 'Set your API key in Settings first.', [
         { text: 'Open Settings', onPress: () => router.push('/(tabs)/settings') },
         { text: 'Cancel', style: 'cancel' },
       ]);
+      return;
+    }
+
+    if (!hasApiKey && debugAllowWithoutApiKey) {
+      setInputValue('');
+      setPendingAction(null);
+      addBubble('user', text);
+      addBubble(
+        'assistant',
+        'Debug mode is enabled without an API key. Assistant calls are skipped. Add an API key in Settings to run live responses.'
+      );
       return;
     }
 
@@ -662,7 +675,7 @@ export default function AssistantPage() {
           contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollContentPaddingBottom }]}
           showsVerticalScrollIndicator={false}
         >
-          {!hasApiKey ? (
+          {!hasApiAccess ? (
             <View style={[styles.noticeCard, isUniverseTheme ? styles.noticeCardUniverse : undefined]}>
               <Ionicons name="warning-outline" size={18} color="#f59e0b" />
               <Text style={[styles.noticeText, isUniverseTheme ? styles.noticeTextUniverse : undefined]}>

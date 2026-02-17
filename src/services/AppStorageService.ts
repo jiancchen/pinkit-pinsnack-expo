@@ -26,6 +26,7 @@ export interface StoredApp {
   baseUrl: string; // For WebView persistence
   model?: string; // Claude model used for generation
   isSample?: boolean; // Mark as sample app for seeding
+  sampleKey?: string; // Stable sample identifier from bundled catalog
   primaryTopic?: string;
   topics?: string[];
   topicClassification?: TopicClassificationMetadata;

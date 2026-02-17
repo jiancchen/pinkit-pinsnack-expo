@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,7 @@ const FavoriteAppCard: React.FC<FavoriteAppCardProps> = ({
   const screenshotState = useScreenshotState(historyItem.id);
   const [imageError, setImageError] = useState(false);
   const isGenerating = historyItem.status === 'generating';
+  const isSample = historyItem.isSample === true || historyItem.id.startsWith('sample_');
 
   const screenshot = screenshotState?.uri;
   const showImage = screenshot && !imageError;
@@ -42,6 +43,11 @@ const FavoriteAppCard: React.FC<FavoriteAppCardProps> = ({
       disabled={isGenerating}
     >
       <View style={[styles.imageContainer, isUniverseTheme ? styles.imageContainerUniverse : undefined]}>
+        {isSample && (
+          <View style={[styles.sampleBadge, isUniverseTheme ? styles.sampleBadgeUniverse : undefined]}>
+            <Text style={styles.sampleBadgeText}>SAMPLE</Text>
+          </View>
+        )}
         {screenshotState?.isLoading && (
           <View style={[styles.loadingContainer, isUniverseTheme ? styles.loadingContainerUniverse : undefined]}>
             <ActivityIndicator size="small" color={isUniverseTheme ? 'rgba(206, 230, 255, 0.86)' : '#999'} />
@@ -160,6 +166,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.35)',
     zIndex: 2,
+  },
+  sampleBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    zIndex: 3,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    backgroundColor: 'rgba(14, 116, 144, 0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(196, 240, 255, 0.8)',
+  },
+  sampleBadgeUniverse: {
+    backgroundColor: 'rgba(8, 120, 160, 0.88)',
+    borderColor: 'rgba(176, 231, 255, 0.8)',
+  },
+  sampleBadgeText: {
+    fontSize: 8,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+    color: '#fff',
   },
   title: {
     fontSize: 12,

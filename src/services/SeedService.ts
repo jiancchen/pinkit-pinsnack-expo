@@ -1,173 +1,225 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppStorageService, StoredApp } from './AppStorageService';
 import { Asset } from 'expo-asset';
+import { BUNDLED_SAMPLE_APPS, SampleStyle } from '../constants/SampleAppCatalog.generated';
+import { AppStorageService, StoredApp } from './AppStorageService';
 import { SeedLogger as log } from '../utils/Logger';
 
-// Import the chess HTML file
-const chessHtmlAsset = require('../../assets/sample-apps/chess.html');
+const APPS_STORAGE_KEY = 'generated_apps';
 
-/**
- * Load chess HTML content from assets
- */
-async function loadChessHtml(): Promise<string> {
-  try {
-    const asset = Asset.fromModule(chessHtmlAsset);
-    await asset.downloadAsync();
-    
-    const response = await fetch(asset.localUri || asset.uri);
-    const htmlContent = await response.text();
-    
-    return htmlContent;
-  } catch (error) {
-    log.error('Failed to load chess.html:', error);
-    return '<html><body><h1>Error loading chess game</h1></body></html>';
-  }
+const VALID_STYLES = new Set<SampleStyle>(['minimalist', 'creative', 'corporate', 'playful', 'elegant', 'modern']);
+
+function buildSampleId(slug: string): string {
+  return `sample_${slug}`;
 }
-const SAMPLE_HTML_PLACEHOLDER = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sample App</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-        .container { max-width: 400px; margin: 0 auto; padding: 20px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Sample App</h1>
-        <p>This is a placeholder for sample apps. Full HTML files are in assets/sample-apps/</p>
-    </div>
-</body>
-</html>
-`;
 
-export interface SampleApp {
+function normalizeStyle(value: unknown, fallback: SampleStyle = 'modern'): SampleStyle {
+  const lowered = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return VALID_STYLES.has(lowered as SampleStyle) ? (lowered as SampleStyle) : fallback;
+}
+
+function normalizeCategory(value: unknown, fallback = 'utility'): string {
+  const lowered = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return lowered || fallback;
+}
+
+function parseTitleAndCategory(rawTitle: string, fallbackCategory: string): { title: string; category: string } {
+  const titleValue = String(rawTitle || '').trim();
+  if (!titleValue) return { title: 'Sample App', category: fallbackCategory };
+
+  if (!titleValue.includes(' | ')) {
+    return { title: titleValue, category: fallbackCategory };
+  }
+
+  const [titlePart, categoryPart] = titleValue.split(' | ');
+  return {
+    title: titlePart?.trim() || 'Sample App',
+    category: normalizeCategory(categoryPart, fallbackCategory),
+  };
+}
+
+async function loadAssetText(assetModule: number): Promise<string> {
+  const asset = Asset.fromModule(assetModule);
+  await asset.downloadAsync();
+  const uri = asset.localUri || asset.uri;
+  const response = await fetch(uri);
+  return response.text();
+}
+
+interface SampleDefinition {
+  slug: string;
   title: string;
   description: string;
   html: string;
-  htmlFile?: string; // Optional filename to load from assets
   category: string;
-  style: string;
-  isSample: boolean;
+  style: SampleStyle;
 }
 
 export class SeedService {
   private static readonly SEED_VERSION_KEY = 'seed_version';
-  private static readonly CURRENT_SEED_VERSION = 1;
-  
-  /**
-   * Sample apps to seed the app with
-   */
-  private static readonly SAMPLE_APPS: SampleApp[] = [
-    {
-      title: 'Chess Game | Games',
-      description: 'A fully featured chess game with AI opponent, move validation, check detection, and beautiful styling',
-      html: '', // Will be loaded from assets
-      htmlFile: 'chess.html',
-      category: 'games',
-      style: 'modern',
-      isSample: true
-    }
-  ];
+  private static readonly SEED_SIGNATURE_KEY = 'seed_signature';
+  private static readonly CURRENT_SEED_VERSION = 2;
+  private static initializationPromise: Promise<void> | null = null;
+  private static initialized = false;
 
-  /**
-   * Check if seeding is needed
-   */
+  private static hashString(input: string): string {
+    let hash = 2166136261;
+    for (let index = 0; index < input.length; index += 1) {
+      hash ^= input.charCodeAt(index);
+      hash = (hash * 16777619) >>> 0;
+    }
+    return hash.toString(16).padStart(8, '0');
+  }
+
+  private static buildSeedSignature(definitions: SampleDefinition[]): string {
+    const normalized = definitions
+      .map((definition) => ({
+        slug: definition.slug,
+        title: definition.title,
+        description: definition.description,
+        category: definition.category,
+        style: definition.style,
+        htmlHash: this.hashString(definition.html),
+      }))
+      .sort((a, b) => a.slug.localeCompare(b.slug));
+
+    return this.hashString(JSON.stringify(normalized));
+  }
+
+  private static async loadSampleDefinitions(): Promise<SampleDefinition[]> {
+    const definitions: SampleDefinition[] = [];
+
+    for (const entry of BUNDLED_SAMPLE_APPS) {
+      try {
+        const html = await loadAssetText(entry.htmlAsset);
+
+        let meta: Record<string, unknown> = {};
+        if (entry.metaAsset) {
+          try {
+            if (typeof entry.metaAsset === 'number') {
+              const rawMeta = await loadAssetText(entry.metaAsset);
+              const parsedMeta = JSON.parse(rawMeta);
+              if (parsedMeta && typeof parsedMeta === 'object') {
+                meta = parsedMeta as Record<string, unknown>;
+              }
+            } else if (typeof entry.metaAsset === 'object') {
+              meta = entry.metaAsset as Record<string, unknown>;
+            }
+          } catch (error) {
+            log.warn(`Failed to parse sample meta for ${entry.slug}:`, error);
+          }
+        }
+
+        const fallbackCategory = normalizeCategory(entry.fallback.category, 'utility');
+        const fallbackStyle = normalizeStyle(entry.fallback.style, 'modern');
+        const titleSource =
+          typeof meta.title === 'string' && meta.title.trim().length > 0
+            ? meta.title
+            : entry.fallback.title;
+
+        const parsed = parseTitleAndCategory(titleSource, fallbackCategory);
+        const description =
+          typeof meta.description === 'string' && meta.description.trim().length > 0
+            ? meta.description.trim()
+            : typeof meta.prompt === 'string' && meta.prompt.trim().length > 0
+              ? meta.prompt.trim()
+              : entry.fallback.description;
+
+        definitions.push({
+          slug: entry.slug,
+          title: parsed.title,
+          description,
+          html,
+          category: normalizeCategory(meta.category, parsed.category),
+          style: normalizeStyle(meta.style, fallbackStyle),
+        });
+      } catch (error) {
+        log.error(`Failed to load sample app ${entry.slug}:`, error);
+      }
+    }
+
+    return definitions;
+  }
+
   static async shouldSeed(): Promise<boolean> {
     try {
-      // Check seed version to handle updates
       const storedVersion = await AsyncStorage.getItem(this.SEED_VERSION_KEY);
       const currentVersion = parseInt(storedVersion || '0', 10);
-      
       if (currentVersion < this.CURRENT_SEED_VERSION) {
         log.info('Seeding needed - version update');
         return true;
       }
-      
-      // Check if any sample apps exist
-      const existingApps = await AppStorageService.getAllApps();
-      const sampleApps = existingApps.filter(app => app.isSample);
-      
-      if (sampleApps.length === 0) {
-        log.info('Seeding needed - no sample apps found');
+
+      const definitions = await this.loadSampleDefinitions();
+      const currentSignature = this.buildSeedSignature(definitions);
+      const storedSignature = await AsyncStorage.getItem(this.SEED_SIGNATURE_KEY);
+      if (!storedSignature || storedSignature !== currentSignature) {
+        log.info('Seeding needed - sample signature changed');
         return true;
       }
-      
-      log.debug('Seeding not needed');
+
+      const expectedSampleIds = new Set(definitions.map((definition) => buildSampleId(definition.slug)));
+
+      const existingApps = await AppStorageService.getAllApps();
+      const sampleApps = existingApps.filter((app) => this.isSampleApp(app));
+
+      if (sampleApps.length !== expectedSampleIds.size) {
+        log.info('Seeding needed - sample count mismatch');
+        return true;
+      }
+
+      const existingSampleIds = new Set(sampleApps.map((app) => app.id));
+      for (const expectedId of expectedSampleIds) {
+        if (!existingSampleIds.has(expectedId)) {
+          log.info('Seeding needed - missing sample app', expectedId);
+          return true;
+        }
+      }
+
       return false;
     } catch (error) {
       log.error('Error checking seed status:', error);
-      return true; // Seed on error to be safe
+      return true;
     }
   }
 
-  /**
-   * Seed the app with sample apps
-   */
   static async seedSampleApps(): Promise<void> {
     log.info('Starting sample app seeding...');
-    
+
     try {
-      // Remove existing sample apps first (in case of re-seeding)
       await this.removeSampleApps();
-      
-      // Create sample apps
-      const createdApps: StoredApp[] = [];
-      
-      for (const sampleApp of this.SAMPLE_APPS) {
-        log.debug(`Creating sample app: ${sampleApp.title}`);
-        
-        // Load HTML content from assets if htmlFile is specified
-        let htmlContent = sampleApp.html;
-        if (sampleApp.htmlFile) {
-          try {
-            htmlContent = await loadChessHtml();
-            log.verbose(`Loaded HTML from ${sampleApp.htmlFile}`);
-          } catch (error) {
-            log.error(`Failed to load ${sampleApp.htmlFile}:`, error);
-            htmlContent = `<html><body><h1>Error loading ${sampleApp.htmlFile}</h1></body></html>`;
-          }
-        }
-        
-        // Parse title and category
-        const [title, category] = sampleApp.title.includes(' | ') 
-          ? sampleApp.title.split(' | ')
-          : [sampleApp.title, sampleApp.category];
-        
-        // Create the app with sample flag
-        const storedApp: StoredApp = {
-          id: `sample_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          title: title.trim(),
-          description: sampleApp.description,
-          html: htmlContent,
-          prompt: sampleApp.description,
-          timestamp: new Date(),
-          style: sampleApp.style,
-          category: category.toLowerCase(),
+
+      const [definitions, existingApps] = await Promise.all([
+        this.loadSampleDefinitions(),
+        AppStorageService.getAllApps(),
+      ]);
+
+      const timestampBase = Date.now();
+      const createdApps: StoredApp[] = definitions.map((definition, index) => {
+        const id = buildSampleId(definition.slug);
+        return {
+          id,
+          title: definition.title,
+          description: definition.description,
+          html: definition.html,
+          prompt: definition.description,
+          timestamp: new Date(timestampBase + index),
+          style: definition.style,
+          category: definition.category,
           status: 'completed',
           favorite: false,
           accessCount: 0,
-          baseUrl: '',
-          isSample: true // Mark as sample app
+          baseUrl: `https://sandbox/${id}/`,
+          model: 'sample',
+          isSample: true,
+          sampleKey: definition.slug,
         };
-        
-        storedApp.baseUrl = `https://sandbox/${storedApp.id}/`;
-        createdApps.push(storedApp);
-      }
-      
-      // Get existing apps and add sample apps to the end
-      const existingApps = await AppStorageService.getAllApps();
+      });
+
       const allApps = [...existingApps, ...createdApps];
-      
-      // Save all apps
-      await AsyncStorage.setItem('generated_apps', JSON.stringify(allApps));
-      
-      // Update seed version
+      await AsyncStorage.setItem(APPS_STORAGE_KEY, JSON.stringify(allApps));
       await AsyncStorage.setItem(this.SEED_VERSION_KEY, this.CURRENT_SEED_VERSION.toString());
-      
+      await AsyncStorage.setItem(this.SEED_SIGNATURE_KEY, this.buildSeedSignature(definitions));
+
       log.info(`Successfully seeded ${createdApps.length} sample apps`);
     } catch (error) {
       log.error('Error seeding sample apps:', error);
@@ -175,78 +227,69 @@ export class SeedService {
     }
   }
 
-  /**
-   * Remove all sample apps
-   */
   static async removeSampleApps(): Promise<void> {
     try {
-      log.debug('Removing existing sample apps...');
-      
       const existingApps = await AppStorageService.getAllApps();
-      const nonSampleApps = existingApps.filter(app => !app.isSample);
-      
-      await AsyncStorage.setItem('generated_apps', JSON.stringify(nonSampleApps));
-      
+      const nonSampleApps = existingApps.filter((app) => !this.isSampleApp(app));
+      await AsyncStorage.setItem(APPS_STORAGE_KEY, JSON.stringify(nonSampleApps));
       log.info(`Removed ${existingApps.length - nonSampleApps.length} sample apps`);
     } catch (error) {
       log.error('Error removing sample apps:', error);
     }
   }
 
-  /**
-   * Re-seed sample apps (useful for updates or user request)
-   */
   static async reseedSampleApps(): Promise<void> {
     log.info('Re-seeding sample apps...');
-    
-    // Reset seed version to force re-seeding
     await AsyncStorage.removeItem(this.SEED_VERSION_KEY);
-    
-    // Seed apps
+    await AsyncStorage.removeItem(this.SEED_SIGNATURE_KEY);
     await this.seedSampleApps();
   }
 
-  /**
-   * Get information about sample apps
-   */
   static getSampleAppsInfo(): { count: number; categories: string[] } {
-    const categories = [...new Set(this.SAMPLE_APPS.map(app => app.category))];
+    const categories = [...new Set(BUNDLED_SAMPLE_APPS.map((entry) => normalizeCategory(entry.fallback.category)))];
     return {
-      count: this.SAMPLE_APPS.length,
-      categories
+      count: BUNDLED_SAMPLE_APPS.length,
+      categories,
     };
   }
 
-  /**
-   * Check if an app is a sample app
-   */
   static isSampleApp(app: StoredApp): boolean {
-    return app.isSample === true || app.id.startsWith('sample_');
+    return app.isSample === true || typeof app.sampleKey === 'string' || app.id.startsWith('sample_');
   }
 
-  /**
-   * Initialize seeding on app startup
-   */
   static async initializeSeeding(): Promise<void> {
-    log.debug('Initializing seeding...');
-    
-    try {
-      const needsSeeding = await this.shouldSeed();
-      
-      if (needsSeeding) {
-        await this.seedSampleApps();
-        log.info('Seeding completed successfully');
-      } else {
-        log.debug('Seeding not needed');
-      }
-    } catch (error) {
-      log.error('Failed to initialize seeding:', error);
-      // Don't throw - app should still work without sample apps
+    if (this.initialized) {
+      return;
     }
+
+    if (this.initializationPromise) {
+      await this.initializationPromise;
+      return;
+    }
+
+    this.initializationPromise = (async () => {
+      log.debug('Initializing seeding...');
+      let didRunSuccessfully = false;
+
+      try {
+        const needsSeeding = await this.shouldSeed();
+        if (needsSeeding) {
+          await this.seedSampleApps();
+          log.info('Seeding completed successfully');
+        } else {
+          log.debug('Seeding not needed');
+        }
+        didRunSuccessfully = true;
+      } catch (error) {
+        log.error('Failed to initialize seeding:', error);
+      } finally {
+        this.initialized = didRunSuccessfully;
+        this.initializationPromise = null;
+      }
+    })();
+
+    await this.initializationPromise;
   }
 }
 
-// Note: In React Native, we'll need to use a different approach to load the HTML files
-// This is a placeholder for the require statements above - we'll need to implement
-// a proper asset loading mechanism
 export default SeedService;

@@ -59,6 +59,7 @@ export default function SettingsPage() {
   const [sampleAppsCount, setSampleAppsCount] = useState(0);
   const [isManagingSampleApps, setIsManagingSampleApps] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
+  const [showDebugMenu, setShowDebugMenu] = useState(false);
   const [showManageApps, setShowManageApps] = useState(false);
   const [manageApps, setManageApps] = useState<Array<{ id: string; title: string; status?: string; sizeKB: number }> | null>(null);
   const [isLoadingManageApps, setIsLoadingManageApps] = useState(false);
@@ -68,6 +69,7 @@ export default function SettingsPage() {
   const tabBarBlurIntensity = useUISettingsStore((s) => s.tabBar.blurIntensity);
   const appTheme = useUISettingsStore((s) => s.appTheme);
   const appLanguage = useUISettingsStore((s) => s.appLanguage);
+  const debugAllowWithoutApiKey = useUISettingsStore((s) => s.debugAllowWithoutApiKey);
   const isUniverseTheme = appTheme === 'universe';
   const { t } = useStrings();
   const setAppTheme = useUISettingsStore((s) => s.setAppTheme);
@@ -75,6 +77,7 @@ export default function SettingsPage() {
   const setTabBarVariant = useUISettingsStore((s) => s.setTabBarVariant);
   const setTabBarTintColor = useUISettingsStore((s) => s.setTabBarTintColor);
   const setTabBarBlurIntensity = useUISettingsStore((s) => s.setTabBarBlurIntensity);
+  const setDebugAllowWithoutApiKey = useUISettingsStore((s) => s.setDebugAllowWithoutApiKey);
 
   const scrollContentPaddingBottom = getLiquidGlassTabBarContentPaddingBottom(insets.bottom, 32);
 
@@ -340,7 +343,12 @@ export default function SettingsPage() {
   };
 
   const handleDebugMode = () => {
-    Alert.alert('Debug Mode', 'Enable debugging features', [{ text: 'OK' }]);
+    setShowDebugMenu(true);
+  };
+
+  const handleViewTutorial = () => {
+    setShowDebugMenu(false);
+    router.push('/welcome');
   };
 
   const handleRuntimeLogs = () => {
@@ -960,6 +968,96 @@ export default function SettingsPage() {
         </View>
       </Modal>
 
+      {/* Debug Menu Modal */}
+      <Modal
+        visible={showDebugMenu}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowDebugMenu(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowDebugMenu(false)} />
+
+          <View style={[styles.modalContent, isUniverseTheme ? styles.modalContentUniverse : undefined]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.modalTitle, isUniverseTheme ? styles.modalTitleUniverse : undefined]}>
+                  Debug Mode
+                </Text>
+                <Text style={[styles.modalSubtitle, isUniverseTheme ? styles.modalSubtitleUniverse : undefined]}>
+                  Internal tools for testing and walkthroughs
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.headerIconButton,
+                  { backgroundColor: isUniverseTheme ? 'rgba(11, 37, 65, 0.82)' : 'rgba(0, 0, 0, 0.06)' },
+                ]}
+                onPress={() => setShowDebugMenu(false)}
+              >
+                <Ionicons
+                  name="close"
+                  size={20}
+                  color={isUniverseTheme ? 'rgba(226, 240, 255, 0.92)' : 'rgba(0, 0, 0, 0.8)'}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.separator} />
+
+            <View style={[styles.debugOptionRow, isUniverseTheme ? styles.debugOptionRowUniverse : undefined]}>
+              <View style={styles.debugOptionTextWrap}>
+                <Text style={[styles.debugOptionTitle, isUniverseTheme ? styles.debugOptionTitleUniverse : undefined]}>
+                  Allow screens without API key
+                </Text>
+                <Text
+                  style={[
+                    styles.debugOptionDescription,
+                    isUniverseTheme ? styles.debugOptionDescriptionUniverse : undefined,
+                  ]}
+                >
+                  Bypass key-required UI locks so you can inspect screen states.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.debugTogglePill,
+                  debugAllowWithoutApiKey
+                    ? isUniverseTheme
+                      ? styles.debugTogglePillEnabledUniverse
+                      : styles.debugTogglePillEnabled
+                    : styles.debugTogglePillDisabled,
+                ]}
+                onPress={() => setDebugAllowWithoutApiKey(!debugAllowWithoutApiKey)}
+              >
+                <Text style={styles.debugToggleText}>
+                  {debugAllowWithoutApiKey ? 'ON' : 'OFF'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.debugActionButton, isUniverseTheme ? styles.debugActionButtonUniverse : undefined]}
+              onPress={handleViewTutorial}
+            >
+              <Ionicons
+                name="school-outline"
+                size={18}
+                color={isUniverseTheme ? 'rgba(226, 240, 255, 0.96)' : '#111827'}
+              />
+              <Text
+                style={[
+                  styles.debugActionButtonText,
+                  isUniverseTheme ? styles.debugActionButtonTextUniverse : undefined,
+                ]}
+              >
+                View Tutorial
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Manage Apps Modal */}
       <Modal
         visible={showManageApps}
@@ -1408,6 +1506,91 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 14,
     fontWeight: '600',
+  },
+  debugOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    marginTop: 10,
+  },
+  debugOptionRowUniverse: {
+    backgroundColor: 'rgba(9, 28, 52, 0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(123, 169, 220, 0.32)',
+  },
+  debugOptionTextWrap: {
+    flex: 1,
+  },
+  debugOptionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  debugOptionTitleUniverse: {
+    color: 'rgba(225, 239, 255, 0.96)',
+  },
+  debugOptionDescription: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 18,
+  },
+  debugOptionDescriptionUniverse: {
+    color: 'rgba(190, 216, 244, 0.84)',
+  },
+  debugTogglePill: {
+    minWidth: 60,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  debugTogglePillEnabled: {
+    backgroundColor: '#2563EB',
+  },
+  debugTogglePillEnabledUniverse: {
+    backgroundColor: 'rgba(44, 118, 193, 0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(195, 224, 250, 0.72)',
+  },
+  debugTogglePillDisabled: {
+    backgroundColor: 'rgba(100, 116, 139, 0.55)',
+  },
+  debugToggleText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 0.4,
+  },
+  debugActionButton: {
+    marginTop: 14,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(15, 23, 42, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.14)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  debugActionButtonUniverse: {
+    backgroundColor: 'rgba(9, 36, 64, 0.9)',
+    borderColor: 'rgba(123, 169, 220, 0.35)',
+  },
+  debugActionButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  debugActionButtonTextUniverse: {
+    color: 'rgba(225, 239, 255, 0.95)',
   },
   modalOverlay: {
     flex: 1,

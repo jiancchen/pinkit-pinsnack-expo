@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "start": "expo start",
-    "start:dev": "expo start --dev-client",
-    "android": "expo run:android",
-    "ios": "expo run:ios",
-    "web": "expo start --web"
+    "samples:refresh": "node scripts/generate-sample-catalog.mjs",
+    "start": "yarn samples:refresh && expo start",
+    "start:dev": "yarn samples:refresh && expo start --dev-client",
+    "android": "yarn samples:refresh && expo run:android",
+    "ios": "yarn samples:refresh && expo run:ios",
+    "web": "yarn samples:refresh && expo start --web"
   },
   "dependencies": {
     "@babel/core": "^7.28.4",

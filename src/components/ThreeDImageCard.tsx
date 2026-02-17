@@ -1,23 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
   ActivityIndicator,
   Image,
 } from 'react-native';
 import { PromptHistory } from '../types/PromptHistory';
 import { AppColors } from '../constants/AppColors';
 import { Ionicons } from '@expo/vector-icons';
-import { useScreenshotState, useScreenshotActions, useScreenshotStore } from '../stores/ScreenshotStore';
+import { useScreenshotState, useScreenshotStore } from '../stores/ScreenshotStore';
 import { createLogger } from '../utils/Logger';
 import { useStrings } from '../i18n/strings';
 
 const log = createLogger('ThreeDImageCard');
 
-const { width: screenWidth } = Dimensions.get('window');
 const MAIN_CARD_OPACITY = 0.82;
 const BACK_CARD_OPACITY = 0.22;
 
@@ -55,6 +53,7 @@ export default function ThreeDImageCard({
   const isGenerating = historyItem.status === 'generating';
   const isNewItem = (historyItem.accessCount || 0) < 1 && !isGenerating;
   const isFavorite = historyItem.favorite === true;
+  const isSample = historyItem.isSample === true || historyItem.id.startsWith('sample_');
 
   // Load screenshot only when app is first accessed - ONE TIME EFFECT
   useEffect(() => {
@@ -161,6 +160,13 @@ export default function ThreeDImageCard({
           <View style={styles.gradientOverlay} />
 
           {/* Badge system */}
+          {isSample && (
+            <View style={styles.sampleBadgeContainer}>
+              <View style={[styles.badge, styles.sampleBadge]}>
+                <Text style={[styles.badgeText, styles.sampleBadgeText]}>SAMPLE</Text>
+              </View>
+            </View>
+          )}
           <View style={styles.badgeContainer}>
             {isNewItem && (
               <View style={[styles.badge, styles.newBadge]}>
@@ -294,6 +300,11 @@ const styles = StyleSheet.create({
     top: 8,
     right: 8,
   },
+  sampleBadgeContainer: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+  },
   badge: {
     borderRadius: 8,
     paddingHorizontal: 8,
@@ -330,10 +341,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingVertical: 0,
   },
+  sampleBadge: {
+    backgroundColor: 'rgba(14, 116, 144, 0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(196, 240, 255, 0.8)',
+  },
   badgeText: {
     color: AppColors.White,
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  sampleBadgeText: {
+    fontSize: 9,
+    letterSpacing: 0.5,
   },
   titleContainer: {
     position: 'absolute',

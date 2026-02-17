@@ -123,6 +123,7 @@ export default function CreatePage() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const appTheme = useUISettingsStore((s) => s.appTheme);
+  const debugAllowWithoutApiKey = useUISettingsStore((s) => s.debugAllowWithoutApiKey);
   const isUniverseTheme = appTheme === 'universe';
   const { t } = useStrings();
   const [prompt, setPrompt] = useState('');
@@ -143,6 +144,7 @@ export default function CreatePage() {
   const [generationModel, setGenerationModel] = useState<string>(DEFAULT_CONFIG.model);
   const [generationMaxTokens, setGenerationMaxTokens] = useState<number>(DEFAULT_CONFIG.maxTokens);
   const [generationTemperature, setGenerationTemperature] = useState<number>(DEFAULT_CONFIG.temperature);
+  const hasApiAccess = hasApiKey || debugAllowWithoutApiKey;
 
   const scrollContentPaddingBottom = getLiquidGlassTabBarContentPaddingBottom(insets.bottom, 32);
 
@@ -389,7 +391,7 @@ export default function CreatePage() {
       return;
     }
 
-    if (!hasApiKey) {
+    if (!hasApiAccess) {
       Alert.alert(
         t('create.apiRequired.title'),
         t('create.apiRequired.body'),
@@ -425,6 +427,16 @@ export default function CreatePage() {
     const request = pendingCreateRequest;
     setShowGenerateConfirm(false);
     setPendingCreateRequest(null);
+
+    if (!hasApiKey && debugAllowWithoutApiKey) {
+      Alert.alert(
+        'Debug mode active',
+        'No API key is configured. This mode is for UI testing only. Add an API key in Settings to run generation.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     void queueGeneration(request);
   };
 
@@ -476,12 +488,12 @@ export default function CreatePage() {
               style={[
                 styleSheet.headerCreateButton,
                 isUniverseTheme ? styleSheet.headerCreateButtonUniverse : undefined,
-                (!prompt.trim() || isLoading || !hasApiKey || isCheckingApiKey)
+                (!prompt.trim() || isLoading || !hasApiAccess || isCheckingApiKey)
                   ? styleSheet.headerCreateButtonDisabled
                   : undefined,
               ]}
               onPress={() => void handleSubmit()}
-              disabled={!prompt.trim() || isLoading || !hasApiKey || isCheckingApiKey}
+              disabled={!prompt.trim() || isLoading || !hasApiAccess || isCheckingApiKey}
             >
               <Ionicons name="sparkles" size={16} color="#fff" />
               <Text style={styleSheet.headerCreateButtonText}>{t('create.actions.create')}</Text>
@@ -689,7 +701,7 @@ export default function CreatePage() {
           </View>
         </View>
 
-        {!hasApiKey && !isCheckingApiKey && (
+        {!hasApiAccess && !isCheckingApiKey && (
           <View style={styleSheet.section}>
             <View style={[styleSheet.warningCard, isUniverseTheme ? styleSheet.warningCardUniverse : undefined]}>
               <Ionicons name="warning" size={20} color="#F59E0B" />

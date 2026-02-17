@@ -16,11 +16,13 @@ export interface UISettingsState {
   appTheme: AppTheme;
   appLanguage: AppLanguage;
   tabBar: TabBarSettings;
+  debugAllowWithoutApiKey: boolean;
   setAppTheme: (theme: AppTheme) => void;
   setAppLanguage: (language: AppLanguage) => void;
   setTabBarVariant: (variant: TabBarVariant) => void;
   setTabBarTintColor: (tintColor: string) => void;
   setTabBarBlurIntensity: (blurIntensity: number) => void;
+  setDebugAllowWithoutApiKey: (enabled: boolean) => void;
 }
 
 const DEFAULT_APP_THEME: AppTheme = 'yellow';
@@ -31,6 +33,7 @@ const DEFAULT_TAB_BAR_SETTINGS: TabBarSettings = {
   tintColor: '#7C3AED',
   blurIntensity: 80,
 };
+const DEFAULT_DEBUG_ALLOW_WITHOUT_API_KEY = false;
 
 function normalizeHexColor(input: string): string {
   const trimmed = input.trim();
@@ -57,6 +60,7 @@ export const useUISettingsStore = create<UISettingsState>()(
       appTheme: DEFAULT_APP_THEME,
       appLanguage: DEFAULT_APP_LANGUAGE,
       tabBar: DEFAULT_TAB_BAR_SETTINGS,
+      debugAllowWithoutApiKey: DEFAULT_DEBUG_ALLOW_WITHOUT_API_KEY,
       setAppTheme: (theme: AppTheme) =>
         set(() => ({
           appTheme: theme === 'universe' ? 'universe' : 'yellow',
@@ -86,10 +90,14 @@ export const useUISettingsStore = create<UISettingsState>()(
             blurIntensity: clampBlurIntensity(blurIntensity),
           },
         })),
+      setDebugAllowWithoutApiKey: (enabled: boolean) =>
+        set(() => ({
+          debugAllowWithoutApiKey: Boolean(enabled),
+        })),
     }),
     {
       name: 'ui_settings',
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => AsyncStorage),
       // Future-proofing: if schema changes, we can migrate here.
       migrate: (persistedState: any) => {
@@ -98,15 +106,18 @@ export const useUISettingsStore = create<UISettingsState>()(
             appTheme: DEFAULT_APP_THEME,
             appLanguage: DEFAULT_APP_LANGUAGE,
             tabBar: DEFAULT_TAB_BAR_SETTINGS,
+            debugAllowWithoutApiKey: DEFAULT_DEBUG_ALLOW_WITHOUT_API_KEY,
           };
         }
 
         const tabBar = persistedState.tabBar ?? {};
         const appTheme = persistedState.appTheme === 'universe' ? 'universe' : 'yellow';
         const appLanguage = persistedState.appLanguage === 'es-ES' ? 'es-ES' : 'en-US';
+        const debugAllowWithoutApiKey = Boolean(persistedState.debugAllowWithoutApiKey);
         return {
           appTheme,
           appLanguage,
+          debugAllowWithoutApiKey,
           tabBar: {
             variant: tabBar.variant === 'clear' ? 'clear' : 'tinted',
             tintColor: normalizeHexColor(typeof tabBar.tintColor === 'string' ? tabBar.tintColor : ''),
@@ -117,6 +128,7 @@ export const useUISettingsStore = create<UISettingsState>()(
       partialize: (state) => ({
         appTheme: state.appTheme,
         appLanguage: state.appLanguage,
+        debugAllowWithoutApiKey: state.debugAllowWithoutApiKey,
         tabBar: state.tabBar,
       }),
     }
