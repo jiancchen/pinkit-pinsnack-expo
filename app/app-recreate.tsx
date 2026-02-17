@@ -104,8 +104,19 @@ export default function AppRecreatePage() {
   const [showRevisionHistory, setShowRevisionHistory] = useState(resolvedMode === 'fix' || shouldStartInHistory);
   const [baseRevisionId, setBaseRevisionId] = useState<string | null>(null);
 
+  const bodyScrollRef = useRef<ScrollView>(null);
   const newPromptRef = useRef<TextInput>(null);
   const fixNotesRef = useRef<TextInput>(null);
+
+  const scrollInputIntoView = (target: 'prompt' | 'fix') => {
+    setTimeout(() => {
+      if (target === 'fix') {
+        bodyScrollRef.current?.scrollToEnd({ animated: true });
+        return;
+      }
+      bodyScrollRef.current?.scrollTo({ y: 220, animated: true });
+    }, 120);
+  };
 
   useEffect(() => {
     const id = typeof appId === 'string' ? appId : '';
@@ -553,7 +564,7 @@ export default function AppRecreatePage() {
       <KeyboardAvoidingView
         style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={[styles.header, isUniverseTheme ? styles.headerUniverse : undefined]}>
           <TouchableOpacity
@@ -611,8 +622,11 @@ export default function AppRecreatePage() {
         </View>
 
         <ScrollView
+          ref={bodyScrollRef}
           style={[styles.body, isUniverseTheme ? styles.bodyUniverse : undefined]}
           contentContainerStyle={styles.bodyContent}
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+          contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
@@ -667,6 +681,7 @@ export default function AppRecreatePage() {
             placeholderTextColor={isUniverseTheme ? 'rgba(191, 216, 243, 0.66)' : 'rgba(0, 0, 0, 0.45)'}
             multiline={true}
             textAlignVertical="top"
+            onFocus={() => scrollInputIntoView('prompt')}
             editable={!isRecreating}
           />
 
@@ -712,6 +727,7 @@ export default function AppRecreatePage() {
             placeholderTextColor={isUniverseTheme ? 'rgba(191, 216, 243, 0.66)' : 'rgba(0, 0, 0, 0.45)'}
             multiline={true}
             textAlignVertical="top"
+            onFocus={() => scrollInputIntoView('fix')}
             editable={!isRecreating}
           />
 

@@ -86,34 +86,58 @@ function buildRevisionHistory(app: StoredApp | null): RevisionRecord[] {
 
 function buildRevisionTreeRows(revisions: RevisionRecord[]): RevisionTreeRow[] {
   const byId = new Map(revisions.map((rev) => [rev.id, rev]));
-  const depthCache = new Map<string, number>();
+  const childrenByParent = new Map<string | null, RevisionRecord[]>();
 
-  const getDepth = (rev: RevisionRecord, seen: Set<string> = new Set()): number => {
-    const cached = depthCache.get(rev.id);
-    if (typeof cached === 'number') return cached;
-    const parentId = rev.parentRevisionId || null;
-    if (!parentId || !byId.has(parentId) || seen.has(parentId)) {
-      depthCache.set(rev.id, 0);
-      return 0;
+  for (const rev of revisions) {
+    const rawParentId = rev.parentRevisionId || null;
+    const parentId = rawParentId && byId.has(rawParentId) ? rawParentId : null;
+    const bucket = childrenByParent.get(parentId);
+    if (bucket) {
+      bucket.push(rev);
+    } else {
+      childrenByParent.set(parentId, [rev]);
     }
-    seen.add(rev.id);
-    const parent = byId.get(parentId)!;
-    const depth = getDepth(parent, seen) + 1;
-    depthCache.set(rev.id, depth);
-    return depth;
-  };
+  }
 
-  return [...revisions]
-    .sort((a, b) => b.at - a.at)
-    .map((rev) => {
-      const parent = rev.parentRevisionId ? byId.get(rev.parentRevisionId) : undefined;
-      return {
-        ...rev,
-        depth: getDepth(rev),
+  childrenByParent.forEach((bucket) => {
+    bucket.sort((a, b) => b.at - a.at);
+  });
+
+  const orderedRows: RevisionTreeRow[] = [];
+  const visited = new Set<string>();
+
+  const visit = (parentId: string | null, depth: number) => {
+    const children = childrenByParent.get(parentId) || [];
+    for (const child of children) {
+      if (visited.has(child.id)) continue;
+      visited.add(child.id);
+      const parent = child.parentRevisionId ? byId.get(child.parentRevisionId) : undefined;
+      orderedRows.push({
+        ...child,
+        depth,
         parentAt: parent?.at,
         parentModel: parent?.model,
-      };
-    });
+      });
+      visit(child.id, depth + 1);
+    }
+  };
+
+  visit(null, 0);
+
+  if (visited.size < revisions.length) {
+    const leftovers = revisions.filter((rev) => !visited.has(rev.id)).sort((a, b) => b.at - a.at);
+    for (const rev of leftovers) {
+      const parent = rev.parentRevisionId ? byId.get(rev.parentRevisionId) : undefined;
+      orderedRows.push({
+        ...rev,
+        depth: 0,
+        parentAt: parent?.at,
+        parentModel: parent?.model,
+      });
+    }
+  }
+
+  return orderedRows;
 }
 
 export default function AppRevisionsPage() {
@@ -164,6 +188,10 @@ export default function AppRevisionsPage() {
 
   const revisionHistory = useMemo(() => buildRevisionHistory(app), [app]);
   const revisionTreeRows = useMemo(() => buildRevisionTreeRows(revisionHistory), [revisionHistory]);
+  const latestRevisionId = useMemo(() => {
+    if (!revisionHistory.length) return null;
+    return [...revisionHistory].sort((a, b) => b.at - a.at)[0]?.id || null;
+  }, [revisionHistory]);
 
   const activeMainRevisionId = useMemo(() => {
     if (!revisionHistory.length) return null;
@@ -336,7 +364,7 @@ export default function AppRevisionsPage() {
             color={isUniverseTheme ? 'rgba(210, 233, 255, 0.9)' : 'rgba(0, 0, 0, 0.7)'}
           />
           <Text style={[styles.infoText, isUniverseTheme ? styles.infoTextUniverse : undefined]}>
-            Most recent revision is shown first. Select a completed revision and tap "Set as Main" to load it.
+            Hierarchy view: parent revisions are shown above their children. The newest revision is marked "Latest".
           </Text>
         </View>
 
@@ -354,6 +382,7 @@ export default function AppRevisionsPage() {
                 ? `Forked from ${new Date(rev.parentAt).toLocaleString()}`
                 : 'Root revision';
               const isMain = activeMainRevisionId === rev.id;
+              const isLatest = latestRevisionId === rev.id;
               const canSetMain =
                 rev.status === 'completed' &&
                 typeof rev.htmlSnapshot === 'string' &&
@@ -376,6 +405,7 @@ export default function AppRevisionsPage() {
                   key={rev.id}
                   style={[
                     styles.treeRow,
+                    isUniverseTheme ? styles.treeRowUniverse : undefined,
                     { marginLeft: depth * 14 },
                     isMain ? styles.treeRowMain : undefined,
                     isMain && isUniverseTheme ? styles.treeRowMainUniverse : undefined,
@@ -407,6 +437,15 @@ export default function AppRevisionsPage() {
                   </View>
 
                   <View style={styles.treeRight}>
+                    {isLatest ? (
+                      <View style={[styles.latestBadge, isUniverseTheme ? styles.latestBadgeUniverse : undefined]}>
+                        <Text
+                          style={[styles.latestBadgeText, isUniverseTheme ? styles.latestBadgeTextUniverse : undefined]}
+                        >
+                          Latest
+                        </Text>
+                      </View>
+                    ) : null}
                     <Ionicons name={statusIcon as any} size={18} color={statusColor} />
                     <TouchableOpacity
                       style={[
@@ -599,6 +638,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.94)',
     padding: 10,
   },
+  treeRowUniverse: {
+    borderColor: 'rgba(123, 169, 220, 0.36)',
+    backgroundColor: 'rgba(7, 24, 45, 0.9)',
+  },
   treeRowMain: {
     borderColor: 'rgba(15, 124, 255, 0.45)',
     backgroundColor: 'rgba(15, 124, 255, 0.08)',
@@ -636,6 +679,26 @@ const styles = StyleSheet.create({
   treeRight: {
     alignItems: 'flex-end',
     gap: 6,
+  },
+  latestBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(95, 15, 64, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(95, 15, 64, 0.34)',
+  },
+  latestBadgeUniverse: {
+    backgroundColor: 'rgba(22, 74, 126, 0.52)',
+    borderColor: 'rgba(140, 185, 235, 0.44)',
+  },
+  latestBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: AppColors.FABMain,
+  },
+  latestBadgeTextUniverse: {
+    color: 'rgba(225, 241, 255, 0.95)',
   },
   mainButton: {
     minWidth: 92,
