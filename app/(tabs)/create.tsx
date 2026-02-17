@@ -107,6 +107,15 @@ const templates = [
     prompt: 'Create a countdown timer app with start, pause, and reset functionality',
     style: 'minimalist' as AppStyle,
     category: 'utility' as AppCategory
+  },
+  {
+    emoji: '🎲',
+    name: 'Something Random',
+    description: 'AI picks a small fun/useful app',
+    prompt:
+      'Create a small random app idea that is fun or useful. Choose one simple concept and implement it with a polished mobile UI and one clear core interaction.',
+    style: 'creative' as AppStyle,
+    category: 'fun' as AppCategory
   }
 ];
 

@@ -398,6 +398,8 @@ export default function AppRevisionsPage() {
                     : 'time-outline';
               const statusColor =
                 rev.status === 'completed' ? '#16A34A' : rev.status === 'error' ? '#EF4444' : '#F59E0B';
+              const statusLabel =
+                rev.status === 'completed' ? 'Completed' : rev.status === 'error' ? 'Error' : 'Generating';
               const treePrefix = depth === 0 ? '●' : `${'│ '.repeat(depth - 1)}└─`;
 
               return (
@@ -411,58 +413,70 @@ export default function AppRevisionsPage() {
                     isMain && isUniverseTheme ? styles.treeRowMainUniverse : undefined,
                   ]}
                 >
-                  <Text style={[styles.treePrefix, isUniverseTheme ? styles.treePrefixUniverse : undefined]}>
-                    {treePrefix}
-                  </Text>
-                  <Ionicons
-                    name={isMain ? 'folder-open-outline' : 'folder-outline'}
-                    size={18}
-                    color={isUniverseTheme ? 'rgba(211, 232, 255, 0.88)' : 'rgba(0, 0, 0, 0.66)'}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.treeTitle, isUniverseTheme ? styles.treeTitleUniverse : undefined]}>
-                      {when}
+                  <View style={styles.treeTopRow}>
+                    <Text style={[styles.treePrefix, isUniverseTheme ? styles.treePrefixUniverse : undefined]}>
+                      {treePrefix}
                     </Text>
-                    <Text style={[styles.treeMeta, isUniverseTheme ? styles.treeMetaUniverse : undefined]}>
-                      {modelName}
-                    </Text>
-                    <Text style={[styles.treeMeta, isUniverseTheme ? styles.treeMetaUniverse : undefined]}>
-                      {parentLabel}
-                    </Text>
-                    {!!rev.fixSummary?.length && (
-                      <Text style={[styles.treeMeta, isUniverseTheme ? styles.treeMetaUniverse : undefined]}>
-                        Fixes: {rev.fixSummary.join(' · ')}
+                    <Ionicons
+                      name={isMain ? 'folder-open-outline' : 'folder-outline'}
+                      size={18}
+                      color={isUniverseTheme ? 'rgba(211, 232, 255, 0.88)' : 'rgba(0, 0, 0, 0.66)'}
+                    />
+                    <View style={styles.treeContent}>
+                      <Text style={[styles.treeTitle, isUniverseTheme ? styles.treeTitleUniverse : undefined]}>
+                        {when}
                       </Text>
-                    )}
-                  </View>
-
-                  <View style={styles.treeRight}>
-                    {isLatest ? (
-                      <View style={[styles.latestBadge, isUniverseTheme ? styles.latestBadgeUniverse : undefined]}>
-                        <Text
-                          style={[styles.latestBadgeText, isUniverseTheme ? styles.latestBadgeTextUniverse : undefined]}
-                        >
-                          Latest
+                      <Text style={[styles.treeMeta, isUniverseTheme ? styles.treeMetaUniverse : undefined]}>
+                        {modelName}
+                      </Text>
+                      <Text style={[styles.treeMeta, isUniverseTheme ? styles.treeMetaUniverse : undefined]}>
+                        {parentLabel}
+                      </Text>
+                      {!!rev.fixSummary?.length && (
+                        <Text style={[styles.treeMeta, isUniverseTheme ? styles.treeMetaUniverse : undefined]}>
+                          Fixes: {rev.fixSummary.join(' · ')}
                         </Text>
-                      </View>
-                    ) : null}
-                    <Ionicons name={statusIcon as any} size={18} color={statusColor} />
-                    <TouchableOpacity
-                      style={[
-                        styles.mainButton,
-                        isUniverseTheme ? styles.mainButtonUniverse : undefined,
-                        !canSetMain ? styles.mainButtonDisabled : undefined,
-                        isMain ? styles.mainButtonActive : undefined,
-                      ]}
-                      disabled={!canSetMain || isApplying || !!applyingRevisionId}
-                      onPress={() => void setRevisionAsMain(rev)}
-                    >
-                      {isApplying ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                      ) : (
-                        <Text style={styles.mainButtonText}>{isMain ? 'Main' : 'Set as Main'}</Text>
                       )}
-                    </TouchableOpacity>
+
+                      <View style={styles.treeFlagsRow}>
+                        {isLatest ? (
+                          <View style={[styles.latestBadge, isUniverseTheme ? styles.latestBadgeUniverse : undefined]}>
+                            <Text
+                              style={[
+                                styles.latestBadgeText,
+                                isUniverseTheme ? styles.latestBadgeTextUniverse : undefined,
+                              ]}
+                            >
+                              Latest
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        <View style={styles.treeStatusInline}>
+                          <Ionicons name={statusIcon as any} size={16} color={statusColor} />
+                          <Text style={[styles.treeStatusInlineText, { color: statusColor }]}>
+                            {statusLabel}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.mainButton,
+                          isUniverseTheme ? styles.mainButtonUniverse : undefined,
+                          !canSetMain ? styles.mainButtonDisabled : undefined,
+                          isMain ? styles.mainButtonActive : undefined,
+                        ]}
+                        disabled={!canSetMain || isApplying || !!applyingRevisionId}
+                        onPress={() => void setRevisionAsMain(rev)}
+                      >
+                        {isApplying ? (
+                          <ActivityIndicator size="small" color="#fff" />
+                        ) : (
+                          <Text style={styles.mainButtonText}>{isMain ? 'Main' : 'Set as Main'}</Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
               );
@@ -517,13 +531,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     gap: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.42)',
+    backgroundColor: '#FFE59A',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0, 0, 0, 0.12)',
   },
   headerUniverse: {
-    backgroundColor: 'rgba(8, 22, 42, 0.9)',
-    borderBottomColor: 'rgba(123, 169, 220, 0.32)',
+    backgroundColor: '#081B33',
+    borderBottomColor: 'rgba(123, 169, 220, 0.4)',
   },
   headerIconButton: {
     width: 38,
@@ -650,6 +664,15 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(145, 196, 255, 0.45)',
     backgroundColor: 'rgba(16, 52, 90, 0.64)',
   },
+  treeTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    flex: 1,
+  },
+  treeContent: {
+    flex: 1,
+  },
   treePrefix: {
     minWidth: 18,
     fontSize: 12,
@@ -676,9 +699,21 @@ const styles = StyleSheet.create({
   treeMetaUniverse: {
     color: 'rgba(190, 216, 244, 0.84)',
   },
-  treeRight: {
-    alignItems: 'flex-end',
+  treeFlagsRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 6,
+  },
+  treeStatusInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  treeStatusInlineText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   latestBadge: {
     borderRadius: 999,
@@ -708,6 +743,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#0f7cff',
+    alignSelf: 'flex-start',
+    marginTop: 8,
   },
   mainButtonUniverse: {
     backgroundColor: '#0f7cff',

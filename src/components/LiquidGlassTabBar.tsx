@@ -88,6 +88,8 @@ function TabButton({ routeName, isFocused, onPress, onLongPress }: TabButtonProp
         return isFocused ? 'planet' : 'planet-outline';
       case 'create':
         return isFocused ? 'add-circle' : 'add-circle-outline';
+      case 'stats':
+        return isFocused ? 'stats-chart' : 'stats-chart-outline';
       case 'settings':
         return isFocused ? 'settings' : 'settings-outline';
       default:

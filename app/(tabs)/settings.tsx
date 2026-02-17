@@ -11,7 +11,6 @@ import { ClaudeApiService } from '../../src/services/ClaudeApiService';
 import { SeedService } from '../../src/services/SeedService';
 import { AppStorageService } from '../../src/services/AppStorageService';
 import { PromptHistoryService } from '../../src/services/PromptHistoryService';
-import { TokenTrackingService, TokenStats } from '../../src/services/TokenTrackingService';
 import { ScreenshotService } from '../../src/services/ScreenshotService';
 import { WebViewScreenshotService } from '../../src/services/WebViewScreenshotService';
 import { useScreenshotStore } from '../../src/stores/ScreenshotStore';
@@ -59,14 +58,7 @@ export default function SettingsPage() {
   const [isLoadingApiKey, setIsLoadingApiKey] = useState(true);
   const [sampleAppsCount, setSampleAppsCount] = useState(0);
   const [isManagingSampleApps, setIsManagingSampleApps] = useState(false);
-  const [tokenStats, setTokenStats] = useState<TokenStats | null>(null);
-  const [isLoadingTokenStats, setIsLoadingTokenStats] = useState(true);
   const [showModelSelector, setShowModelSelector] = useState(false);
-  const [appsStorageStats, setAppsStorageStats] = useState<{ totalApps: number; favorites: number; estimatedSizeKB: number } | null>(null);
-  const [promptHistoryStats, setPromptHistoryStats] = useState<{ total: number; estimatedSizeKB: number } | null>(null);
-  const [screenshotStats, setScreenshotStats] = useState<{ totalScreenshots: number; estimatedSizeKB: number } | null>(null);
-  const [webviewScreenshotStats, setWebviewScreenshotStats] = useState<{ totalScreenshots: number; estimatedSizeKB: number } | null>(null);
-  const [isLoadingStorageStats, setIsLoadingStorageStats] = useState(true);
   const [showManageApps, setShowManageApps] = useState(false);
   const [manageApps, setManageApps] = useState<Array<{ id: string; title: string; status?: string; sizeKB: number }> | null>(null);
   const [isLoadingManageApps, setIsLoadingManageApps] = useState(false);
@@ -90,8 +82,6 @@ export default function SettingsPage() {
     checkApiKeyStatus();
     loadClaudeConfig();
     loadSampleAppsCount();
-    loadTokenStats();
-    loadStorageStats();
   }, []);
 
   useFocusEffect(
@@ -100,8 +90,6 @@ export default function SettingsPage() {
       checkApiKeyStatus();
       loadClaudeConfig();
       loadSampleAppsCount();
-      loadTokenStats();
-      loadStorageStats();
     }, [])
   );
 
@@ -137,18 +125,6 @@ export default function SettingsPage() {
     }
   };
 
-  const loadTokenStats = async () => {
-    try {
-      setIsLoadingTokenStats(true);
-      const stats = await TokenTrackingService.getTokenStats();
-      setTokenStats(stats);
-    } catch (error) {
-      log.error('Error loading token stats:', error);
-    } finally {
-      setIsLoadingTokenStats(false);
-    }
-  };
-
   const formatSize = (kb: number): string => {
     if (!Number.isFinite(kb) || kb <= 0) return '0 KB';
     if (kb < 1024) return `${kb.toLocaleString()} KB`;
@@ -156,30 +132,6 @@ export default function SettingsPage() {
     if (mb < 1024) return `${mb.toFixed(1)} MB`;
     const gb = mb / 1024;
     return `${gb.toFixed(2)} GB`;
-  };
-
-  const loadStorageStats = async () => {
-    try {
-      setIsLoadingStorageStats(true);
-      const [apps, prompts, screenshots, webviewShots] = await Promise.all([
-        AppStorageService.getStorageStats(),
-        PromptHistoryService.getStats(),
-        ScreenshotService.getStorageStats(),
-        WebViewScreenshotService.getStorageStats(),
-      ]);
-      setAppsStorageStats(apps);
-      setPromptHistoryStats(prompts);
-      setScreenshotStats(screenshots);
-      setWebviewScreenshotStats(webviewShots);
-    } catch (error) {
-      log.error('Error loading storage stats:', error);
-      setAppsStorageStats(null);
-      setPromptHistoryStats(null);
-      setScreenshotStats(null);
-      setWebviewScreenshotStats(null);
-    } finally {
-      setIsLoadingStorageStats(false);
-    }
   };
 
   const loadManageApps = async () => {
@@ -250,7 +202,6 @@ export default function SettingsPage() {
                 // ignore
               }
               await loadSampleAppsCount();
-              await loadStorageStats();
               setManageApps(null);
               Alert.alert('Success', 'All apps cleared.');
             } catch (error) {
@@ -275,7 +226,6 @@ export default function SettingsPage() {
           onPress: async () => {
             try {
               await PromptHistoryService.clear();
-              await loadStorageStats();
               Alert.alert('Success', 'Prompt history cleared.');
             } catch (error) {
               log.error('Error clearing prompt history:', error);
@@ -283,30 +233,6 @@ export default function SettingsPage() {
             }
           },
         },
-      ]
-    );
-  };
-
-  const handleClearTokenHistory = () => {
-    Alert.alert(
-      'Clear Token History',
-      'Are you sure you want to clear all token usage history? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await TokenTrackingService.clearTokenHistory();
-              await loadTokenStats();
-              Alert.alert('Success', 'Token history cleared successfully');
-            } catch (error) {
-              log.error('Error clearing token history:', error);
-              Alert.alert('Error', 'Failed to clear token history');
-            }
-          }
-        }
       ]
     );
   };
@@ -827,53 +753,6 @@ export default function SettingsPage() {
           </SettingsCard>
         </View>
 
-        {/* App Statistics Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
-            App Statistics
-          </Text>
-          
-          <SettingsCard>
-            <View style={styles.statsContainer}>
-              <StatItem
-                label="Total Apps"
-                value={appsStorageStats ? appsStorageStats.totalApps.toString() : '—'}
-              />
-              <StatItem
-                label="Favorites"
-                value={appsStorageStats ? appsStorageStats.favorites.toString() : '—'}
-              />
-            </View>
-            <View style={styles.separator} />
-            <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
-              <View>
-                <Text style={[styles.settingsItemTitle, isUniverseTheme ? styles.settingsItemTitleUniverse : undefined]}>
-                  Storage (estimated)
-                </Text>
-                {isLoadingStorageStats ? (
-                  <Text
-                    style={[
-                      styles.settingsItemDescription,
-                      isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
-                    ]}
-                  >
-                    Loading…
-                  </Text>
-                ) : (
-                  <Text
-                    style={[
-                      styles.settingsItemDescription,
-                      isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
-                    ]}
-                  >
-                    Total: {formatSize((appsStorageStats?.estimatedSizeKB ?? 0) + (screenshotStats?.estimatedSizeKB ?? 0) + (webviewScreenshotStats?.estimatedSizeKB ?? 0) + (promptHistoryStats?.estimatedSizeKB ?? 0))} • Apps: {formatSize(appsStorageStats?.estimatedSizeKB ?? 0)} • Screenshots: {formatSize((screenshotStats?.estimatedSizeKB ?? 0) + (webviewScreenshotStats?.estimatedSizeKB ?? 0))} • Prompts: {formatSize(promptHistoryStats?.estimatedSizeKB ?? 0)}
-                  </Text>
-                )}
-              </View>
-            </View>
-          </SettingsCard>
-        </View>
-
         {/* Storage & Data Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
@@ -910,102 +789,6 @@ export default function SettingsPage() {
               icon="time-outline"
               statusColor="#DC3545"
             />
-          </SettingsCard>
-        </View>
-
-        {/* Token Usage Section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
-            Token Usage & Costs
-          </Text>
-          
-          <SettingsCard>
-            {isLoadingTokenStats ? (
-              <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
-                <Text
-                  style={[
-                    styles.settingsItemDescription,
-                    isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
-                  ]}
-                >
-                  Loading token usage statistics...
-                </Text>
-              </View>
-            ) : tokenStats ? (
-              <View>
-                <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
-                  <View>
-                    <Text style={[styles.settingsItemTitle, isUniverseTheme ? styles.settingsItemTitleUniverse : undefined]}>
-                      Total Usage
-                    </Text>
-                    <Text
-                      style={[
-                        styles.settingsItemDescription,
-                        isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
-                      ]}
-                    >
-                      {tokenStats.totalTokens.toLocaleString()} tokens across {tokenStats.totalRequests} requests
-                    </Text>
-                  </View>
-                </View>
-                
-                <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
-                  <View>
-                    <Text style={[styles.settingsItemTitle, isUniverseTheme ? styles.settingsItemTitleUniverse : undefined]}>
-                      Input/Output Breakdown
-                    </Text>
-                    <Text
-                      style={[
-                        styles.settingsItemDescription,
-                        isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
-                      ]}
-                    >
-                      Input: {tokenStats.totalInputTokens.toLocaleString()} • Output: {tokenStats.totalOutputTokens.toLocaleString()}
-                    </Text>
-                  </View>
-                </View>
-
-                {Object.entries(tokenStats.usageByModel).length > 0 && (
-                  <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
-                    <View>
-                      <Text style={[styles.settingsItemTitle, isUniverseTheme ? styles.settingsItemTitleUniverse : undefined]}>
-                        Usage by Model
-                      </Text>
-                      {Object.entries(tokenStats.usageByModel).map(([model, usage]) => (
-                        <Text
-                          key={model}
-                          style={[
-                            styles.settingsItemDescription,
-                            isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
-                          ]}
-                        >
-                          {getModelDisplayName(model)}: {(usage.inputTokens + usage.outputTokens).toLocaleString()} tokens ({usage.requests} requests)
-                        </Text>
-                      ))}
-                    </View>
-                  </View>
-                )}
-                
-                <TouchableOpacity
-                  style={[styles.button, { backgroundColor: '#dc3545', marginTop: 16 }]}
-                  onPress={handleClearTokenHistory}
-                >
-                  <Ionicons name="trash-outline" size={16} color="white" style={{ marginRight: 8 }} />
-                  <Text style={styles.buttonText}>Clear Token History</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
-                <Text
-                  style={[
-                    styles.settingsItemDescription,
-                    isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
-                  ]}
-                >
-                  No token usage data available
-                </Text>
-              </View>
-            )}
           </SettingsCard>
         </View>
 
@@ -1254,7 +1037,6 @@ export default function SettingsPage() {
                                 await deleteAppAndAssets(app.id);
                                 await loadManageApps();
                                 await loadSampleAppsCount();
-                                await loadStorageStats();
                               },
                             },
                           ]
@@ -1334,21 +1116,6 @@ function SettingsItem({ title, description, onPress, icon = "chevron-forward", s
       </View>
       <Ionicons name={icon as any} size={20} color={statusColor || "#94A3B8"} />
     </TouchableOpacity>
-  );
-}
-
-interface StatItemProps {
-  label: string;
-  value: string;
-}
-
-function StatItem({ label, value }: StatItemProps) {
-  const isUniverseTheme = useUISettingsStore((s) => s.appTheme === 'universe');
-  return (
-    <View style={styles.statItem}>
-      <Text style={[styles.statValue, isUniverseTheme ? styles.statValueUniverse : undefined]}>{value}</Text>
-      <Text style={[styles.statLabel, isUniverseTheme ? styles.statLabelUniverse : undefined]}>{label}</Text>
-    </View>
   );
 }
 
@@ -1611,30 +1378,6 @@ const styles = StyleSheet.create({
     backgroundColor: AppColors.FABMain,
     borderRadius: 8,
     marginLeft: -8,
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 8,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'rgba(0, 0, 0, 0.8)',
-  },
-  statValueUniverse: {
-    color: 'rgba(225, 239, 255, 0.95)',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: 'rgba(0, 0, 0, 0.6)',
-    marginTop: 2,
-  },
-  statLabelUniverse: {
-    color: 'rgba(190, 216, 244, 0.84)',
   },
   button: {
     flexDirection: 'row',
