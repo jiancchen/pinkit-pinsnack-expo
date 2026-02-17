@@ -89,7 +89,7 @@ function TabButton({ routeName, isFocused, onPress, onLongPress }: TabButtonProp
       case 'create':
         return isFocused ? 'add-circle' : 'add-circle-outline';
       case 'stats':
-        return isFocused ? 'stats-chart' : 'stats-chart-outline';
+        return isFocused ? 'chatbubble-ellipses' : 'chatbubble-ellipses-outline';
       case 'settings':
         return isFocused ? 'settings' : 'settings-outline';
       default:

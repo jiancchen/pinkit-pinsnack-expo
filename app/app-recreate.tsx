@@ -73,10 +73,12 @@ function buildRootRevision(app: StoredApp, fallbackModel?: string, fallbackPromp
 
 export default function AppRecreatePage() {
   const router = useRouter();
-  const { appId, mode, showHistory } = useLocalSearchParams<{
+  const { appId, mode, showHistory, prefillPrompt, prefillFixNotes } = useLocalSearchParams<{
     appId?: string;
     mode?: string;
     showHistory?: string;
+    prefillPrompt?: string;
+    prefillFixNotes?: string;
   }>();
   const appTheme = useUISettingsStore((s) => s.appTheme);
   const isUniverseTheme = appTheme === 'universe';
@@ -159,8 +161,11 @@ export default function AppRecreatePage() {
       }
 
       setApp(storedApp);
-      setNewPrompt(storedApp.prompt || '');
-      setFixNotes('');
+      const prefilledPrompt = typeof prefillPrompt === 'string' ? prefillPrompt.trim() : '';
+      const prefilledFixNotes = typeof prefillFixNotes === 'string' ? prefillFixNotes.trim() : '';
+
+      setNewPrompt(prefilledPrompt || storedApp.prompt || '');
+      setFixNotes(prefilledFixNotes);
 
       try {
         const config = await SecureStorageService.getConfig();

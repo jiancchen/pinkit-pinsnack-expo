@@ -753,6 +753,22 @@ export default function SettingsPage() {
           </SettingsCard>
         </View>
 
+        {/* Insights Section */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
+            Insights
+          </Text>
+
+          <SettingsCard>
+            <SettingsItem
+              title="App Statistics & Token Usage"
+              description="Open charts, usage by app, and aggregate analytics"
+              onPress={() => router.push('/stats')}
+              icon="stats-chart-outline"
+            />
+          </SettingsCard>
+        </View>
+
         {/* Storage & Data Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>

@@ -423,6 +423,27 @@ export class ClaudeApiService {
     };
   }
 
+  async generateAssistantResponse(args: {
+    messages: ClaudeMessage[];
+    model?: string;
+    maxTokens?: number;
+    temperature?: number;
+    operation?: string;
+  }): Promise<string> {
+    if (!this.config) {
+      await this.initialize();
+    }
+
+    const response = await this.sendMessage(args.messages, {
+      model: args.model,
+      maxTokens: args.maxTokens ?? 1400,
+      temperature: args.temperature ?? 0.2,
+      operation: args.operation || 'assistant_chat',
+    });
+
+    return response.content;
+  }
+
   /**
    * Test the API connection and configuration
    */

@@ -178,6 +178,7 @@ export default function RootLayout() {
           <Stack.Screen name="app-view" options={{ headerShown: false }} />
           <Stack.Screen name="app-recreate" options={{ headerShown: false }} />
           <Stack.Screen name="app-revisions" options={{ headerShown: false }} />
+          <Stack.Screen name="stats" options={{ headerShown: false }} />
           <Stack.Screen name="runtime-logs" options={{ headerShown: false }} />
         </Stack>
         <GenerationLiveActivityController />
