@@ -4,15 +4,63 @@ import {
   ClaudeResponse, 
   ClaudeApiConfig, 
   ApiError,
-  ClaudeMessage 
+  ClaudeMessage,
+  clampMaxOutputTokens,
+  clampTemperature,
+  resolveSupportedClaudeModel,
 } from '../types/ClaudeApi';
 import { SecureStorageService } from './SecureStorageService';
 import { GeneratedAppConcept } from '../types/PromptHistory';
+import { TokenTrackingService } from './TokenTrackingService';
+import { ApiLogger as log } from '../utils/Logger';
 
 export class ClaudeApiService {
   private static instance: ClaudeApiService;
   private axiosInstance: AxiosInstance;
   private config: ClaudeApiConfig | null = null;
+
+  private normalizeHtmlResponse(raw: string): string {
+    let content = raw.trim();
+
+    // If Claude wraps HTML in Markdown code fences, strip them.
+    if (content.startsWith('```')) {
+      content = content.replace(/^```[a-zA-Z0-9_-]*\s*\n/, '').trim();
+      content = content.replace(/```[\s]*$/, '').trim();
+    }
+
+    const lower = content.toLowerCase();
+    const doctypeIndex = lower.indexOf('<!doctype html');
+    const htmlIndex = lower.indexOf('<html');
+    const startIndex = doctypeIndex !== -1 ? doctypeIndex : htmlIndex;
+
+    if (startIndex > 0) {
+      content = content.slice(startIndex).trim();
+    }
+
+    const endIndex = content.toLowerCase().lastIndexOf('</html>');
+    if (endIndex !== -1) {
+      content = content.slice(0, endIndex + '</html>'.length).trim();
+    }
+
+    return content;
+  }
+
+  private normalizeJsonResponse(raw: string): string {
+    let content = raw.trim();
+
+    if (content.startsWith('```')) {
+      content = content.replace(/^```[a-zA-Z0-9_-]*\s*\n/, '').trim();
+      content = content.replace(/```[\s]*$/, '').trim();
+    }
+
+    const firstBrace = content.indexOf('{');
+    const lastBrace = content.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      content = content.slice(firstBrace, lastBrace + 1).trim();
+    }
+
+    return content;
+  }
 
   private constructor() {
     this.axiosInstance = axios.create({
@@ -28,7 +76,7 @@ export class ClaudeApiService {
     this.axiosInstance.interceptors.response.use(
       (response) => response,
       (error) => {
-        console.error('Claude API Error Details:', {
+        log.error('Claude API Error Details:', {
           status: error.response?.status,
           statusText: error.response?.statusText,
           data: error.response?.data,
@@ -60,7 +108,7 @@ export class ClaudeApiService {
       }
       return false;
     } catch (error) {
-      console.error('Failed to initialize Claude API service:', error);
+      log.error('Failed to initialize Claude API service:', error);
       return false;
     }
   }
@@ -83,14 +131,17 @@ export class ClaudeApiService {
       // Store additional config if provided
       if (config) {
         const currentConfig = await SecureStorageService.getConfig();
-        const newConfig = { ...currentConfig, ...config };
-        await SecureStorageService.storeConfig(newConfig);
+        const merged = { ...currentConfig, ...config };
+        const model = resolveSupportedClaudeModel(typeof merged.model === 'string' ? merged.model : undefined);
+        const maxTokens = clampMaxOutputTokens(model, merged.maxTokens as number);
+        const temperature = clampTemperature(merged.temperature as number);
+        await SecureStorageService.storeConfig({ model, maxTokens, temperature });
       }
 
       // Reinitialize with new config
       await this.initialize();
     } catch (error) {
-      console.error('Failed to update configuration:', error);
+      log.error('Failed to update configuration:', error);
       throw new Error('Failed to update API configuration');
     }
   }
@@ -101,27 +152,34 @@ export class ClaudeApiService {
   private async sendMessage(
     messages: ClaudeMessage[],
     options: {
-      maxTokens: number;
-      temperature: number;
+      maxTokens?: number;
+      temperature?: number;
+      model?: string;
+      operation?: string;
+      appId?: string;
     }
   ): Promise<{ content: string }> {
-    console.log('📨 [ClaudeAPI] Starting sendMessage');
-    console.log('📝 [ClaudeAPI] Messages count:', messages.length);
-    console.log('🎯 [ClaudeAPI] Options:', options);
+    log.debug('Starting sendMessage');
+    log.verbose('Messages count:', messages.length);
+    log.verbose('Options:', options);
     
     if (!this.config) {
-      console.log('❌ [ClaudeAPI] No config available');
+      log.error('No config available');
       throw new Error('API not configured');
     }
 
+    const resolvedModel = resolveSupportedClaudeModel(options.model || this.config.model);
+    const resolvedMaxTokens = clampMaxOutputTokens(resolvedModel, options.maxTokens ?? this.config.maxTokens);
+    const resolvedTemperature = clampTemperature(options.temperature ?? this.config.temperature);
+
     const requestBody: ClaudeRequest = {
-      model: this.config.model,
-      max_tokens: options.maxTokens,
-      temperature: options.temperature,
+      model: resolvedModel,
+      max_tokens: resolvedMaxTokens,
+      temperature: resolvedTemperature,
       messages
     };
     
-    console.log('📦 [ClaudeAPI] Request body prepared:', {
+    log.verbose('Request body prepared:', {
       model: requestBody.model,
       max_tokens: requestBody.max_tokens,
       temperature: requestBody.temperature,
@@ -129,24 +187,37 @@ export class ClaudeApiService {
     });
 
     try {
-      console.log('🌐 [ClaudeAPI] Making HTTP request to Anthropic API...');
+      log.debug('Making HTTP request to Anthropic API...');
       const response: AxiosResponse<ClaudeResponse> = await this.axiosInstance.post('/messages', requestBody);
       
-      console.log('✅ [ClaudeAPI] Received HTTP response');
-      console.log('📊 [ClaudeAPI] Response status:', response.status);
-      console.log('📊 [ClaudeAPI] Response data keys:', Object.keys(response.data || {}));
+      log.debug('Received HTTP response');
+      log.verbose('Response status:', response.status);
+      log.verbose('Response data keys:', Object.keys(response.data || {}));
       
       if (response.data && response.data.content && response.data.content.length > 0) {
         const contentText = response.data.content[0].text;
-        console.log('✅ [ClaudeAPI] Successfully extracted content text');
-        console.log('📊 [ClaudeAPI] Content length:', contentText?.length || 0);
+        log.debug('Successfully extracted content text');
+        log.verbose('Content length:', contentText?.length || 0);
+        
+        // Track token usage if available
+        if (response.data.usage) {
+          log.verbose('Token usage:', response.data.usage);
+          await TokenTrackingService.trackTokenUsage(
+            response.data.usage.input_tokens,
+            response.data.usage.output_tokens,
+            resolvedModel,
+            options.operation || 'api_call',
+            options.appId
+          ).catch(err => log.warn('Failed to track tokens:', err));
+        }
+        
         return { content: contentText };
       } else {
-        console.error('❌ [ClaudeAPI] Invalid response structure:', response.data);
+        log.error('Invalid response structure:', response.data);
         throw new Error('Invalid response format from Claude API');
       }
     } catch (error: any) {
-      console.error('💥 [ClaudeAPI] HTTP request failed:', {
+      log.error('HTTP request failed:', {
         message: error?.message,
         status: error?.response?.status,
         statusText: error?.response?.statusText,
@@ -160,7 +231,16 @@ export class ClaudeApiService {
   /**
    * Generate an app concept using Claude API
    */
-  async generateAppConcept(prompt: string): Promise<any> {
+  async generateAppConcept(
+    prompt: string,
+    options?: {
+      model?: string;
+      maxTokens?: number;
+      temperature?: number;
+      operation?: string;
+      appId?: string;
+    }
+  ): Promise<any> {
     const messages: ClaudeMessage[] = [
       {
         role: 'user',
@@ -170,17 +250,23 @@ export class ClaudeApiService {
 
     try {
       const response = await this.sendMessage(messages, {
-        maxTokens: this.config!.maxTokens,
-        temperature: this.config!.temperature
+        model: options?.model,
+        maxTokens: options?.maxTokens,
+        temperature: options?.temperature,
+        operation: options?.operation || 'app_generation',
+        appId: options?.appId
       });
       
       if (response.content && response.content.length > 0) {
-        const content = response.content;
-        console.log('📄 [ClaudeAPI] Raw response content:', content.substring(0, 500) + '...');
+        const rawContent = response.content;
+        const content = this.normalizeHtmlResponse(rawContent);
+        log.verbose('Response content preview:', content.substring(0, 500) + '...');
         
         // Check if this looks like HTML
-        if (content.trim().startsWith('<!DOCTYPE html>') || content.trim().startsWith('<html')) {
-          console.log('✅ [ClaudeAPI] Received HTML response');
+        const trimmed = content.trim();
+        const trimmedLower = trimmed.toLowerCase();
+        if (trimmedLower.startsWith('<!doctype html>') || trimmedLower.startsWith('<html')) {
+          log.debug('Received HTML response');
           
           // Extract app title and category from data-app-title attribute (format: "Title | Category")
           const titleMatch = content.match(/data-app-title="([^"]*)"/i);
@@ -209,8 +295,8 @@ export class ClaudeApiService {
             }
           }
           
-          console.log('🏷️ [ClaudeAPI] Extracted app title:', appTitle);
-          console.log('📂 [ClaudeAPI] Extracted app category:', appCategory);
+          log.info('Extracted app title:', appTitle);
+          log.info('Extracted app category:', appCategory);
           
           // Extract external libraries used
           const libMatches = content.match(/<(?:script|link)[^>]*(?:src|href)="([^"]*(?:cdnjs|jsdelivr|fonts\.googleapis)[^"]*)"/gi) || [];
@@ -231,7 +317,7 @@ export class ClaudeApiService {
             return 'Unknown Library';
           });
           
-          console.log('📚 [ClaudeAPI] Detected external libraries:', externalLibs);
+          log.verbose('Detected external libraries:', externalLibs);
           
           return {
             name: appTitle,
@@ -243,16 +329,119 @@ export class ClaudeApiService {
 
         
         // If we get here, it's not valid HTML
-        console.error('❌ [ClaudeAPI] Response is not valid HTML');
-        console.log('📄 [ClaudeAPI] Full response for debugging:', content);
+        log.error('Response is not valid HTML');
+        log.debug('Full response for debugging (raw):', rawContent);
+        log.debug('Full response for debugging (normalized):', content);
         throw new Error('Claude API did not return valid HTML.');
       } else {
         throw new Error('Claude API returned an empty response.');
       }
     } catch (error: any) {
-      console.error('💥 [ClaudeAPI] Failed to generate app concept:', error);
+      log.error('Failed to generate app concept:', error);
       throw error;
     }
+  }
+
+  async classifyProjectTopics(args: {
+    title: string;
+    description: string;
+    prompt: string;
+    category: string;
+    style: string;
+    htmlSnippet: string;
+    taxonomy: string[];
+    model?: string;
+    appId?: string;
+  }): Promise<{
+    topics: string[];
+    primaryTopic: string;
+    confidence: number;
+    summary?: string;
+    model?: string;
+  }> {
+    const taxonomy = args.taxonomy.join(', ');
+    const model = resolveSupportedClaudeModel(args.model || this.config?.model);
+
+    const messages: ClaudeMessage[] = [
+      {
+        role: 'user',
+        content:
+          `You classify app projects into high-level topics.\n` +
+          `Return JSON only with keys: primaryTopic, topics, confidence, summary.\n` +
+          `Constraints:\n` +
+          `- primaryTopic must be one of: ${taxonomy}\n` +
+          `- topics must be an array of 1-4 unique values from the same taxonomy\n` +
+          `- confidence must be a number between 0 and 1\n` +
+          `- summary must be <= 160 characters\n\n` +
+          `Project:\n` +
+          `title: ${args.title}\n` +
+          `description: ${args.description}\n` +
+          `prompt: ${args.prompt}\n` +
+          `category: ${args.category}\n` +
+          `style: ${args.style}\n` +
+          `htmlSnippet: ${args.htmlSnippet}\n`,
+      },
+    ];
+
+    const response = await this.sendMessage(messages, {
+      model,
+      maxTokens: 300,
+      temperature: 0,
+      operation: 'project_topic_classification',
+      appId: args.appId,
+    });
+
+    const normalized = this.normalizeJsonResponse(response.content);
+    const parsed = JSON.parse(normalized) as Partial<{
+      primaryTopic: string;
+      topics: string[];
+      confidence: number;
+      summary: string;
+    }>;
+
+    const allowed = new Set(args.taxonomy.map((topic) => topic.toLowerCase()));
+    const primaryTopic = (parsed.primaryTopic || '').toLowerCase().trim();
+    const parsedTopics = Array.isArray(parsed.topics)
+      ? parsed.topics.map((topic) => String(topic).toLowerCase().trim()).filter((topic) => allowed.has(topic))
+      : [];
+    const normalizedPrimary = allowed.has(primaryTopic) ? primaryTopic : parsedTopics[0];
+    const topics = [...new Set([normalizedPrimary, ...parsedTopics].filter(Boolean))].slice(0, 4);
+
+    if (!normalizedPrimary || topics.length === 0) {
+      throw new Error('Claude topic classification returned invalid taxonomy values');
+    }
+
+    return {
+      primaryTopic: normalizedPrimary,
+      topics,
+      confidence:
+        typeof parsed.confidence === 'number' && Number.isFinite(parsed.confidence)
+          ? Math.max(0, Math.min(1, parsed.confidence))
+          : 0.65,
+      summary: typeof parsed.summary === 'string' ? parsed.summary.trim().slice(0, 160) : undefined,
+      model,
+    };
+  }
+
+  async generateAssistantResponse(args: {
+    messages: ClaudeMessage[];
+    model?: string;
+    maxTokens?: number;
+    temperature?: number;
+    operation?: string;
+  }): Promise<string> {
+    if (!this.config) {
+      await this.initialize();
+    }
+
+    const response = await this.sendMessage(args.messages, {
+      model: args.model,
+      maxTokens: args.maxTokens ?? 1400,
+      temperature: args.temperature ?? 0.2,
+      operation: args.operation || 'assistant_chat',
+    });
+
+    return response.content;
   }
 
   /**
@@ -276,7 +465,8 @@ export class ClaudeApiService {
 
       const response = await this.sendMessage(testMessages, {
         maxTokens: 50,
-        temperature: 0
+        temperature: 0,
+        operation: 'connection_test'
       });
 
       if (response.content && response.content.length > 0) {
@@ -296,7 +486,7 @@ export class ClaudeApiService {
                           error.message || 
                           'Connection failed';
       
-      console.error('Test connection failed:', {
+      log.error('Test connection failed:', {
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
@@ -334,7 +524,7 @@ export class ClaudeApiService {
       this.config = null;
       delete this.axiosInstance.defaults.headers['x-api-key'];
     } catch (error) {
-      console.error('Failed to sign out:', error);
+      log.error('Failed to sign out:', error);
       throw new Error('Failed to clear stored configuration');
     }
   }

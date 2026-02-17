@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PromptHistory, GeneratedAppConcept } from '../types/PromptHistory';
+import { TopicClassificationMetadata, TopicSortHistoryEntry } from '../types/ProjectTopics';
 import { AppGenerationRequest } from './PromptGenerator';
+import { StorageLogger as log } from '../utils/Logger';
 
 const APPS_STORAGE_KEY = 'generated_apps';
 const APP_COUNTER_KEY = 'app_counter';
@@ -8,9 +10,11 @@ const APP_COUNTER_KEY = 'app_counter';
 export interface StoredApp {
   id: string;
   title: string;
+  titleEditedByUser?: boolean;
   description: string;
   html: string;
   prompt: string;
+  generatedPrompt?: string;
   timestamp: Date;
   style: string;
   category: string;
@@ -21,9 +25,80 @@ export interface StoredApp {
   request?: AppGenerationRequest;
   baseUrl: string; // For WebView persistence
   model?: string; // Claude model used for generation
+  isSample?: boolean; // Mark as sample app for seeding
+  sampleKey?: string; // Stable sample identifier from bundled catalog
+  primaryTopic?: string;
+  topics?: string[];
+  topicClassification?: TopicClassificationMetadata;
+  topicSortHistory?: TopicSortHistoryEntry[];
+  mainRevisionId?: string | null;
+  lastRevision?: {
+    at: number;
+    model: string;
+    updatedPrompt: string;
+    userNotes: string;
+    fixSummary?: string[];
+    parentRevisionId?: string | null;
+  };
+  revisions?: Array<{
+    id: string;
+    at: number;
+    operation: 'create' | 'app_revision';
+    status: 'generating' | 'completed' | 'error';
+    model: string;
+    updatedPrompt: string;
+    userNotes: string;
+    fixSummary?: string[];
+    errorMessage?: string;
+    parentRevisionId?: string | null;
+    htmlSnapshot?: string;
+  }>;
+}
+
+export interface UpdateAppOptions {
+  skipTopicClassification?: boolean;
 }
 
 export class AppStorageService {
+  private static readonly TOPIC_TRIGGER_FIELDS: Array<keyof StoredApp> = [
+    'title',
+    'description',
+    'prompt',
+    'generatedPrompt',
+    'html',
+    'category',
+  ];
+
+  private static shouldTriggerTopicClassification(
+    currentApp: StoredApp,
+    nextApp: StoredApp,
+    updates: Partial<StoredApp>
+  ): boolean {
+    return this.TOPIC_TRIGGER_FIELDS.some((field) => {
+      if (!(field in updates)) return false;
+      const previous = currentApp[field];
+      const next = nextApp[field];
+
+      if (typeof previous === 'string' || typeof next === 'string') {
+        const previousValue = typeof previous === 'string' ? previous.trim() : '';
+        const nextValue = typeof next === 'string' ? next.trim() : '';
+        return previousValue !== nextValue;
+      }
+
+      return previous !== next;
+    });
+  }
+
+  private static scheduleTopicClassification(appId: string, reason: string): void {
+    void import('./TopicClassificationService')
+      .then(({ TopicClassificationService }) => {
+        TopicClassificationService.scheduleForApp(appId, { reason });
+      })
+      .catch((error: unknown) => {
+        log.warn('Failed to schedule topic classification:', { appId, reason, error });
+      });
+  }
+
   /**
    * Parse title and category from Claude's response format: "Title | Category"
    */
@@ -31,7 +106,7 @@ export class AppStorageService {
     claudeTitle: string,
     fallbackCategory: string
   ): { title: string; category: string } {
-    console.log('🔍 [AppStorage] Parsing title and category from:', claudeTitle);
+    log.verbose('Parsing title and category from:', claudeTitle);
     
     // Check if title contains category separator
     if (claudeTitle.includes(' | ')) {
@@ -49,13 +124,31 @@ export class AppStorageService {
         
         const finalCategory = validCategories.includes(category) ? category : fallbackCategory;
         
-        console.log('✅ [AppStorage] Parsed - Title:', title, 'Category:', finalCategory);
+        log.debug('Parsed - Title:', title, 'Category:', finalCategory);
         return { title, category: finalCategory };
       }
     }
     
-    console.log('⚠️ [AppStorage] No category found, using fallback:', fallbackCategory);
+    log.debug('No category found, using fallback:', fallbackCategory);
     return { title: claudeTitle, category: fallbackCategory };
+  }
+
+  private static createTemporaryTitle(description: string): string {
+    const cleaned = description
+      .replace(/[^\w\s-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!cleaned) return 'New App';
+
+    const words = cleaned.split(' ').slice(0, 4);
+    const title = words
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ')
+      .slice(0, 24)
+      .trim();
+
+    return title || 'New App';
   }
 
   /**
@@ -69,7 +162,7 @@ export class AppStorageService {
       await AsyncStorage.setItem(APP_COUNTER_KEY, newCounter.toString());
       return `app_${newCounter}_${Date.now()}`;
     } catch (error) {
-      console.error('Error generating app ID:', error);
+      log.error('Error generating app ID:', error);
       return `app_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
   }
@@ -81,24 +174,26 @@ export class AppStorageService {
     request: AppGenerationRequest,
     generatedConcept?: GeneratedAppConcept,
     html?: string,
-    model?: string
+    model?: string,
+    generatedPrompt?: string
   ): Promise<StoredApp> {
-    console.log('💾 [AppStorage] Starting saveApp process');
-    console.log('📝 [AppStorage] Request:', request);
-    console.log('🤖 [AppStorage] Model:', model);
-    console.log('🎯 [AppStorage] Has concept:', !!generatedConcept);
-    console.log('📄 [AppStorage] Has custom HTML:', !!html);
+    log.debug('Starting saveApp process');
+    log.verbose('Request:', request);
+    log.verbose('Model:', model);
+    log.verbose('Has concept:', !!generatedConcept);
+    log.verbose('Has custom HTML:', !!html);
     
     try {
       const appId = await this.generateAppId();
-      console.log('🆔 [AppStorage] Generated app ID:', appId);
+      log.debug('Generated app ID:', appId);
       
       const baseUrl = `https://sandbox/${appId}/`;
-      console.log('🌐 [AppStorage] Generated baseUrl:', baseUrl);
+      log.verbose('Generated baseUrl:', baseUrl);
       
       // Parse title and category from Claude's response (format: "Title | Category")
+      const temporaryTitle = this.createTemporaryTitle(request.description);
       const { title, category } = this.parseTitleAndCategory(
-        generatedConcept?.title || `App ${appId.split('_')[1]}`,
+        generatedConcept?.title || temporaryTitle,
         'utility' // Default category
       );
       
@@ -108,6 +203,7 @@ export class AppStorageService {
         description: request.description,
         html: html || this.generatePlaceholderHTML(request, generatedConcept),
         prompt: request.description,
+        generatedPrompt,
         timestamp: new Date(),
         style: request.style,
         category,
@@ -117,10 +213,32 @@ export class AppStorageService {
         generatedConcept,
         request,
         baseUrl: `https://sandbox/${appId}/`,
-        model: model || 'unknown'
+        model: model || 'unknown',
+        titleEditedByUser: false,
+        mainRevisionId: null,
       };
+
+      if (newApp.status === 'completed' && typeof newApp.html === 'string' && newApp.html.trim()) {
+        const rootRevisionId = `root_${appId}`;
+        const createdAt = new Date(newApp.timestamp).getTime();
+        newApp.revisions = [
+          {
+            id: rootRevisionId,
+            at: Number.isFinite(createdAt) ? createdAt : Date.now(),
+            operation: 'create',
+            status: 'completed',
+            model: newApp.model || 'unknown',
+            updatedPrompt: newApp.prompt || newApp.description || '',
+            userNotes: 'Initial generated version',
+            fixSummary: ['Initial generated version'],
+            parentRevisionId: null,
+            htmlSnapshot: newApp.html,
+          },
+        ];
+        newApp.mainRevisionId = rootRevisionId;
+      }
       
-      console.log('📦 [AppStorage] Created app object:', {
+      log.verbose('Created app object:', {
         id: newApp.id,
         title: newApp.title,
         status: newApp.status,
@@ -129,22 +247,24 @@ export class AppStorageService {
       });
 
       // Get existing apps
-      console.log('📚 [AppStorage] Fetching existing apps...');
+      log.verbose('Fetching existing apps...');
       const existingApps = await this.getAllApps();
-      console.log('📊 [AppStorage] Found', existingApps.length, 'existing apps');
+      log.verbose('Found', existingApps.length, 'existing apps');
       
       // Add new app to the beginning
       const updatedApps = [newApp, ...existingApps];
-      console.log('📈 [AppStorage] Total apps after addition:', updatedApps.length);
+      log.verbose('Total apps after addition:', updatedApps.length);
       
       // Save to storage
-      console.log('💾 [AppStorage] Saving to AsyncStorage...');
+      log.debug('Saving to AsyncStorage...');
       await AsyncStorage.setItem(APPS_STORAGE_KEY, JSON.stringify(updatedApps));
-      console.log('✅ [AppStorage] Successfully saved to storage');
+      log.debug('Successfully saved to storage');
+
+      this.scheduleTopicClassification(appId, 'app_created');
       
       return newApp;
     } catch (error: any) {
-      console.error('💥 [AppStorage] Error saving app:', {
+      log.error('Error saving app:', {
         error: error?.message || error,
         stack: error?.stack,
         request
@@ -256,14 +376,13 @@ export class AppStorageService {
         ` : '<p>Generating your app with AI...</p>'}
     </div>
     
-    <script>
-        // Persistent storage demo
-        const appData = JSON.parse(localStorage.getItem('appData') || '{}');
-        console.log('App data loaded:', appData);
-        
-        // Save some demo data
-        localStorage.setItem('appData', JSON.stringify({
-            id: '${request.description.slice(0, 20)}',
+	    <script>
+	        // Persistent storage demo
+	        const appData = JSON.parse(localStorage.getItem('appData') || '{}');
+	        
+	        // Save some demo data
+	        localStorage.setItem('appData', JSON.stringify({
+	            id: '${request.description.slice(0, 20)}',
             visits: (appData.visits || 0) + 1,
             lastVisit: new Date().toISOString()
         }));
@@ -280,7 +399,7 @@ export class AppStorageService {
       const apps = await this.getAllApps();
       return apps.find(app => app.id === appId) || null;
     } catch (error) {
-      console.error('Error getting app:', error);
+      log.error('Error getting app:', error);
       return null;
     }
   }
@@ -302,9 +421,33 @@ export class AppStorageService {
         timestamp: new Date(app.timestamp)
       }));
     } catch (error) {
-      console.error('Error getting apps:', error);
+      log.error('Error getting apps:', error);
       return [];
     }
+  }
+
+  static async getStorageStats(): Promise<{
+    totalApps: number;
+    favorites: number;
+    estimatedSizeKB: number;
+  }> {
+    try {
+      const raw = await AsyncStorage.getItem(APPS_STORAGE_KEY);
+      if (!raw) return { totalApps: 0, favorites: 0, estimatedSizeKB: 0 };
+      const parsed = JSON.parse(raw);
+      const apps = Array.isArray(parsed) ? parsed : [];
+      const totalApps = apps.length;
+      const favorites = apps.filter((app: any) => app && app.favorite === true).length;
+      const estimatedSizeKB = Math.round(raw.length / 1024);
+      return { totalApps, favorites, estimatedSizeKB };
+    } catch (error) {
+      log.error('Error getting apps storage stats:', error);
+      return { totalApps: 0, favorites: 0, estimatedSizeKB: 0 };
+    }
+  }
+
+  static async clearAllApps(): Promise<void> {
+    await AsyncStorage.removeItem(APPS_STORAGE_KEY);
   }
 
   /**
@@ -315,7 +458,7 @@ export class AppStorageService {
       const apps = await this.getAllApps();
       return apps.find(app => app.id === appId) || null;
     } catch (error) {
-      console.error('Error getting app by ID:', error);
+      log.error('Error getting app by ID:', error);
       return null;
     }
   }
@@ -323,7 +466,11 @@ export class AppStorageService {
   /**
    * Update an existing app
    */
-  static async updateApp(appId: string, updates: Partial<StoredApp>): Promise<boolean> {
+  static async updateApp(
+    appId: string,
+    updates: Partial<StoredApp>,
+    options: UpdateAppOptions = {}
+  ): Promise<boolean> {
     try {
       const apps = await this.getAllApps();
       const appIndex = apps.findIndex(app => app.id === appId);
@@ -332,12 +479,18 @@ export class AppStorageService {
         return false;
       }
       
-      apps[appIndex] = { ...apps[appIndex], ...updates };
+      const currentApp = apps[appIndex];
+      const nextApp = { ...currentApp, ...updates };
+      apps[appIndex] = nextApp;
       await AsyncStorage.setItem(APPS_STORAGE_KEY, JSON.stringify(apps));
+
+      if (!options.skipTopicClassification && this.shouldTriggerTopicClassification(currentApp, nextApp, updates)) {
+        this.scheduleTopicClassification(appId, 'app_updated');
+      }
       
       return true;
     } catch (error) {
-      console.error('Error updating app:', error);
+      log.error('Error updating app:', error);
       return false;
     }
   }
@@ -353,7 +506,7 @@ export class AppStorageService {
       await AsyncStorage.setItem(APPS_STORAGE_KEY, JSON.stringify(filteredApps));
       return true;
     } catch (error) {
-      console.error('Error deleting app:', error);
+      log.error('Error deleting app:', error);
       return false;
     }
   }
@@ -371,7 +524,7 @@ export class AppStorageService {
         await AsyncStorage.setItem(APPS_STORAGE_KEY, JSON.stringify(apps));
       }
     } catch (error) {
-      console.error('Error incrementing access count:', error);
+      log.error('Error incrementing access count:', error);
     }
   }
 
@@ -392,7 +545,7 @@ export class AppStorageService {
       
       return apps[appIndex].favorite;
     } catch (error) {
-      console.error('Error toggling favorite:', error);
+      log.error('Error toggling favorite:', error);
       return false;
     }
   }
@@ -401,24 +554,53 @@ export class AppStorageService {
    * Update app HTML after generation
    */
   static async updateAppHTML(appId: string, html: string, concept?: GeneratedAppConcept, model?: string): Promise<boolean> {
-    console.log('🔄 [AppStorage] Starting updateAppHTML process');
-    console.log('🆔 [AppStorage] App ID:', appId);
-    console.log('📄 [AppStorage] HTML length:', html?.length || 0);
-    console.log('🎯 [AppStorage] Has concept:', !!concept);
-    console.log('🤖 [AppStorage] Model:', model);
+    log.debug('Starting updateAppHTML process');
+    log.verbose('App ID:', appId);
+    log.verbose('HTML length:', html?.length || 0);
+    log.verbose('Has concept:', !!concept);
+    log.verbose('Model:', model);
     
     try {
+      const currentApp = await this.getAppById(appId);
       const updateData: Partial<StoredApp> = {
         html,
         generatedConcept: concept,
         status: 'completed'
       };
+
+      if (concept?.title) {
+        const parsed = this.parseTitleAndCategory(concept.title, currentApp?.category || 'utility');
+        if (!currentApp?.titleEditedByUser) {
+          updateData.title = parsed.title;
+        }
+        updateData.category = parsed.category;
+      }
       
       if (model) {
         updateData.model = model;
       }
+
+      if (currentApp && (!currentApp.revisions || currentApp.revisions.length === 0) && html?.trim()) {
+        const rootRevisionId = `root_${appId}`;
+        const createdAt = new Date(currentApp.timestamp).getTime();
+        updateData.revisions = [
+          {
+            id: rootRevisionId,
+            at: Number.isFinite(createdAt) ? createdAt : Date.now(),
+            operation: 'create',
+            status: 'completed',
+            model: model || currentApp.model || 'unknown',
+            updatedPrompt: currentApp.prompt || currentApp.description || '',
+            userNotes: 'Initial generated version',
+            fixSummary: ['Initial generated version'],
+            parentRevisionId: null,
+            htmlSnapshot: html,
+          },
+        ];
+        updateData.mainRevisionId = rootRevisionId;
+      }
       
-      console.log('📦 [AppStorage] Update data prepared:', {
+      log.verbose('Update data prepared:', {
         hasHtml: !!updateData.html,
         hasGeneratedConcept: !!updateData.generatedConcept,
         status: updateData.status,
@@ -426,11 +608,11 @@ export class AppStorageService {
       });
       
       const result = await this.updateApp(appId, updateData);
-      console.log('✅ [AppStorage] Update app result:', result);
+      log.debug('Update app result:', result);
       
       return result;
     } catch (error: any) {
-      console.error('💥 [AppStorage] Error updating app HTML:', {
+      log.error('Error updating app HTML:', {
         error: error?.message || error,
         appId,
         htmlLength: html?.length || 0
@@ -460,7 +642,7 @@ export class AppStorageService {
         recentlyCreated: apps.filter(app => new Date(app.timestamp) > dayAgo).length
       };
     } catch (error) {
-      console.error('Error getting stats:', error);
+      log.error('Error getting stats:', error);
       return { total: 0, favorites: 0, totalAccess: 0, recentlyCreated: 0 };
     }
   }

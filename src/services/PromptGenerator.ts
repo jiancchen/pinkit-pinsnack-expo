@@ -1,4 +1,7 @@
 import { PromptHistory, GeneratedAppConcept } from '../types/PromptHistory';
+import { createLogger } from '../utils/Logger';
+
+const log = createLogger('PromptGenerator');
 
 export type AppStyle = 'minimalist' | 'creative' | 'corporate' | 'playful' | 'elegant' | 'modern';
 export type AppCategory = 'productivity' | 'social' | 'utility' | 'entertainment' | 'education' | 'health' | 'finance' | 'travel' | 'shopping' | 'other';
@@ -6,6 +9,7 @@ export type AppCategory = 'productivity' | 'social' | 'utility' | 'entertainment
 export interface AppGenerationRequest {
   description: string;
   style: AppStyle;
+  styleTags?: string[];
   category?: AppCategory; // Optional - Claude will determine from description
   features?: string[];
   platform?: 'mobile' | 'web' | 'both';
@@ -27,6 +31,7 @@ Respond with ONLY the complete HTML code. No explanations, markdown blocks, or c
 - Start with <!DOCTYPE html>
 - End with </html>
 - Include data-app-title attribute with format: <html data-app-title="App Name | Category">
+- App Name MUST be short and readable: 1-4 words, max 24 characters, based on the user request
 - Category must be one of: utility, fun, productivity, entertainment, education, health, finance, social, travel, shopping, games, tools, lifestyle, business, creative, other
 - Do NOT display the app name or category visibly in the HTML content
 - Choose the most appropriate category based on the app's primary function
@@ -78,17 +83,66 @@ Dynamic apps (todos, notes, trackers): Use min-height: calc(100vh - 80px) with o
 Key principle: Either full-height OR auto-height, never dynamic growing containers
 </layout_strategy>
 
-<react_native_features>
-Available features (use if relevant):
-- Storage: window.ReactNativeWebView.postMessage(JSON.stringify({type:'saveData',key,value}))
-- Load: window.ReactNativeWebView.postMessage(JSON.stringify({type:'loadData',key}))
-- Reminders: window.ReactNativeWebView.postMessage(JSON.stringify({type:'setReminder',id,milliseconds,title,message}))
+	<react_native_features>
+	When running inside the Droplets app WebView (React Native), you can optionally call native features via:
+	- window.ReactNativeWebView.postMessage(JSON.stringify({...}))
+	Always guard with: if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage)
 
-Pattern: Always check if(window.ReactNativeWebView) before using
+	<native_live_activities>
+	Live Activities / Dynamic Island (iOS only, requires a development build, iOS 16.2+):
+	- Start a countdown timer Live Activity (counts DOWN):
+	  window.ReactNativeWebView.postMessage(JSON.stringify({
+	    type:'live_activity_start_timer',
+	    activityKey:'main',
+	    title:'Focus Timer',
+	    subtitle:'Tap to open',
+	    endAtMs: Date.now() + 25*60*1000,
+	    direction:'down',
+	    tintColor:'#7C3AED'
+	  }))
+	- Start a stopwatch / count-up Live Activity (counts UP):
+	  window.ReactNativeWebView.postMessage(JSON.stringify({
+	    type:'live_activity_start_timer',
+	    activityKey:'stopwatch',
+	    title:'Stopwatch',
+	    subtitle:'Tap to open',
+	    startAtMs: Date.now(),
+	    durationMs: 24*60*60*1000,
+	    direction:'up',
+	    tintColor:'#2D5A7B'
+	  }))
+	- Start a counter Live Activity:
+	  window.ReactNativeWebView.postMessage(JSON.stringify({
+	    type:'live_activity_start_counter',
+	    activityKey:'main',
+	    title:'Counter',
+	    subtitle:'Tap to open',
+	    count: 0,
+	    unit: 'items'
+	  }))
+	- Update a counter Live Activity (ONLY when value changes; do not spam updates):
+	  window.ReactNativeWebView.postMessage(JSON.stringify({
+	    type:'live_activity_update_counter',
+	    activityKey:'main',
+	    count: 123
+	  }))
+	- Stop:
+	  window.ReactNativeWebView.postMessage(JSON.stringify({
+	    type:'live_activity_stop',
+	    activityKey:'main',
+	    dismissalPolicy:'immediate'
+	  }))
 
-<local_storage>
-localStorage is AVAILABLE and RECOMMENDED for data persistence:
-- Use localStorage.setItem(key, JSON.stringify(data)) to save
+	Notes:
+	- Do NOT send updates more often than once every ~5 seconds.
+	- Prefer using the native-rendered timer Live Activity instead of updating every second.
+	- The app MUST still work if Live Activities are unavailable or disabled by the user.
+	- If the app is a timer/counter app, include an in-app toggle like "Show in notification" (default OFF) and wire it to these APIs.
+	</native_live_activities>
+
+	<local_storage>
+	localStorage is AVAILABLE and RECOMMENDED for data persistence:
+	- Use localStorage.setItem(key, JSON.stringify(data)) to save
 - Use JSON.parse(localStorage.getItem(key) || '[]') to load
 - Always provide fallback values for missing data
 - Wrap JSON operations in try-catch for error handling
@@ -166,12 +220,17 @@ Note: localStorage is ALLOWED for data persistence within the app. Use it for sa
   /**
    * Generate a comprehensive prompt for Claude API based on user requirements
    */
-  static generatePrompt(request: AppGenerationRequest): string {
-    console.log('📝 [PromptGenerator] Starting prompt generation for request:', request);
+  static generatePrompt(
+    request: AppGenerationRequest,
+    options?: {
+      maxOutputTokens?: number;
+    }
+  ): string {
+    log.debug('Starting prompt generation for request:', request);
     
-    const { description, style, features } = request;
+    const { description, style, features, styleTags } = request;
     
-    console.log('🎨 [PromptGenerator] Building prompt with parameters:', {
+    log.verbose('Building prompt with parameters:', {
       description: description.substring(0, 50) + '...',
       style,
       featuresCount: features?.length || 0,
@@ -198,15 +257,37 @@ Note: localStorage is ALLOWED for data persistence within the app. Use it for sa
       featuresContext = `\n<required_features>\n${features.map(f => `- ${f}`).join('\n')}\n</required_features>`;
     }
 
+    let styleTagsContext = '';
+    if (Array.isArray(styleTags) && styleTags.length > 0) {
+      const normalized = styleTags.map((tag) => tag.trim()).filter(Boolean);
+      if (normalized.length > 0) {
+        styleTagsContext = `\n<style_tags>\n${normalized.map((tag) => `- ${tag}`).join('\n')}\n</style_tags>`;
+      }
+    }
+
+    // Output token budget guidance (helps avoid truncated HTML)
+    let outputBudgetContext = '';
+    if (typeof options?.maxOutputTokens === 'number' && Number.isFinite(options.maxOutputTokens)) {
+      const maxOutputTokens = Math.max(1, Math.round(options.maxOutputTokens));
+      outputBudgetContext =
+        `\n<output_budget>\n` +
+        `Max output tokens available: ${maxOutputTokens}\n` +
+        `- Keep the response within this budget and still end with </html>\n` +
+        `- If space is tight, simplify styling/animations and reduce scope before cutting off\n` +
+        `</output_budget>`;
+    }
+
     // Build the complete prompt
     const fullPrompt = this.CORE_PROMPT_TEMPLATE + 
       description + 
       styleGuidance + 
+      styleTagsContext +
       featuresContext + 
+      outputBudgetContext +
       '\n</user_request>\n\nGenerate the complete HTML application now:';
     
-    console.log('✅ [PromptGenerator] Generated prompt length:', fullPrompt.length);
-    console.log('📄 [PromptGenerator] Prompt preview:', fullPrompt.substring(0, 200) + '...');
+    log.debug('Generated prompt length:', fullPrompt.length);
+    log.verbose('Prompt preview:', fullPrompt.substring(0, 200) + '...');
     
     return fullPrompt;
   }
@@ -303,6 +384,10 @@ Note: localStorage is ALLOWED for data persistence within the app. Use it for sa
       errors.push('Maximum 10 features allowed');
     }
 
+    if (request.styleTags && request.styleTags.length > 20) {
+      errors.push('Maximum 20 style tags allowed');
+    }
+
     return {
       isValid: errors.length === 0,
       errors
@@ -335,5 +420,69 @@ Note: localStorage is ALLOWED for data persistence within the app. Use it for sa
     }
 
     return { isValid: true };
+  }
+
+  /**
+   * Generate a prompt for revising an existing HTML app.
+   * The model must return a full HTML document and preserve the data-app-title attribute.
+   */
+  static generateHtmlRevisionPrompt(args: {
+    originalPrompt: string;
+    updatedPrompt: string;
+    userNotes: string;
+    originalHtml: string;
+  }): string {
+    const originalPrompt = args.originalPrompt?.trim() || '';
+    const updatedPrompt = args.updatedPrompt?.trim() || originalPrompt;
+    const userNotes = args.userNotes?.trim() || '';
+    const originalHtml = args.originalHtml || '';
+
+    return `<role>
+You are an expert HTML/CSS/JavaScript developer specializing in mobile web apps for WebView environments.
+</role>
+
+<task>
+Revise the existing HTML app to match the updated prompt and address the user notes. Keep the app fully offline and functional inside a React Native WebView.
+</task>
+
+<requirements>
+- Keep functionality the same unless the user notes require a clear bug fix.
+- Fix layout issues (overflow, spacing, touch targets) and obvious bugs.
+- Do NOT add network features: fetch(), XMLHttpRequest, WebSocket.
+- Do NOT use camera, microphone, geolocation, filesystem.
+- Preserve the existing <html ... data-app-title="..."> attribute value exactly.
+- The output MUST be a complete HTML document (<!DOCTYPE html> ... </html>).
+</requirements>
+
+<debug>
+Include a debug block in the output HTML:
+- Add a <script id="droplets_debug" type="application/json"> in <head>
+- It must include JSON with keys: updatedPrompt, userNotes, fixSummary
+- Keep fixSummary concise (1-6 bullet strings).
+</debug>
+
+<inputs>
+<original_prompt>
+${originalPrompt}
+</original_prompt>
+
+<updated_prompt>
+${updatedPrompt}
+</updated_prompt>
+
+<user_notes>
+${userNotes}
+</user_notes>
+
+<original_html>
+${originalHtml}
+</original_html>
+</inputs>
+
+<output_format>
+Respond with ONLY the complete HTML code. No explanations, markdown blocks, or commentary.
+- Start with <!DOCTYPE html>
+- End with </html>
+</output_format>`;
   }
 }

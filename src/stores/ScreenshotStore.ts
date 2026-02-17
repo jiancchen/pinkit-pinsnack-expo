@@ -8,6 +8,7 @@ import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { ScreenshotService } from '../services/ScreenshotService';
 import { WebViewScreenshotService } from '../services/WebViewScreenshotService';
+import { ScreenshotLogger as log } from '../utils/Logger';
 
 export interface ScreenshotState {
   appId: string;
@@ -71,7 +72,7 @@ export const useScreenshotStore = create<ScreenshotStore>()(
         },
 
         setScreenshotCaptured: (appId: string, uri: string, method: 'external' | 'webview') => {
-          console.log(`📸 [Store] Screenshot captured for ${appId} via ${method}`);
+          log.debug(`Screenshot captured for ${appId} via ${method}`);
           set((state) => ({
             screenshots: {
               ...state.screenshots,
@@ -87,7 +88,7 @@ export const useScreenshotStore = create<ScreenshotStore>()(
         },
 
         setScreenshotError: (appId: string, error: string) => {
-          console.warn(`💥 [Store] Screenshot error for ${appId}: ${error}`);
+          log.warn(`Screenshot error for ${appId}: ${error}`);
           set((state) => ({
             screenshots: {
               ...state.screenshots,
@@ -129,7 +130,7 @@ export const useScreenshotStore = create<ScreenshotStore>()(
           
           try {
             setScreenshotLoading(appId, true);
-            console.log(`🔍 [Store] Loading screenshot for app: ${appId}`);
+            log.debug(`Loading screenshot for app: ${appId}`);
             
             // Try WebView screenshot first, then fallback to external
             let uri = await WebViewScreenshotService.getWebViewScreenshot(appId);
@@ -142,28 +143,28 @@ export const useScreenshotStore = create<ScreenshotStore>()(
             
             if (uri) {
               setScreenshotCaptured(appId, uri, method);
-              console.log(`✅ [Store] Screenshot loaded for ${appId} via ${method}`);
+              log.debug(`Screenshot loaded for ${appId} via ${method}`);
             } else {
               setScreenshotError(appId, 'No screenshot found');
             }
           } catch (error) {
-            console.error(`💥 [Store] Failed to load screenshot for ${appId}:`, error);
+            log.error(`Failed to load screenshot for ${appId}:`, error);
             setScreenshotError(appId, error instanceof Error ? error.message : 'Unknown error');
           }
         },
 
         captureScreenshot: async (appId: string, method: 'external' | 'webview') => {
-          const { setCapturing, setScreenshotCaptured, setScreenshotError } = get();
+          const { setCapturing, setScreenshotError } = get();
           
           try {
             setCapturing(appId, true);
-            console.log(`📸 [Store] Starting screenshot capture for ${appId} via ${method}`);
+            log.debug(`Starting screenshot capture for ${appId} via ${method}`);
             
             // This will be called from the capture services when they complete
             // The actual capture happens in AppViewScreen, but the result flows through here
             
           } catch (error) {
-            console.error(`💥 [Store] Screenshot capture failed for ${appId}:`, error);
+            log.error(`Screenshot capture failed for ${appId}:`, error);
             setScreenshotError(appId, error instanceof Error ? error.message : 'Capture failed');
           } finally {
             setCapturing(appId, false);

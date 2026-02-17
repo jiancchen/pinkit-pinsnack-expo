@@ -1,18 +1,23 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Dimensions,
   ActivityIndicator,
   Image,
 } from 'react-native';
-import { PromptHistory, AppColors } from '../types/PromptHistory';
+import { PromptHistory } from '../types/PromptHistory';
+import { AppColors } from '../constants/AppColors';
 import { Ionicons } from '@expo/vector-icons';
-import { useScreenshotState, useScreenshotActions, useScreenshotStore } from '../stores/ScreenshotStore';
+import { useScreenshotState, useScreenshotStore } from '../stores/ScreenshotStore';
+import { createLogger } from '../utils/Logger';
+import { useStrings } from '../i18n/strings';
 
-const { width: screenWidth } = Dimensions.get('window');
+const log = createLogger('ThreeDImageCard');
+
+const MAIN_CARD_OPACITY = 0.82;
+const BACK_CARD_OPACITY = 0.22;
 
 interface ThreeDImageCardProps {
   historyItem: PromptHistory;
@@ -21,6 +26,7 @@ interface ThreeDImageCardProps {
   scale: number;
   depth: number;
   alpha: number;
+  centerIntensity: number;
   backgroundColor: string;
   onNavigateToApp: (id: string) => void;
   onShowSnackbar?: (message: string) => void;
@@ -33,6 +39,7 @@ export default function ThreeDImageCard({
   scale,
   depth,
   alpha,
+  centerIntensity,
   backgroundColor,
   onNavigateToApp,
   onShowSnackbar,
@@ -40,11 +47,13 @@ export default function ThreeDImageCard({
   // Use Zustand store for reactive screenshot state - like Android LiveData
   const screenshotState = useScreenshotState(historyItem.id);
   const screenshotStore = useScreenshotStore();
+  const { t } = useStrings();
 
   // Check different states (moved up to avoid scope issues)
-  const isGenerating = historyItem.html === 'GENERATING...';
+  const isGenerating = historyItem.status === 'generating';
   const isNewItem = (historyItem.accessCount || 0) < 1 && !isGenerating;
   const isFavorite = historyItem.favorite === true;
+  const isSample = historyItem.isSample === true || historyItem.id.startsWith('sample_');
 
   // Load screenshot only when app is first accessed - ONE TIME EFFECT
   useEffect(() => {
@@ -59,18 +68,18 @@ export default function ThreeDImageCard({
     const shouldLoad = (historyItem.accessCount || 0) > 0 && !isGenerating;
                       
     if (shouldLoad) {
-      console.log('🔄 [Card] Loading screenshot for accessed app:', historyItem.id);
+      log.debug('Loading screenshot for accessed app:', historyItem.id);
       // Call the store method directly to avoid function reference issues
       screenshotStore.loadScreenshot(historyItem.id);
     }
   }, [historyItem.id, historyItem.accessCount, isGenerating]);
 
-  const displayTitle = historyItem.title?.trim() || 
-    (historyItem.prompt.substring(0, 50) + '...');
+  const displayTitle =
+    historyItem.title?.trim() || (historyItem.prompt.substring(0, 50) + '...');
 
   const handlePress = () => {
     if (isGenerating) {
-      onShowSnackbar?.('Item is still generating, please wait...');
+      onShowSnackbar?.(t('home.generating.wait'));
     } else {
       onNavigateToApp(historyItem.id);
     }
@@ -101,7 +110,7 @@ export default function ThreeDImageCard({
           styles.backgroundCard,
           {
             backgroundColor: backgroundColor,
-            opacity: alpha * 0.8,
+            opacity: alpha * BACK_CARD_OPACITY,
             transform: backgroundTransform,
           },
         ]}
@@ -114,7 +123,7 @@ export default function ThreeDImageCard({
         style={[
           styles.mainCard,
           {
-            opacity: alpha,
+            opacity: alpha * MAIN_CARD_OPACITY,
             transform: cardTransform,
           },
         ]}
@@ -151,6 +160,13 @@ export default function ThreeDImageCard({
           <View style={styles.gradientOverlay} />
 
           {/* Badge system */}
+          {isSample && (
+            <View style={styles.sampleBadgeContainer}>
+              <View style={[styles.badge, styles.sampleBadge]}>
+                <Text style={[styles.badgeText, styles.sampleBadgeText]}>SAMPLE</Text>
+              </View>
+            </View>
+          )}
           <View style={styles.badgeContainer}>
             {isNewItem && (
               <View style={[styles.badge, styles.newBadge]}>
@@ -171,7 +187,17 @@ export default function ThreeDImageCard({
 
           {/* Title text */}
           <View style={styles.titleContainer}>
-            <Text style={[styles.titleText, { fontSize: Math.max(18, 18 * scale) }]} numberOfLines={2}>
+            <Text
+              style={[
+                styles.titleText,
+                {
+                  fontSize: Math.max(18, 18 * scale * (1 + centerIntensity * 0.08)),
+                  textShadowRadius: 4 + centerIntensity * 8,
+                  textShadowColor: `rgba(255, 255, 255, ${0.18 + centerIntensity * 0.36})`,
+                },
+              ]}
+              numberOfLines={2}
+            >
               {displayTitle}
             </Text>
           </View>
@@ -274,6 +300,11 @@ const styles = StyleSheet.create({
     top: 8,
     right: 8,
   },
+  sampleBadgeContainer: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+  },
   badge: {
     borderRadius: 8,
     paddingHorizontal: 8,
@@ -310,10 +341,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingVertical: 0,
   },
+  sampleBadge: {
+    backgroundColor: 'rgba(14, 116, 144, 0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(196, 240, 255, 0.8)',
+  },
   badgeText: {
     color: AppColors.White,
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  sampleBadgeText: {
+    fontSize: 9,
+    letterSpacing: 0.5,
   },
   titleContainer: {
     position: 'absolute',
