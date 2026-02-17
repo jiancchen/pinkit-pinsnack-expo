@@ -322,6 +322,17 @@ export default function CreatePage() {
     setShowModelSelector(false);
   };
 
+  const promptApiSetup = (featureLabel: string) => {
+    Alert.alert(
+      `${featureLabel} requires setup`,
+      'Complete API key setup to unlock this feature.',
+      [
+        { text: 'Open Setup', onPress: () => router.push('/welcome') },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
   const resetAdvancedToDefaults = () => {
     setGenerationModel(defaultsConfig.model);
     setGenerationMaxTokens(defaultsConfig.maxTokens);
@@ -392,14 +403,7 @@ export default function CreatePage() {
     }
 
     if (!hasApiAccess) {
-      Alert.alert(
-        t('create.apiRequired.title'),
-        t('create.apiRequired.body'),
-        [
-          { text: t('create.apiRequired.cta'), onPress: () => router.push('/(tabs)/settings') },
-          { text: t('create.actions.cancel'), style: 'cancel' },
-        ]
-      );
+      promptApiSetup('Create app');
       return;
     }
 
@@ -472,8 +476,18 @@ export default function CreatePage() {
           <View style={{ flex: 1 }} />
           <View style={styleSheet.headerRightActions}>
             <TouchableOpacity
-              style={[styleSheet.headerIconButton, isUniverseTheme ? styleSheet.headerIconButtonUniverse : undefined]}
-              onPress={() => setShowAdvanced(true)}
+              style={[
+                styleSheet.headerIconButton,
+                isUniverseTheme ? styleSheet.headerIconButtonUniverse : undefined,
+                !hasApiAccess ? styleSheet.headerIconButtonDisabled : undefined,
+              ]}
+              onPress={() => {
+                if (!hasApiAccess) {
+                  promptApiSetup('Model settings');
+                  return;
+                }
+                setShowAdvanced(true);
+              }}
               accessibilityRole="button"
               accessibilityLabel="Open advanced settings"
             >
@@ -493,7 +507,7 @@ export default function CreatePage() {
                   : undefined,
               ]}
               onPress={() => void handleSubmit()}
-              disabled={!prompt.trim() || isLoading || !hasApiAccess || isCheckingApiKey}
+              disabled={!prompt.trim() || isLoading || isCheckingApiKey}
             >
               <Ionicons name="sparkles" size={16} color="#fff" />
               <Text style={styleSheet.headerCreateButtonText}>{t('create.actions.create')}</Text>
@@ -710,9 +724,9 @@ export default function CreatePage() {
               </Text>
               <TouchableOpacity
                 style={[styleSheet.settingsButton, isUniverseTheme ? styleSheet.settingsButtonUniverse : undefined]}
-                onPress={() => router.push('/(tabs)/settings')}
+                onPress={() => router.push('/welcome')}
               >
-                <Text style={styleSheet.settingsButtonText}>{t('create.apiRequired.cta')}</Text>
+                <Text style={styleSheet.settingsButtonText}>Open Setup</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1718,6 +1732,9 @@ const styleSheet = StyleSheet.create({
     backgroundColor: 'rgba(12, 37, 65, 0.82)',
     borderWidth: 1,
     borderColor: 'rgba(155, 196, 239, 0.34)',
+  },
+  headerIconButtonDisabled: {
+    opacity: 0.45,
   },
   modalOverlay: {
     flex: 1,

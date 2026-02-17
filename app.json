@@ -86,6 +86,27 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "expo-navigation-bar": {},
+      "router": {},
+      "eas": {
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "PinSnacksLiveActivity",
+                  "bundleIdentifier": "com.zigzura.pinsnacks.PinSnacksLiveActivity",
+                  "entitlements": {}
+                }
+              ]
+            }
+          }
+        },
+        "projectId": "0828f68d-04b9-4dd1-b3f2-b1ba7b6a9c32"
+      }
+    },
+    "owner": "jcchen13"
   }
 }

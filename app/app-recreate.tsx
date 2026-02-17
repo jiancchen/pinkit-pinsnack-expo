@@ -81,6 +81,7 @@ export default function AppRecreatePage() {
     prefillFixNotes?: string;
   }>();
   const appTheme = useUISettingsStore((s) => s.appTheme);
+  const debugAllowWithoutApiKey = useUISettingsStore((s) => s.debugAllowWithoutApiKey);
   const isUniverseTheme = appTheme === 'universe';
 
   const safeGoBack = () => {
@@ -97,6 +98,8 @@ export default function AppRecreatePage() {
 
   const [app, setApp] = useState<StoredApp | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCheckingApiKey, setIsCheckingApiKey] = useState(true);
+  const [hasApiKey, setHasApiKey] = useState(false);
   const [isRecreating, setIsRecreating] = useState(false);
 
   const [newPrompt, setNewPrompt] = useState('');
@@ -109,6 +112,18 @@ export default function AppRecreatePage() {
   const bodyScrollRef = useRef<ScrollView>(null);
   const newPromptRef = useRef<TextInput>(null);
   const fixNotesRef = useRef<TextInput>(null);
+  const hasApiAccess = hasApiKey || debugAllowWithoutApiKey;
+
+  const promptApiSetup = (featureLabel: string) => {
+    Alert.alert(
+      `${featureLabel} requires setup`,
+      'Complete API key setup to unlock this feature.',
+      [
+        { text: 'Open Setup', onPress: () => router.push('/welcome') },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
 
   const scrollInputIntoView = (target: 'prompt' | 'fix') => {
     setTimeout(() => {
@@ -154,7 +169,11 @@ export default function AppRecreatePage() {
   const loadApp = async (id: string) => {
     try {
       setIsLoading(true);
-      const storedApp = await AppStorageService.getApp(id);
+      const [storedApp, hasKey] = await Promise.all([
+        AppStorageService.getApp(id),
+        SecureStorageService.hasApiKey(),
+      ]);
+      setHasApiKey(hasKey);
       if (!storedApp) {
         Alert.alert('Error', 'App not found.', [{ text: 'OK', onPress: safeGoBack }]);
         return;
@@ -176,8 +195,10 @@ export default function AppRecreatePage() {
       }
     } catch (error) {
       log.error('Error loading app for recreate:', error);
+      setHasApiKey(false);
       Alert.alert('Error', 'Failed to load app.', [{ text: 'OK', onPress: safeGoBack }]);
     } finally {
+      setIsCheckingApiKey(false);
       setIsLoading(false);
     }
   };
@@ -250,6 +271,11 @@ export default function AppRecreatePage() {
 
   const onRecreate = async () => {
     if (!app || isRecreating) return;
+    if (!hasApiAccess) {
+      promptApiSetup('Update/Fix');
+      return;
+    }
+
     const updatedPrompt = newPrompt.trim();
     if (!updatedPrompt) {
       Alert.alert('Error', 'Please enter a prompt.');
@@ -611,10 +637,10 @@ export default function AppRecreatePage() {
               style={[
                 styles.headerPrimaryAction,
                 isUniverseTheme ? styles.headerPrimaryActionUniverse : undefined,
-                isRecreating ? styles.headerPrimaryActionDisabled : undefined,
+                isRecreating || !hasApiAccess || isCheckingApiKey ? styles.headerPrimaryActionDisabled : undefined,
               ]}
               onPress={onRecreate}
-              disabled={isRecreating}
+              disabled={isRecreating || isCheckingApiKey}
               accessibilityLabel={primaryHeaderActionLabel}
             >
               {isRecreating ? (
@@ -647,13 +673,44 @@ export default function AppRecreatePage() {
             </Text>
           </View>
 
+          {!hasApiAccess ? (
+            <View style={[styles.setupCallout, isUniverseTheme ? styles.setupCalloutUniverse : undefined]}>
+              <Ionicons
+                name="lock-closed-outline"
+                size={18}
+                color={isUniverseTheme ? 'rgba(205, 226, 248, 0.95)' : 'rgba(0, 0, 0, 0.72)'}
+              />
+              <Text style={[styles.setupCalloutText, isUniverseTheme ? styles.setupCalloutTextUniverse : undefined]}>
+                Setup API key to unlock app updates, fix mode, and model selection.
+              </Text>
+              <TouchableOpacity
+                style={[styles.setupCalloutButton, isUniverseTheme ? styles.setupCalloutButtonUniverse : undefined]}
+                onPress={() => router.push('/welcome')}
+              >
+                <Text style={[styles.setupCalloutButtonText, isUniverseTheme ? styles.setupCalloutButtonTextUniverse : undefined]}>
+                  Open Setup
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
             Select AI Model
           </Text>
           <TouchableOpacity
-            style={[styles.modelPickerTrigger, isUniverseTheme ? styles.modelPickerTriggerUniverse : undefined]}
-            onPress={() => setShowModelPicker(true)}
-            disabled={isRecreating}
+            style={[
+              styles.modelPickerTrigger,
+              isUniverseTheme ? styles.modelPickerTriggerUniverse : undefined,
+              !hasApiAccess ? styles.inputLocked : undefined,
+            ]}
+            onPress={() => {
+              if (!hasApiAccess) {
+                promptApiSetup('Model settings');
+                return;
+              }
+              setShowModelPicker(true);
+            }}
+            disabled={isRecreating || isCheckingApiKey}
           >
             <View style={{ flex: 1, paddingRight: 10 }}>
               <Text style={[styles.modelName, isUniverseTheme ? styles.modelNameUniverse : undefined]}>
@@ -687,7 +744,7 @@ export default function AppRecreatePage() {
             multiline={true}
             textAlignVertical="top"
             onFocus={() => scrollInputIntoView('prompt')}
-            editable={!isRecreating}
+            editable={!isRecreating && hasApiAccess}
           />
 
           <View style={styles.sectionHeaderRow}>
@@ -707,7 +764,7 @@ export default function AppRecreatePage() {
                   'Repro steps:\n- \n\nExpected:\n- \n\nActual:\n- \n\nDevice / screen:\n- \n\nConstraints:\n- Keep same functionality\n- Fix layout/overflow\n';
                 setFixNotes((prev) => (prev.trim() ? `${prev.trim()}\n\n${template}` : template));
               }}
-              disabled={isRecreating}
+              disabled={isRecreating || !hasApiAccess}
             >
               <Ionicons
                 name="clipboard-outline"
@@ -733,7 +790,7 @@ export default function AppRecreatePage() {
             multiline={true}
             textAlignVertical="top"
             onFocus={() => scrollInputIntoView('fix')}
-            editable={!isRecreating}
+            editable={!isRecreating && hasApiAccess}
           />
 
           <TouchableOpacity
@@ -906,9 +963,14 @@ export default function AppRecreatePage() {
                       isSelected && styles.modelOptionSelected,
                       isSelected && isUniverseTheme ? styles.modelOptionSelectedUniverse : undefined,
                       isRetired && styles.modelOptionDisabled,
+                      !hasApiAccess && styles.inputLocked,
                     ]}
-                    disabled={isRetired}
+                    disabled={isRetired || !hasApiAccess}
                     onPress={() => {
+                      if (!hasApiAccess) {
+                        promptApiSetup('Model settings');
+                        return;
+                      }
                       setSelectedModel(model);
                       setShowModelPicker(false);
                     }}
@@ -1099,6 +1161,48 @@ const styles = StyleSheet.create({
   explainerTextUniverse: {
     color: 'rgba(205, 226, 248, 0.9)',
   },
+  setupCallout: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  setupCalloutUniverse: {
+    borderColor: 'rgba(123, 169, 220, 0.3)',
+    backgroundColor: 'rgba(8, 26, 48, 0.86)',
+  },
+  setupCalloutText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: 'rgba(0, 0, 0, 0.72)',
+    fontWeight: '700',
+  },
+  setupCalloutTextUniverse: {
+    color: 'rgba(205, 226, 248, 0.9)',
+  },
+  setupCalloutButton: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  setupCalloutButtonUniverse: {
+    backgroundColor: 'rgba(27, 86, 146, 0.7)',
+    borderWidth: 1,
+    borderColor: 'rgba(196, 223, 250, 0.65)',
+  },
+  setupCalloutButtonText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: 'rgba(0, 0, 0, 0.75)',
+  },
+  setupCalloutButtonTextUniverse: {
+    color: 'rgba(233, 246, 255, 0.95)',
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
@@ -1122,6 +1226,9 @@ const styles = StyleSheet.create({
   modelPickerTriggerUniverse: {
     borderColor: 'rgba(123, 169, 220, 0.34)',
     backgroundColor: 'rgba(7, 24, 45, 0.9)',
+  },
+  inputLocked: {
+    opacity: 0.5,
   },
   textInput: {
     borderWidth: 1,

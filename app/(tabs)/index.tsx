@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Alert, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, Alert, StatusBar, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import Scrollable3DStack from '../../src/components/Scrollable3DStack';
 import SearchBarWithFavorites from '../../src/components/SearchBarWithFavorites';
 import AppThemeBackground from '../../src/components/AppThemeBackground';
 import { PromptHistory } from '../../src/types/PromptHistory';
 import { AppColors } from '../../src/constants/AppColors';
 import { AppStorageService, StoredApp } from '../../src/services/AppStorageService';
+import { SecureStorageService } from '../../src/services/SecureStorageService';
 import { SeedService } from '../../src/services/SeedService';
 import { useGenerationStatusStore } from '../../src/stores/GenerationStatusStore';
 import { useUISettingsStore } from '../../src/stores/UISettingsStore';
@@ -25,6 +27,7 @@ export default function MyAppsPage() {
   const { t } = useStrings();
   const [promptHistory, setPromptHistory] = useState<PromptHistory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [showFavorites, setShowFavorites] = useState(false);
   const queue = useGenerationStatusStore((s) => s.queue);
@@ -34,7 +37,11 @@ export default function MyAppsPage() {
     try {
       setIsLoading(true);
       await SeedService.initializeSeeding();
-      const storedApps = await AppStorageService.getAllApps();
+      const [storedApps, hasKey] = await Promise.all([
+        AppStorageService.getAllApps(),
+        SecureStorageService.hasApiKey(),
+      ]);
+      setHasApiKey(hasKey);
       
       // Convert StoredApp to PromptHistory format for the 3D stack
       const converted: PromptHistory[] = storedApps.map((app: StoredApp) => ({
@@ -157,8 +164,9 @@ export default function MyAppsPage() {
     setShowFavorites(false);
   };
 
+  const showSetupBanner = !hasApiKey;
   const searchBarTopPadding = insets.top + 56;
-  const stackTopPadding = Math.max(150, searchBarTopPadding + 70);
+  const stackTopPadding = Math.max(150, searchBarTopPadding + 70 + (showSetupBanner ? 52 : 0));
 
   return (
     <View style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]}>
@@ -174,6 +182,33 @@ export default function MyAppsPage() {
           {t('home.brand')}
         </Text>
       </View>
+
+      {showSetupBanner ? (
+        <TouchableOpacity
+          style={[
+            styles.setupBanner,
+            isUniverseTheme ? styles.setupBannerUniverse : undefined,
+            { top: searchBarTopPadding + 64 },
+          ]}
+          onPress={() => router.push('/welcome')}
+          accessibilityRole="button"
+          accessibilityLabel="Open setup tutorial"
+        >
+          <Ionicons
+            name="key-outline"
+            size={16}
+            color={isUniverseTheme ? 'rgba(222, 239, 255, 0.96)' : '#1f2937'}
+          />
+          <Text style={[styles.setupBannerText, isUniverseTheme ? styles.setupBannerTextUniverse : undefined]}>
+            API key not configured. Tap to start setup tutorial.
+          </Text>
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color={isUniverseTheme ? 'rgba(222, 239, 255, 0.92)' : '#1f2937'}
+          />
+        </TouchableOpacity>
+      ) : null}
       
       {/* Main 3D Stack */}
       <Scrollable3DStack
@@ -227,5 +262,39 @@ const styles = StyleSheet.create({
     color: 'rgba(233, 246, 255, 0.95)',
     textShadowColor: 'rgba(52, 135, 226, 0.55)',
     textShadowRadius: 8,
+  },
+  setupBanner: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    zIndex: 950,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.93)',
+    borderWidth: 1,
+    borderColor: 'rgba(17, 24, 39, 0.12)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  setupBannerUniverse: {
+    backgroundColor: 'rgba(9, 30, 54, 0.94)',
+    borderColor: 'rgba(123, 169, 220, 0.5)',
+    shadowOpacity: 0.25,
+  },
+  setupBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1f2937',
+  },
+  setupBannerTextUniverse: {
+    color: 'rgba(225, 239, 255, 0.95)',
   },
 });

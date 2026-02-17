@@ -15,28 +15,33 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { AppColors } from '../src/constants/AppColors';
+import AppThemeBackground from '../src/components/AppThemeBackground';
 import { SecureStorageService } from '../src/services/SecureStorageService';
 import { ClaudeApiService } from '../src/services/ClaudeApiService';
 import { GenerationQueueService } from '../src/services/GenerationQueueService';
+import { useUISettingsStore } from '../src/stores/UISettingsStore';
 import { createLogger } from '../src/utils/Logger';
 
 const log = createLogger('Welcome');
 
 export default function WelcomePage() {
   const router = useRouter();
+  const appTheme = useUISettingsStore((s) => s.appTheme);
+  const isUniverseTheme = appTheme === 'universe';
+
   const [apiKey, setApiKey] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
 
   const handleApiKeySubmit = async () => {
     if (!apiKey.trim()) {
-      Alert.alert('Error', 'Please enter your Claude API key');
+      Alert.alert('Missing API key', 'Please enter your Claude API key.');
       return;
     }
 
     if (!SecureStorageService.validateApiKey(apiKey)) {
       Alert.alert(
-        'Invalid API Key',
+        'Invalid API key',
         'Please enter a valid Claude API key. It should start with "sk-ant-" and be at least 50 characters long.'
       );
       return;
@@ -50,29 +55,22 @@ export default function WelcomePage() {
       await claudeService.initialize();
 
       const testResult = await claudeService.testConnection();
-
-      if (testResult.success) {
-        void GenerationQueueService.startWorker();
-        Alert.alert(
-          'Success!',
-          'Your Claude API key has been saved and verified. You can now start generating apps!',
-          [
-            {
-              text: 'Back to Settings',
-              onPress: () => router.replace('/(tabs)/settings'),
-            },
-          ]
-        );
-      } else {
-        Alert.alert(
-          'Connection Failed',
-          `Failed to connect to Claude API: ${testResult.message}. Please check your API key and try again.`
-        );
+      if (!testResult.success) {
         await SecureStorageService.removeApiKey();
+        Alert.alert('Connection failed', `Failed to connect to Claude API: ${testResult.message}`);
+        return;
       }
+
+      void GenerationQueueService.startWorker();
+
+      Alert.alert(
+        'Setup complete',
+        'Your API key is saved. Review token/cost controls in Settings if you need stricter limits.',
+        [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
+      );
     } catch (error: any) {
       log.error('API key setup error:', error);
-      Alert.alert('Setup Failed', error.message || 'Failed to set up your API key. Please try again.');
+      Alert.alert('Setup failed', error?.message || 'Failed to set up your API key. Please try again.');
       await SecureStorageService.removeApiKey();
     } finally {
       setIsLoading(false);
@@ -92,112 +90,146 @@ export default function WelcomePage() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={[]}>
-      <StatusBar translucent backgroundColor="transparent" />
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color={AppColors.White} />
-          </TouchableOpacity>
+    <SafeAreaView style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]} edges={['top']}>
+      <StatusBar
+        translucent
+        backgroundColor="transparent"
+        barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
+      />
+      <AppThemeBackground />
 
-          <View style={styles.iconContainer}>
-            <Ionicons name="sparkles" size={48} color={AppColors.White} />
-          </View>
-          <Text style={styles.title}>Welcome to Droplets</Text>
-          <Text style={styles.subtitle}>AI-Powered App Generator</Text>
+      <View style={[styles.header, isUniverseTheme ? styles.headerUniverse : undefined]}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Ionicons
+            name="arrow-back"
+            size={22}
+            color={isUniverseTheme ? 'rgba(226, 240, 255, 0.95)' : 'rgba(0, 0, 0, 0.84)'}
+          />
+        </TouchableOpacity>
+        <View style={[styles.headerIcon, isUniverseTheme ? styles.headerIconUniverse : undefined]}>
+          <Ionicons name="sparkles" size={20} color="#fff" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.headerTitle, isUniverseTheme ? styles.headerTitleUniverse : undefined]}>
+            Setup PinSnacks
+          </Text>
+          <Text style={[styles.headerSubtitle, isUniverseTheme ? styles.headerSubtitleUniverse : undefined]}>
+            Quick start in 5 steps
+          </Text>
+        </View>
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={[styles.stepCard, isUniverseTheme ? styles.stepCardUniverse : undefined]}>
+          <Text style={[styles.stepLabel, isUniverseTheme ? styles.stepLabelUniverse : undefined]}>1</Text>
+          <Text style={[styles.stepText, isUniverseTheme ? styles.stepTextUniverse : undefined]}>
+            PinSnacks creates apps for you on your phone, and your saved apps stay on this device until you delete them.
+          </Text>
         </View>
 
-        <View style={styles.content}>
-          <Text style={styles.description}>
-            Transform your ideas into beautiful app concepts using Claude AI. Get started by entering your Claude API key below.
+        <View style={[styles.stepCard, isUniverseTheme ? styles.stepCardUniverse : undefined]}>
+          <Text style={[styles.stepLabel, isUniverseTheme ? styles.stepLabelUniverse : undefined]}>2</Text>
+          <Text style={[styles.stepText, isUniverseTheme ? styles.stepTextUniverse : undefined]}>
+            Bring your own API key. We currently support Claude, with more providers planned.
           </Text>
+        </View>
 
-          <View style={styles.featuresContainer}>
-            <View style={styles.feature}>
-              <Ionicons name="bulb-outline" size={24} color={AppColors.FABDeepOrange} />
-              <Text style={styles.featureText}>Generate creative app concepts</Text>
-            </View>
-            <View style={styles.feature}>
-              <Ionicons name="color-palette-outline" size={24} color={AppColors.FABDeepOrange} />
-              <Text style={styles.featureText}>Choose from multiple design styles</Text>
-            </View>
-            <View style={styles.feature}>
-              <Ionicons name="layers-outline" size={24} color={AppColors.FABDeepOrange} />
-              <Text style={styles.featureText}>Detailed technical specifications</Text>
-            </View>
-            <View style={styles.feature}>
-              <Ionicons name="rocket-outline" size={24} color={AppColors.FABDeepOrange} />
-              <Text style={styles.featureText}>Ready-to-use marketing copy</Text>
-            </View>
+        <View style={[styles.stepCard, isUniverseTheme ? styles.stepCardUniverse : undefined]}>
+          <Text style={[styles.stepLabel, isUniverseTheme ? styles.stepLabelUniverse : undefined]}>3</Text>
+          <Text style={[styles.stepText, isUniverseTheme ? styles.stepTextUniverse : undefined]}>
+            Demo Preview (placeholder)
+          </Text>
+          <View style={[styles.demoPlaceholder, isUniverseTheme ? styles.demoPlaceholderUniverse : undefined]}>
+            <Ionicons
+              name="play-circle-outline"
+              size={42}
+              color={isUniverseTheme ? 'rgba(214, 233, 253, 0.92)' : 'rgba(31, 41, 55, 0.8)'}
+            />
+            <Text style={[styles.demoPlaceholderText, isUniverseTheme ? styles.demoPlaceholderTextUniverse : undefined]}>
+              Looping setup demo will be added here.
+            </Text>
+          </View>
+        </View>
+
+        <View style={[styles.keySection, isUniverseTheme ? styles.keySectionUniverse : undefined]}>
+          <View style={styles.sectionRow}>
+            <Text style={[styles.stepLabel, isUniverseTheme ? styles.stepLabelUniverse : undefined]}>4</Text>
+            <Text style={[styles.keyTitle, isUniverseTheme ? styles.keyTitleUniverse : undefined]}>
+              Add your Claude API key
+            </Text>
           </View>
 
-          <View style={styles.setupContainer}>
-            <Text style={styles.setupTitle}>Setup Your Claude API Key</Text>
-            <Text style={styles.setupDescription}>
-              You'll need a Claude API key from Anthropic to generate app concepts.
-            </Text>
-
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your Claude API key (sk-ant-...)"
-                placeholderTextColor={AppColors.Black + '80'}
-                value={apiKey}
-                onChangeText={setApiKey}
-                secureTextEntry={!showApiKey}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!isLoading}
-              />
-              <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() => setShowApiKey(!showApiKey)}
-                disabled={isLoading}
-              >
-                <Ionicons
-                  name={showApiKey ? 'eye-off-outline' : 'eye-outline'}
-                  size={20}
-                  color={AppColors.Black + '60'}
-                />
-              </TouchableOpacity>
-            </View>
-
+          <View style={[styles.inputContainer, isUniverseTheme ? styles.inputContainerUniverse : undefined]}>
+            <TextInput
+              style={[styles.input, isUniverseTheme ? styles.inputUniverse : undefined]}
+              placeholder="Enter your Claude API key (sk-ant-...)"
+              placeholderTextColor={isUniverseTheme ? 'rgba(191, 216, 243, 0.66)' : 'rgba(0, 0, 0, 0.45)'}
+              value={apiKey}
+              onChangeText={setApiKey}
+              secureTextEntry={!showApiKey}
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!isLoading}
+            />
             <TouchableOpacity
-              style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
-              onPress={handleApiKeySubmit}
+              style={styles.eyeButton}
+              onPress={() => setShowApiKey((prev) => !prev)}
               disabled={isLoading}
             >
-              {isLoading ? (
-                <ActivityIndicator color={AppColors.White} size="small" />
-              ) : (
-                <>
-                  <Ionicons name="key-outline" size={20} color={AppColors.White} />
-                  <Text style={styles.submitButtonText}>Save & Verify API Key</Text>
-                </>
-              )}
+              <Ionicons
+                name={showApiKey ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={isUniverseTheme ? 'rgba(204, 228, 251, 0.82)' : 'rgba(0, 0, 0, 0.5)'}
+              />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.helpContainer}>
-            <Text style={styles.helpTitle}>Need help getting your API key?</Text>
+          <TouchableOpacity
+            style={[styles.submitButton, isLoading ? styles.submitButtonDisabled : undefined]}
+            onPress={handleApiKeySubmit}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="key-outline" size={18} color="#fff" />
+                <Text style={styles.submitButtonText}>Save & Verify Key</Text>
+              </>
+            )}
+          </TouchableOpacity>
 
-            <TouchableOpacity style={styles.linkButton} onPress={openClaudeConsole}>
-              <Ionicons name="link-outline" size={16} color={AppColors.FABDeepOrange} />
-              <Text style={styles.linkText}>Get API Key from Claude Console</Text>
+          <View style={styles.helpLinksWrap}>
+            <TouchableOpacity style={styles.helpLink} onPress={openClaudeConsole}>
+              <Ionicons name="link-outline" size={15} color={AppColors.FABDeepOrange} />
+              <Text style={[styles.helpLinkText, isUniverseTheme ? styles.helpLinkTextUniverse : undefined]}>
+                Get API key from Claude Console
+              </Text>
             </TouchableOpacity>
-
-            <TouchableOpacity style={styles.linkButton} onPress={openClaudeDocumentation}>
-              <Ionicons name="document-text-outline" size={16} color={AppColors.FABDeepOrange} />
-              <Text style={styles.linkText}>Read Claude API Documentation</Text>
+            <TouchableOpacity style={styles.helpLink} onPress={openClaudeDocumentation}>
+              <Ionicons name="document-text-outline" size={15} color={AppColors.FABDeepOrange} />
+              <Text style={[styles.helpLinkText, isUniverseTheme ? styles.helpLinkTextUniverse : undefined]}>
+                Claude API getting-started docs
+              </Text>
             </TouchableOpacity>
           </View>
+        </View>
 
-          <View style={styles.securityNote}>
-            <Ionicons name="shield-checkmark-outline" size={20} color={AppColors.StackColors[7]} />
-            <Text style={styles.securityText}>
-              Your API key is stored securely using device encryption and never shared with third parties.
-            </Text>
-          </View>
+        <View style={[styles.stepCard, isUniverseTheme ? styles.stepCardUniverse : undefined]}>
+          <Text style={[styles.stepLabel, isUniverseTheme ? styles.stepLabelUniverse : undefined]}>5</Text>
+          <Text style={[styles.stepText, isUniverseTheme ? styles.stepTextUniverse : undefined]}>
+            Cost and usage guidance
+          </Text>
+          <Text style={[styles.guidanceText, isUniverseTheme ? styles.guidanceTextUniverse : undefined]}>
+            You control usage with model selection, max output tokens, and temperature. If unsure, keep recommended defaults.
+          </Text>
+          <Text style={[styles.guidanceText, isUniverseTheme ? styles.guidanceTextUniverse : undefined]}>
+            Misconfigured settings can consume a lot of tokens. Check Settings for usage/cost insights and tune limits as needed.
+          </Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -209,176 +241,215 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: AppColors.Primary,
   },
-  contentContainer: {
-    flexGrow: 1,
+  containerUniverse: {
+    backgroundColor: 'transparent',
   },
   header: {
-    alignItems: 'center',
-    paddingTop: 60,
-    paddingBottom: 40,
-    paddingHorizontal: 20,
-    position: 'relative',
-  },
-  backButton: {
-    position: 'absolute',
-    top: 60,
-    left: 20,
-    padding: 8,
-    zIndex: 1,
-  },
-  iconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: AppColors.FABDeepOrange,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-    elevation: 8,
-    shadowColor: AppColors.Black,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: AppColors.Black,
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 18,
-    color: AppColors.Black + 'CC',
-    fontWeight: '500',
-  },
-  content: {
-    flex: 1,
-    backgroundColor: AppColors.White,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    padding: 20,
-  },
-  description: {
-    fontSize: 16,
-    color: AppColors.Black + 'CC',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 30,
-  },
-  featuresContainer: {
-    marginBottom: 30,
-  },
-  feature: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
-    paddingHorizontal: 10,
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: 10,
+    gap: 10,
   },
-  featureText: {
-    fontSize: 16,
-    color: AppColors.Black + 'CC',
-    marginLeft: 15,
+  headerUniverse: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(123, 169, 220, 0.35)',
+    backgroundColor: 'rgba(8, 24, 44, 0.42)',
+  },
+  backButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+  },
+  headerIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AppColors.FABMain,
+  },
+  headerIconUniverse: {
+    backgroundColor: '#0f7cff',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: 'rgba(0, 0, 0, 0.86)',
+  },
+  headerTitleUniverse: {
+    color: 'rgba(232, 245, 255, 0.96)',
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: 'rgba(0, 0, 0, 0.62)',
+    marginTop: 2,
+  },
+  headerSubtitleUniverse: {
+    color: 'rgba(191, 216, 243, 0.86)',
+  },
+  scrollView: {
     flex: 1,
   },
-  setupContainer: {
-    backgroundColor: AppColors.White,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 30,
-    elevation: 4,
-    shadowColor: AppColors.Black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+  scrollContent: {
+    padding: 14,
+    gap: 12,
+    paddingBottom: 20,
   },
-  setupTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: AppColors.Black,
-    textAlign: 'center',
-    marginBottom: 10,
+  stepCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    gap: 7,
   },
-  setupDescription: {
+  stepCardUniverse: {
+    borderColor: 'rgba(123, 169, 220, 0.34)',
+    backgroundColor: 'rgba(8, 26, 48, 0.88)',
+  },
+  stepLabel: {
+    alignSelf: 'flex-start',
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#0f172a',
+    backgroundColor: 'rgba(15, 23, 42, 0.12)',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  stepLabelUniverse: {
+    color: 'rgba(232, 245, 255, 0.95)',
+    backgroundColor: 'rgba(49, 102, 159, 0.65)',
+  },
+  stepText: {
     fontSize: 14,
-    color: AppColors.Black + '99',
-    textAlign: 'center',
+    fontWeight: '700',
+    color: 'rgba(0, 0, 0, 0.8)',
     lineHeight: 20,
-    marginBottom: 20,
+  },
+  stepTextUniverse: {
+    color: 'rgba(219, 236, 255, 0.94)',
+  },
+  demoPlaceholder: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    minHeight: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  demoPlaceholderUniverse: {
+    borderColor: 'rgba(123, 169, 220, 0.34)',
+    backgroundColor: 'rgba(7, 24, 45, 0.9)',
+  },
+  demoPlaceholderText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: 'rgba(0, 0, 0, 0.62)',
+  },
+  demoPlaceholderTextUniverse: {
+    color: 'rgba(191, 216, 243, 0.86)',
+  },
+  keySection: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.12)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    gap: 10,
+  },
+  keySectionUniverse: {
+    borderColor: 'rgba(123, 169, 220, 0.34)',
+    backgroundColor: 'rgba(8, 26, 48, 0.88)',
+  },
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  keyTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: 'rgba(0, 0, 0, 0.84)',
+  },
+  keyTitleUniverse: {
+    color: 'rgba(232, 245, 255, 0.95)',
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: AppColors.White,
-    borderRadius: 15,
     borderWidth: 1,
-    borderColor: AppColors.Black + '20',
-    marginBottom: 20,
+    borderColor: 'rgba(128, 128, 128, 0.36)',
+    borderRadius: 12,
+    backgroundColor: '#fff',
+  },
+  inputContainerUniverse: {
+    borderColor: 'rgba(123, 169, 220, 0.44)',
+    backgroundColor: 'rgba(7, 24, 45, 0.9)',
   },
   input: {
     flex: 1,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    fontSize: 16,
-    color: AppColors.Black,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontSize: 14,
+    color: 'rgba(0, 0, 0, 0.84)',
+  },
+  inputUniverse: {
+    color: 'rgba(227, 242, 255, 0.95)',
   },
   eyeButton: {
-    padding: 15,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   submitButton: {
-    backgroundColor: AppColors.FABDeepOrange,
-    borderRadius: 15,
-    paddingVertical: 15,
-    flexDirection: 'row',
-    justifyContent: 'center',
+    borderRadius: 12,
+    paddingVertical: 11,
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: AppColors.FABMain,
   },
   submitButtonDisabled: {
     opacity: 0.7,
   },
   submitButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: AppColors.White,
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '900',
   },
-  helpContainer: {
-    marginBottom: 30,
-  },
-  helpTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: AppColors.Black,
-    textAlign: 'center',
-    marginBottom: 15,
-  },
-  linkButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    backgroundColor: AppColors.FABDeepOrange + '10',
-    borderRadius: 12,
-    marginBottom: 10,
+  helpLinksWrap: {
     gap: 8,
   },
-  linkText: {
-    fontSize: 14,
-    color: AppColors.FABDeepOrange,
-    fontWeight: '500',
-  },
-  securityNote: {
+  helpLink: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: AppColors.StackColors[7] + '10',
-    padding: 15,
-    borderRadius: 15,
-    gap: 10,
+    alignItems: 'center',
+    gap: 7,
   },
-  securityText: {
-    flex: 1,
-    fontSize: 13,
-    color: AppColors.Black + '99',
+  helpLinkText: {
+    fontSize: 12,
+    color: 'rgba(0, 0, 0, 0.7)',
+    fontWeight: '700',
+  },
+  helpLinkTextUniverse: {
+    color: 'rgba(205, 226, 248, 0.9)',
+  },
+  guidanceText: {
+    fontSize: 12,
     lineHeight: 18,
+    color: 'rgba(0, 0, 0, 0.68)',
+    fontWeight: '600',
+  },
+  guidanceTextUniverse: {
+    color: 'rgba(191, 216, 243, 0.88)',
   },
 });

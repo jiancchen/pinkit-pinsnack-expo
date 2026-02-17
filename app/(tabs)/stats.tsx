@@ -294,10 +294,27 @@ export default function AssistantPage() {
     return () => clearTimeout(timer);
   }, [messages, pendingAction, isSending]);
 
+  React.useEffect(() => {
+    if (!hasApiAccess && showModelPicker) {
+      setShowModelPicker(false);
+    }
+  }, [hasApiAccess, showModelPicker]);
+
   const addBubble = (role: ChatRole, text: string) => {
     const content = text.trim();
     if (!content) return;
     setMessages((prev) => [...prev, { id: makeId(role), role, text: content, at: Date.now() }]);
+  };
+
+  const promptApiSetup = (featureLabel: string) => {
+    Alert.alert(
+      `${featureLabel} requires setup`,
+      'Complete API key setup to unlock this feature.',
+      [
+        { text: 'Open Setup', onPress: () => router.push('/welcome') },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
   };
 
   const resolveAppFromArgs = async (args: Record<string, unknown> | undefined) => {
@@ -504,10 +521,7 @@ export default function AssistantPage() {
     if (!text || isSending) return;
 
     if (!hasApiAccess) {
-      Alert.alert('Claude API key required', 'Set your API key in Settings first.', [
-        { text: 'Open Settings', onPress: () => router.push('/(tabs)/settings') },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
+      promptApiSetup('Assistant');
       return;
     }
 
@@ -653,8 +667,18 @@ export default function AssistantPage() {
             Assistant
           </Text>
           <TouchableOpacity
-            style={[styles.modelButton, isUniverseTheme ? styles.modelButtonUniverse : undefined]}
-            onPress={() => setShowModelPicker(true)}
+            style={[
+              styles.modelButton,
+              isUniverseTheme ? styles.modelButtonUniverse : undefined,
+              !hasApiAccess ? styles.modelButtonLocked : undefined,
+            ]}
+            onPress={() => {
+              if (!hasApiAccess) {
+                promptApiSetup('Assistant model settings');
+                return;
+              }
+              setShowModelPicker(true);
+            }}
             accessibilityRole="button"
             accessibilityLabel="Select assistant model"
           >
@@ -683,9 +707,9 @@ export default function AssistantPage() {
               </Text>
               <TouchableOpacity
                 style={[styles.noticeButton, isUniverseTheme ? styles.noticeButtonUniverse : undefined]}
-                onPress={() => router.push('/(tabs)/settings')}
+                onPress={() => router.push('/welcome')}
               >
-                <Text style={styles.noticeButtonText}>Open Settings</Text>
+                <Text style={styles.noticeButtonText}>Open Setup</Text>
               </TouchableOpacity>
             </View>
           ) : null}
@@ -694,9 +718,13 @@ export default function AssistantPage() {
             {QUICK_QUESTIONS.map((question) => (
               <TouchableOpacity
                 key={question}
-                style={[styles.chip, isUniverseTheme ? styles.chipUniverse : undefined]}
+                style={[
+                  styles.chip,
+                  isUniverseTheme ? styles.chipUniverse : undefined,
+                  !hasApiAccess ? styles.chipDisabled : undefined,
+                ]}
                 onPress={() => void sendMessage(question)}
-                disabled={isSending}
+                disabled={isSending || !hasApiAccess}
               >
                 <Text style={[styles.chipText, isUniverseTheme ? styles.chipTextUniverse : undefined]}>{question}</Text>
               </TouchableOpacity>
@@ -803,6 +831,7 @@ export default function AssistantPage() {
             styles.inputBar,
             isUniverseTheme ? styles.inputBarUniverse : undefined,
             { marginBottom: composerBottomOffset },
+            !hasApiAccess ? styles.inputBarLocked : undefined,
           ]}
         >
           <TextInput
@@ -811,7 +840,12 @@ export default function AssistantPage() {
             onChangeText={setInputValue}
             placeholder="Ask assistant..."
             placeholderTextColor={isUniverseTheme ? 'rgba(191, 216, 243, 0.66)' : '#808080'}
-            editable={!isSending}
+            editable={!isSending && hasApiAccess}
+            onFocus={() => {
+              if (!hasApiAccess) {
+                promptApiSetup('Assistant');
+              }
+            }}
             multiline
             maxLength={1200}
           />
@@ -819,10 +853,17 @@ export default function AssistantPage() {
             style={[
               styles.sendButton,
               isUniverseTheme ? styles.sendButtonUniverse : undefined,
-              (!inputValue.trim() || isSending) && styles.sendButtonDisabled,
+              ((!inputValue.trim() && hasApiAccess) || isSending) && styles.sendButtonDisabled,
+              !hasApiAccess ? styles.sendButtonDisabled : undefined,
             ]}
-            onPress={() => void sendMessage()}
-            disabled={!inputValue.trim() || isSending}
+            onPress={() => {
+              if (!hasApiAccess) {
+                promptApiSetup('Assistant');
+                return;
+              }
+              void sendMessage();
+            }}
+            disabled={isSending || (!inputValue.trim() && hasApiAccess)}
           >
             {isSending ? (
               <ActivityIndicator size="small" color={isUniverseTheme ? 'rgba(226, 240, 255, 0.96)' : '#0f7cff'} />
@@ -978,6 +1019,9 @@ const styles = StyleSheet.create({
   modelButtonTextUniverse: {
     color: 'rgba(226, 240, 255, 0.95)',
   },
+  modelButtonLocked: {
+    opacity: 0.62,
+  },
   scrollView: {
     flex: 1,
   },
@@ -1037,6 +1081,9 @@ const styles = StyleSheet.create({
   chipUniverse: {
     borderColor: 'rgba(125, 171, 222, 0.4)',
     backgroundColor: 'rgba(7, 28, 52, 0.9)',
+  },
+  chipDisabled: {
+    opacity: 0.48,
   },
   chipText: {
     fontSize: 12,
@@ -1188,6 +1235,9 @@ const styles = StyleSheet.create({
   },
   inputBarUniverse: {
     backgroundColor: 'transparent',
+  },
+  inputBarLocked: {
+    opacity: 0.58,
   },
   input: {
     flex: 1,

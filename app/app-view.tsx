@@ -25,6 +25,7 @@ import { ScreenshotService } from '../src/services/ScreenshotService';
 import { WebViewScreenshotService } from '../src/services/WebViewScreenshotService';
 import { emitScreenshotCaptured, emitScreenshotError, emitScreenshotLoading } from '../src/stores/ScreenshotStore';
 import { handleWebViewLiveActivityMessage, stopWebViewLiveActivitiesForApp } from '../src/services/WebViewLiveActivityBridge';
+import { SecureStorageService } from '../src/services/SecureStorageService';
 import { createLogger } from '../src/utils/Logger';
 import { useUISettingsStore } from '../src/stores/UISettingsStore';
 import AppThemeBackground from '../src/components/AppThemeBackground';
@@ -35,6 +36,7 @@ export default function AppViewPage() {
   const router = useRouter();
   const { appId } = useLocalSearchParams<{ appId: string }>();
   const appTheme = useUISettingsStore((s) => s.appTheme);
+  const debugAllowWithoutApiKey = useUISettingsStore((s) => s.debugAllowWithoutApiKey);
   const isUniverseTheme = appTheme === 'universe';
 
   const safeGoBack = () => {
@@ -59,6 +61,8 @@ export default function AppViewPage() {
   const [showEditTitleModal, setShowEditTitleModal] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [isExporting, setIsExporting] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
+  const hasApiAccess = hasApiKey || debugAllowWithoutApiKey;
   
   const webViewRef = useRef<WebView>(null);
   const webViewContainerRef = useRef<View>(null);
@@ -78,8 +82,9 @@ export default function AppViewPage() {
       let isActive = true;
       const id = appId as string | undefined;
       if (!id) return () => {};
-      void AppStorageService.getApp(id).then((stored) => {
+      void Promise.all([AppStorageService.getApp(id), SecureStorageService.hasApiKey()]).then(([stored, hasKey]) => {
         if (!isActive) return;
+        setHasApiKey(hasKey);
         if (stored) {
           setApp(stored);
           setNewTitle(stored.title);
@@ -485,6 +490,17 @@ export default function AppViewPage() {
   const openEditPrompt = () => {
     setShowMenuModal(false);
     if (!app) return;
+    if (!hasApiAccess) {
+      Alert.alert(
+        'Update requires setup',
+        'Complete API key setup to update and recreate apps.',
+        [
+          { text: 'Open Setup', onPress: () => router.push('/welcome') },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
     router.push({
       pathname: '/app-recreate',
       params: { appId: app.id, mode: 'recreate' },
@@ -551,6 +567,17 @@ export default function AppViewPage() {
   const fixApp = () => {
     setShowMenuModal(false);
     if (!app) return;
+    if (!hasApiAccess) {
+      Alert.alert(
+        'Fix requires setup',
+        'Complete API key setup to use AI fix mode.',
+        [
+          { text: 'Open Setup', onPress: () => router.push('/welcome') },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+      return;
+    }
     router.push({
       pathname: '/app-recreate',
       params: { appId: app.id, mode: 'fix' },
@@ -900,9 +927,14 @@ export default function AppViewPage() {
               <Text style={styles.menuItemText}>Update Title</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={openEditPrompt}>
+            <TouchableOpacity
+              style={[styles.menuItem, !hasApiAccess ? styles.menuItemDisabled : undefined]}
+              onPress={openEditPrompt}
+            >
               <Ionicons name="refresh-outline" size={24} color={AppColors.FABMain} />
-              <Text style={styles.menuItemText}>Update Prompt & Recreate</Text>
+              <Text style={[styles.menuItemText, !hasApiAccess ? styles.menuItemTextDisabled : undefined]}>
+                Update Prompt & Recreate
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.menuItem} onPress={openRevisions}>
@@ -921,9 +953,14 @@ export default function AppViewPage() {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem} onPress={fixApp}>
+            <TouchableOpacity
+              style={[styles.menuItem, !hasApiAccess ? styles.menuItemDisabled : undefined]}
+              onPress={fixApp}
+            >
               <Ionicons name="build-outline" size={24} color="#F59E0B" />
-              <Text style={styles.menuItemText}>Fix App</Text>
+              <Text style={[styles.menuItemText, !hasApiAccess ? styles.menuItemTextDisabled : undefined]}>
+                Fix App
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={[styles.menuItem, styles.deleteMenuItem]} onPress={deleteApp}>
@@ -1259,11 +1296,17 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 8,
   },
+  menuItemDisabled: {
+    opacity: 0.48,
+  },
   menuItemText: {
     fontSize: 16,
     color: 'rgba(0, 0, 0, 0.8)',
     marginLeft: 12,
     flex: 1,
+  },
+  menuItemTextDisabled: {
+    color: 'rgba(0, 0, 0, 0.55)',
   },
   deleteMenuItem: {
     backgroundColor: 'rgba(239, 68, 68, 0.1)',

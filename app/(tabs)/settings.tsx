@@ -78,6 +78,8 @@ export default function SettingsPage() {
   const setTabBarTintColor = useUISettingsStore((s) => s.setTabBarTintColor);
   const setTabBarBlurIntensity = useUISettingsStore((s) => s.setTabBarBlurIntensity);
   const setDebugAllowWithoutApiKey = useUISettingsStore((s) => s.setDebugAllowWithoutApiKey);
+  const hasApiAccess = hasApiKey || debugAllowWithoutApiKey;
+  const modelSettingsLocked = !hasApiAccess;
 
   const scrollContentPaddingBottom = getLiquidGlassTabBarContentPaddingBottom(insets.bottom, 32);
 
@@ -355,6 +357,17 @@ export default function SettingsPage() {
     router.push('/runtime-logs');
   };
 
+  const promptApiSetup = (featureLabel: string) => {
+    Alert.alert(
+      `${featureLabel} requires setup`,
+      'Complete API key setup to unlock this feature.',
+      [
+        { text: 'Open Setup', onPress: () => router.push('/welcome') },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
   const handlePrivacyPolicy = () => {
     Alert.alert('Privacy Policy', 'Learn how we protect your data', [{ text: 'OK' }]);
   };
@@ -434,6 +447,11 @@ export default function SettingsPage() {
 
   const handleModelSelect = async (model: string) => {
     try {
+      if (modelSettingsLocked) {
+        promptApiSetup('Model settings');
+        return;
+      }
+
       const modelInfo = MODEL_INFO[model];
       if (modelInfo?.status === 'retired') {
         Alert.alert(
@@ -460,12 +478,22 @@ export default function SettingsPage() {
   };
 
   const handleMaxTokensSelect = async (requestedMaxTokens: number) => {
+    if (modelSettingsLocked) {
+      promptApiSetup('Model settings');
+      return;
+    }
+
     const clampedMaxTokens = clampMaxOutputTokens(selectedModel, requestedMaxTokens);
     setMaxTokens(clampedMaxTokens);
     await persistClaudeDefaults({ model: selectedModel, maxTokens: clampedMaxTokens, temperature });
   };
 
   const handleTemperatureSelect = async (nextTemperature: number) => {
+    if (modelSettingsLocked) {
+      promptApiSetup('Model settings');
+      return;
+    }
+
     setTemperature(nextTemperature);
     await persistClaudeDefaults({ model: selectedModel, maxTokens, temperature: nextTemperature });
   };
@@ -532,11 +560,43 @@ export default function SettingsPage() {
           </Text>
           
           <SettingsCard>
+            {modelSettingsLocked ? (
+              <View style={[styles.lockedCallout, isUniverseTheme ? styles.lockedCalloutUniverse : undefined]}>
+                <Ionicons name="lock-closed-outline" size={18} color={isUniverseTheme ? 'rgba(208, 231, 255, 0.92)' : '#0f172a'} />
+                <Text style={[styles.lockedCalloutText, isUniverseTheme ? styles.lockedCalloutTextUniverse : undefined]}>
+                  Set up your API key to enable model selection, token limits, and temperature controls.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.lockedCalloutButton, isUniverseTheme ? styles.lockedCalloutButtonUniverse : undefined]}
+                  onPress={() => router.push('/welcome')}
+                >
+                  <Text
+                    style={[
+                      styles.lockedCalloutButtonText,
+                      isUniverseTheme ? styles.lockedCalloutButtonTextUniverse : undefined,
+                    ]}
+                  >
+                    Open Setup
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
             <View style={styles.settingGroup}>
               <Text style={[styles.settingLabel, themedSettingLabelStyle]}>Model</Text>
               <TouchableOpacity 
-                style={[styles.dropdown, themedDropdownStyle]}
-                onPress={() => setShowModelSelector(true)}
+                style={[
+                  styles.dropdown,
+                  themedDropdownStyle,
+                  modelSettingsLocked ? styles.inputLocked : undefined,
+                ]}
+                onPress={() => {
+                  if (modelSettingsLocked) {
+                    promptApiSetup('Model settings');
+                    return;
+                  }
+                  setShowModelSelector(true);
+                }}
               >
                 <Text style={[styles.dropdownText, themedDropdownTextStyle]}>{getModelDisplayName(selectedModel)}</Text>
                 <Ionicons
@@ -564,8 +624,17 @@ export default function SettingsPage() {
                   return (
                     <TouchableOpacity
                       key={preset}
-                      style={getChipStyle(isSelected)}
-                      onPress={() => handleMaxTokensSelect(preset)}
+                      style={[
+                        ...getChipStyle(isSelected),
+                        modelSettingsLocked ? styles.inputLocked : undefined,
+                      ]}
+                      onPress={() => {
+                        if (modelSettingsLocked) {
+                          promptApiSetup('Model settings');
+                          return;
+                        }
+                        void handleMaxTokensSelect(preset);
+                      }}
                     >
                       <Text style={getChipTextStyle(isSelected)}>
                         {preset >= 1000 ? `${preset / 1000}K` : `${preset}`}
@@ -589,8 +658,17 @@ export default function SettingsPage() {
                   return (
                     <TouchableOpacity
                       key={preset.label}
-                      style={getChipStyle(isSelected)}
-                      onPress={() => handleTemperatureSelect(preset.value)}
+                      style={[
+                        ...getChipStyle(isSelected),
+                        modelSettingsLocked ? styles.inputLocked : undefined,
+                      ]}
+                      onPress={() => {
+                        if (modelSettingsLocked) {
+                          promptApiSetup('Model settings');
+                          return;
+                        }
+                        void handleTemperatureSelect(preset.value);
+                      }}
                     >
                       <Text style={getChipTextStyle(isSelected)}>
                         {preset.label}
@@ -1374,6 +1452,52 @@ const styles = StyleSheet.create({
   },
   helperTextUniverse: {
     color: 'rgba(190, 216, 244, 0.84)',
+  },
+  lockedCallout: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(15, 23, 42, 0.14)',
+    gap: 8,
+    marginBottom: 10,
+  },
+  lockedCalloutUniverse: {
+    backgroundColor: 'rgba(10, 34, 61, 0.86)',
+    borderColor: 'rgba(123, 169, 220, 0.4)',
+  },
+  lockedCalloutText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: 'rgba(0, 0, 0, 0.68)',
+    fontWeight: '600',
+  },
+  lockedCalloutTextUniverse: {
+    color: 'rgba(204, 228, 251, 0.9)',
+  },
+  lockedCalloutButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: 'rgba(15, 23, 42, 0.14)',
+  },
+  lockedCalloutButtonUniverse: {
+    backgroundColor: 'rgba(27, 86, 146, 0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(196, 223, 250, 0.7)',
+  },
+  lockedCalloutButtonText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  lockedCalloutButtonTextUniverse: {
+    color: 'rgba(232, 245, 255, 0.96)',
+  },
+  inputLocked: {
+    opacity: 0.48,
   },
   chipRow: {
     flexDirection: 'row',
