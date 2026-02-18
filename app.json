@@ -19,7 +19,17 @@
       "deploymentTarget": "17.0",
       "statusBarStyle": "light",
       "infoPlist": {
-        "UIViewControllerBasedStatusBarAppearance": true
+        "UIViewControllerBasedStatusBarAppearance": true,
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "pinsnacks"
+            ]
+          }
+        ],
+        "NSSupportsLiveActivities": true,
+        "NSSupportsLiveActivitiesFrequentUpdates": false,
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -96,8 +106,8 @@
             "ios": {
               "appExtensions": [
                 {
-                  "targetName": "PinSnacksLiveActivity",
-                  "bundleIdentifier": "com.zigzura.pinsnacks.PinSnacksLiveActivity",
+                  "targetName": "liveactivity",
+                  "bundleIdentifier": "com.zigzura.pinsnacks.liveactivity",
                   "entitlements": {}
                 }
               ]
