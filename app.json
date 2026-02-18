@@ -73,7 +73,12 @@
           "launchMode": "most-recent"
         }
       ],
-      "voltra",
+      [
+        "voltra",
+        {
+          "targetName": "liveactivity"
+        }
+      ],
       [
         "react-native-edge-to-edge",
         {
