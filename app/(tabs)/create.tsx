@@ -38,22 +38,6 @@ const TEMPERATURE_PRESETS: Array<{ label: string; value: number }> = [
   { label: 'Creative', value: 0.7 },
 ];
 
-const COMMON_STYLE_TAGS = [
-  'modern',
-  'minimalist',
-  'playful',
-  'creative',
-  'elegant',
-  'corporate',
-  'glassmorphism',
-  'retro',
-  'dark',
-  'pastel',
-  'bold',
-  'neon',
-  'clean',
-];
-
 const STYLE_TAG_TO_APP_STYLE: Record<string, AppStyle> = {
   minimalist: 'minimalist',
   creative: 'creative',
@@ -66,58 +50,6 @@ const STYLE_TAG_TO_APP_STYLE: Record<string, AppStyle> = {
 function normalizeTag(input: string): string {
   return input.trim().toLowerCase().replace(/\s+/g, '-');
 }
-
-const templates = [
-  {
-    emoji: '✅',
-    name: 'Todo List',
-    description: 'Simple task management',
-    prompt: 'Create a todo list app with add, delete, and mark complete functionality',
-    style: 'minimalist' as AppStyle,
-    category: 'productivity' as AppCategory
-  },
-  {
-    emoji: '🎯',
-    name: 'Habit Tracker',
-    description: 'Track daily habits',
-    prompt: 'Create a habit tracker that lets me check off daily habits and shows streaks',
-    style: 'modern' as AppStyle,
-    category: 'health' as AppCategory
-  },
-  {
-    emoji: '📝',
-    name: 'Note Taking',
-    description: 'Quick notes and memos',
-    prompt: 'Create a simple note-taking app where I can add, edit, and delete notes',
-    style: 'minimalist' as AppStyle,
-    category: 'productivity' as AppCategory
-  },
-  {
-    emoji: '🧮',
-    name: 'Calculator',
-    description: 'Basic calculator',
-    prompt: 'Create a calculator app with basic arithmetic operations',
-    style: 'modern' as AppStyle,
-    category: 'utility' as AppCategory
-  },
-  {
-    emoji: '⏰',
-    name: 'Timer',
-    description: 'Countdown timer',
-    prompt: 'Create a countdown timer app with start, pause, and reset functionality',
-    style: 'minimalist' as AppStyle,
-    category: 'utility' as AppCategory
-  },
-  {
-    emoji: '🎲',
-    name: 'Something Random',
-    description: 'AI picks a small fun/useful app',
-    prompt:
-      'Create a small random app idea that is fun or useful. Choose one simple concept and implement it with a polished mobile UI and one clear core interaction.',
-    style: 'creative' as AppStyle,
-    category: 'fun' as AppCategory
-  }
-];
 
 export default function CreatePage() {
   const router = useRouter();
@@ -145,6 +77,59 @@ export default function CreatePage() {
   const [generationMaxTokens, setGenerationMaxTokens] = useState<number>(DEFAULT_CONFIG.maxTokens);
   const [generationTemperature, setGenerationTemperature] = useState<number>(DEFAULT_CONFIG.temperature);
   const hasApiAccess = hasApiKey || debugAllowWithoutApiKey;
+  const templates = useMemo(
+    () => [
+      {
+        emoji: '✅',
+        name: t('create.template.todo.name'),
+        description: t('create.template.todo.description'),
+        prompt: t('create.template.todo.prompt'),
+        style: 'minimalist' as AppStyle,
+        category: 'productivity' as AppCategory,
+      },
+      {
+        emoji: '🎯',
+        name: t('create.template.habit.name'),
+        description: t('create.template.habit.description'),
+        prompt: t('create.template.habit.prompt'),
+        style: 'modern' as AppStyle,
+        category: 'health' as AppCategory,
+      },
+      {
+        emoji: '📝',
+        name: t('create.template.notes.name'),
+        description: t('create.template.notes.description'),
+        prompt: t('create.template.notes.prompt'),
+        style: 'minimalist' as AppStyle,
+        category: 'productivity' as AppCategory,
+      },
+      {
+        emoji: '🧮',
+        name: t('create.template.calc.name'),
+        description: t('create.template.calc.description'),
+        prompt: t('create.template.calc.prompt'),
+        style: 'modern' as AppStyle,
+        category: 'utility' as AppCategory,
+      },
+      {
+        emoji: '⏰',
+        name: t('create.template.timer.name'),
+        description: t('create.template.timer.description'),
+        prompt: t('create.template.timer.prompt'),
+        style: 'minimalist' as AppStyle,
+        category: 'utility' as AppCategory,
+      },
+      {
+        emoji: '🎲',
+        name: t('create.template.random.name'),
+        description: t('create.template.random.description'),
+        prompt: t('create.template.random.prompt'),
+        style: 'creative' as AppStyle,
+        category: 'fun' as AppCategory,
+      },
+    ],
+    [t]
+  );
 
   const scrollContentPaddingBottom = getLiquidGlassTabBarContentPaddingBottom(insets.bottom, 32);
 
@@ -320,11 +305,11 @@ export default function CreatePage() {
 
   const promptApiSetup = (featureLabel: string) => {
     Alert.alert(
-      `${featureLabel} requires setup`,
-      'Complete API key setup to unlock this feature.',
+      t('create.apiSetup.requiredTitle', { feature: featureLabel }),
+      t('create.apiSetup.requiredBody'),
       [
-        { text: 'Open Setup', onPress: () => router.push('/welcome') },
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.actions.openSetup'), onPress: () => router.push('/welcome') },
+        { text: t('common.actions.cancel'), style: 'cancel' },
       ]
     );
   };
@@ -366,14 +351,14 @@ export default function CreatePage() {
 
       router.push('/(tabs)');
       Alert.alert(
-        'Generation queued',
-        'Your app is generating. You can navigate around Droplets, but please keep the app open — backgrounding may pause generation. You’ll get a notification when it’s ready.',
+        t('create.generationQueued.title'),
+        t('create.generationQueued.body'),
         [
           {
-            text: 'OK',
+            text: t('common.actions.ok'),
           },
           {
-            text: 'Create Another',
+            text: t('create.generationQueued.createAnother'),
             onPress: () => router.push('/(tabs)/create'),
             style: 'cancel',
           },
@@ -381,10 +366,15 @@ export default function CreatePage() {
       );
     } catch (error: any) {
       log.error('App generation error:', error);
+      const rawMessage = typeof error?.message === 'string' ? error.message : '';
+      const normalizedMessage = rawMessage.toLowerCase();
+      const localizedMessage = normalizedMessage.includes('api key not configured')
+        ? t('create.apiRequired.body')
+        : rawMessage || t('create.generationFailed.body');
       Alert.alert(
-        'Generation Failed',
-        error.message || 'Failed to generate app. Please try again.',
-        [{ text: 'OK' }]
+        t('create.generationFailed.title'),
+        localizedMessage,
+        [{ text: t('common.actions.ok') }]
       );
     } finally {
       log.debug('Generation process completed');
@@ -399,14 +389,14 @@ export default function CreatePage() {
     }
 
     if (!hasApiAccess) {
-      promptApiSetup('Create app');
+      promptApiSetup(t('create.feature.createApp'));
       return;
     }
 
     const request = buildRequest();
     const validation = PromptGenerator.validateRequest(request);
     if (!validation.isValid) {
-      Alert.alert('Validation Error', validation.errors.join('\n'));
+      Alert.alert(t('create.validationError.title'), validation.errors.join('\n'));
       return;
     }
 
@@ -430,9 +420,9 @@ export default function CreatePage() {
 
     if (!hasApiKey && debugAllowWithoutApiKey) {
       Alert.alert(
-        'Debug mode active',
-        'No API key is configured. This mode is for UI testing only. Add an API key in Settings to run generation.',
-        [{ text: 'OK' }]
+        t('create.debug.title'),
+        t('create.debug.body'),
+        [{ text: t('common.actions.ok') }]
       );
       return;
     }
@@ -481,7 +471,7 @@ export default function CreatePage() {
               ]}
               onPress={() => {
                 if (!hasApiAccess) {
-                  promptApiSetup('Model settings');
+                  promptApiSetup(t('create.feature.modelSettings'));
                   return;
                 }
                 setShowAdvanced(true);
@@ -649,38 +639,6 @@ export default function CreatePage() {
               </TouchableOpacity>
             </View>
 
-            <Text style={[styleSheet.helperText, isUniverseTheme ? styleSheet.helperTextUniverse : undefined]}>
-              {t('create.designTags.common')}
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styleSheet.tagSuggestionsRow}>
-              {COMMON_STYLE_TAGS.map((tag) => {
-                const isSelected = selectedStyleTags.includes(tag);
-                return (
-                  <TouchableOpacity
-                    key={tag}
-                    style={[
-                      styleSheet.suggestionChip,
-                      isUniverseTheme ? styleSheet.suggestionChipUniverse : undefined,
-                      isSelected ? styleSheet.suggestionChipSelected : undefined,
-                      isSelected && isUniverseTheme ? styleSheet.suggestionChipSelectedUniverse : undefined,
-                    ]}
-                    onPress={() => void addStyleTag(tag)}
-                  >
-                    <Text
-                      style={[
-                        styleSheet.suggestionChipText,
-                        isUniverseTheme ? styleSheet.suggestionChipTextUniverse : undefined,
-                        isSelected ? styleSheet.suggestionChipTextSelected : undefined,
-                        isSelected && isUniverseTheme ? styleSheet.suggestionChipTextSelectedUniverse : undefined,
-                      ]}
-                    >
-                      {tag}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
             {recentStyleTags.length > 0 ? (
               <>
                 <Text style={[styleSheet.helperText, isUniverseTheme ? styleSheet.helperTextUniverse : undefined]}>
@@ -724,7 +682,7 @@ export default function CreatePage() {
                 style={[styleSheet.settingsButton, isUniverseTheme ? styleSheet.settingsButtonUniverse : undefined]}
                 onPress={() => router.push('/welcome')}
               >
-                <Text style={styleSheet.settingsButtonText}>Open Setup</Text>
+                <Text style={styleSheet.settingsButtonText}>{t('common.actions.openSetup')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1073,7 +1031,7 @@ export default function CreatePage() {
                   style={[styleSheet.headerIconButton, isUniverseTheme ? styleSheet.headerIconButtonUniverse : undefined]}
                   onPress={() => setShowPromptHistory(false)}
                   accessibilityRole="button"
-                  accessibilityLabel="Close prompt history"
+                  accessibilityLabel={t('create.history.closeA11y')}
                 >
                   <Ionicons
                     name="close"
@@ -1092,12 +1050,12 @@ export default function CreatePage() {
                   ]}
                   onPress={() => {
                     Alert.alert(
-                      'Clear prompt history',
-                      'Delete all saved prompts on this device?',
+                      t('create.history.clearTitle'),
+                      t('create.history.clearBody'),
                       [
-                        { text: 'Cancel', style: 'cancel' },
+                        { text: t('common.actions.cancel'), style: 'cancel' },
                         {
-                          text: 'Clear',
+                          text: t('common.actions.clear'),
                           style: 'destructive',
                           onPress: async () => {
                             await PromptHistoryService.clear();
@@ -1153,7 +1111,7 @@ export default function CreatePage() {
                           const nextTags = historyTags
                             .map((tag) => normalizeTag(tag))
                             .filter((tag) => tag.length > 0);
-                          setSelectedStyleTags(nextTags.length > 0 ? nextTags : ['modern']);
+                          setSelectedStyleTags(nextTags);
                           setShowPromptHistory(false);
                         }}
                       >

@@ -41,6 +41,7 @@ import {
   resolveSupportedClaudeModel,
 } from '../../src/types/ClaudeApi';
 import { useUISettingsStore } from '../../src/stores/UISettingsStore';
+import { useStrings } from '../../src/i18n/strings';
 import { createLogger } from '../../src/utils/Logger';
 
 const log = createLogger('Assistant');
@@ -88,14 +89,6 @@ type PendingAction =
       updatedPrompt: string;
       notes: string;
     };
-
-const QUICK_QUESTIONS = [
-  'Suggest me a random app to make',
-  'What are my most used apps?',
-  'Summarize my token usage by app',
-  'Give me an overview of my app stats',
-  'Help me fix one of my apps',
-];
 
 const ASSISTANT_PROTOCOL_PROMPT = `
 You are Droplets Assistant. You must ALWAYS respond with strict JSON and no extra text.
@@ -149,7 +142,11 @@ function normalizeJsonResponse(raw: string): string {
   return content;
 }
 
-function parseAssistantResponse(raw: string): AssistantModelResponse {
+function parseAssistantResponse(
+  raw: string,
+  fallbackDoneMessage: string,
+  fallbackParseErrorMessage: string
+): AssistantModelResponse {
   try {
     const parsed = JSON.parse(normalizeJsonResponse(raw)) as Partial<AssistantModelResponse>;
     const assistantMessage = typeof parsed.assistantMessage === 'string' ? parsed.assistantMessage.trim() : '';
@@ -159,12 +156,12 @@ function parseAssistantResponse(raw: string): AssistantModelResponse {
           .filter((entry): entry is AssistantToolCall => Boolean(entry))
       : [];
     return {
-      assistantMessage: assistantMessage || 'Done.',
+      assistantMessage: assistantMessage || fallbackDoneMessage,
       toolCalls,
     };
   } catch {
     return {
-      assistantMessage: raw.trim() || 'I could not parse that response. Please try again.',
+      assistantMessage: raw.trim() || fallbackParseErrorMessage,
       toolCalls: [],
     };
   }
@@ -202,6 +199,7 @@ export default function AssistantPage() {
   const appTheme = useUISettingsStore((s) => s.appTheme);
   const debugAllowWithoutApiKey = useUISettingsStore((s) => s.debugAllowWithoutApiKey);
   const isUniverseTheme = appTheme === 'universe';
+  const { t } = useStrings();
 
   const [inputValue, setInputValue] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -213,7 +211,7 @@ export default function AssistantPage() {
     {
       id: makeId('assistant'),
       role: 'assistant',
-      text: 'Ask me to explore your apps, summarize usage, or help create/fix/update an app.',
+      text: t('assistant.message.initial'),
       at: Date.now(),
     },
   ]);
@@ -232,6 +230,16 @@ export default function AssistantPage() {
   const availableAssistantModels = useMemo(
     () => CLAUDE_MODEL_PICKER_OPTIONS.filter((modelId) => MODEL_INFO[modelId]?.status !== 'retired'),
     []
+  );
+  const quickQuestions = useMemo(
+    () => [
+      t('assistant.quick.random'),
+      t('assistant.quick.mostUsed'),
+      t('assistant.quick.usageSummary'),
+      t('assistant.quick.overview'),
+      t('assistant.quick.fix'),
+    ],
+    [t]
   );
 
   React.useEffect(() => {
@@ -308,11 +316,11 @@ export default function AssistantPage() {
 
   const promptApiSetup = (featureLabel: string) => {
     Alert.alert(
-      `${featureLabel} requires setup`,
-      'Complete API key setup to unlock this feature.',
+      t('assistant.apiSetup.requiredTitle', { feature: featureLabel }),
+      t('assistant.apiSetup.requiredBody'),
       [
-        { text: 'Open Setup', onPress: () => router.push('/welcome') },
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.actions.openSetup'), onPress: () => router.push('/welcome') },
+        { text: t('common.actions.cancel'), style: 'cancel' },
       ]
     );
   };
@@ -448,12 +456,16 @@ export default function AssistantPage() {
         operation: 'assistant_chat',
       });
 
-      const parsed = parseAssistantResponse(raw);
+      const parsed = parseAssistantResponse(
+        raw,
+        t('assistant.model.done'),
+        t('assistant.message.errorGeneric')
+      );
       finalAssistantMessage = parsed.assistantMessage || finalAssistantMessage;
       const toolCalls = parsed.toolCalls || [];
 
       if (toolCalls.length === 0) {
-        const assistantContent = finalAssistantMessage || 'Done.';
+        const assistantContent = finalAssistantMessage || t('assistant.model.done');
         workingConversation = [...workingConversation, { role: 'assistant', content: assistantContent }];
         return { assistantMessage: assistantContent, pendingAction: null, nextConversation: workingConversation };
       }
@@ -474,7 +486,7 @@ export default function AssistantPage() {
         if (pending) {
           writeAction = pending;
           return {
-            assistantMessage: finalAssistantMessage || 'I prepared an action. Please confirm below.',
+            assistantMessage: finalAssistantMessage || t('assistant.pending.required'),
             pendingAction: writeAction,
             nextConversation: workingConversation,
           };
@@ -503,14 +515,14 @@ export default function AssistantPage() {
       }
 
       return {
-        assistantMessage: finalAssistantMessage || 'I could not complete that request.',
+        assistantMessage: finalAssistantMessage || t('assistant.message.errorGeneric'),
         pendingAction: null,
         nextConversation: workingConversation,
       };
     }
 
     return {
-      assistantMessage: finalAssistantMessage || 'I reached a tool-call limit. Please refine your request.',
+      assistantMessage: finalAssistantMessage || t('assistant.message.errorGeneric'),
       pendingAction: writeAction,
       nextConversation: workingConversation,
     };
@@ -521,7 +533,7 @@ export default function AssistantPage() {
     if (!text || isSending) return;
 
     if (!hasApiAccess) {
-      promptApiSetup('Assistant');
+      promptApiSetup(t('assistant.feature.assistant'));
       return;
     }
 
@@ -531,7 +543,7 @@ export default function AssistantPage() {
       addBubble('user', text);
       addBubble(
         'assistant',
-        'Debug mode is enabled without an API key. Assistant calls are skipped. Add an API key in Settings to run live responses.'
+        t('assistant.message.debugNoApi')
       );
       return;
     }
@@ -548,7 +560,7 @@ export default function AssistantPage() {
       setModelConversation(response.nextConversation);
     } catch (error: any) {
       log.error('Assistant turn failed:', error);
-      addBubble('assistant', error?.message || 'I hit an error. Please try again.');
+      addBubble('assistant', error?.message || t('assistant.message.errorGeneric'));
     } finally {
       setIsSending(false);
     }
@@ -569,7 +581,7 @@ export default function AssistantPage() {
 
         const validation = PromptGenerator.validateRequest(request);
         if (!validation.isValid) {
-          addBubble('assistant', `I can't create that yet: ${validation.errors.join('; ')}`);
+          addBubble('assistant', t('assistant.message.validationFailed', { errors: validation.errors.join('; ') }));
           setPendingAction(null);
           return;
         }
@@ -578,7 +590,10 @@ export default function AssistantPage() {
         if (!featureCheck.isValid) {
           addBubble(
             'assistant',
-            `That request uses unavailable features (${featureCheck.reason}). Try: ${featureCheck.suggestion}`
+            t('assistant.message.unavailableFeatures', {
+              reason: featureCheck.reason || '',
+              suggestion: featureCheck.suggestion || '',
+            })
           );
           setPendingAction(null);
           return;
@@ -592,9 +607,10 @@ export default function AssistantPage() {
 
         addBubble(
           'assistant',
-          `Created and queued. Job ${job.id} is generating now. Estimated max cost was ${formatUsd(
-            pendingAction.estimatedMaxCostUsd
-          )}.`
+          t('assistant.message.createdQueued', {
+            jobId: job.id,
+            cost: formatUsd(pendingAction.estimatedMaxCostUsd),
+          })
         );
         setPendingAction(null);
         return;
@@ -612,15 +628,19 @@ export default function AssistantPage() {
         } as any);
         addBubble(
           'assistant',
-          `Opened ${pendingAction.kind === 'fix_app' ? 'Fix App' : 'Update Prompt & Recreate'} for "${
-            pendingAction.appTitle
-          }".`
+          t('assistant.message.openedFlow', {
+            mode:
+              pendingAction.kind === 'fix_app'
+                ? t('assistant.flow.fixMode')
+                : t('assistant.flow.updateMode'),
+            title: pendingAction.appTitle,
+          })
         );
         setPendingAction(null);
       }
     } catch (error: any) {
       log.error('Failed to run pending action:', error);
-      addBubble('assistant', error?.message || 'Failed to execute the action.');
+      addBubble('assistant', error?.message || t('assistant.message.executeFailed'));
     } finally {
       setIsSending(false);
     }
@@ -630,22 +650,27 @@ export default function AssistantPage() {
     if (!pendingAction) return;
     const kindLabel =
       pendingAction.kind === 'create_app'
-        ? 'create'
+        ? t('assistant.kind.create')
         : pendingAction.kind === 'fix_app'
-          ? 'fix'
-          : 'update';
+          ? t('assistant.kind.fix')
+          : t('assistant.kind.update');
     setPendingAction(null);
-    addBubble('assistant', `Cancelled ${kindLabel} action.`);
+    addBubble('assistant', t('assistant.message.cancelledAction', { kind: kindLabel }));
   };
 
   const pendingSummary = useMemo(() => {
     if (!pendingAction) return '';
     if (pendingAction.kind === 'create_app') {
-      return `Create app (${pendingAction.style}) • est. max ${formatUsd(
-        pendingAction.estimatedMaxCostUsd
-      )} • input ~${pendingAction.estimatedInputTokens.toLocaleString()} tokens`;
+      return t('assistant.pending.summaryCreate', {
+        style: pendingAction.style,
+        cost: formatUsd(pendingAction.estimatedMaxCostUsd),
+        tokens: pendingAction.estimatedInputTokens.toLocaleString(),
+      });
     }
-    return `${pendingAction.kind === 'fix_app' ? 'Fix app' : 'Update app'}: ${pendingAction.appTitle}`;
+    if (pendingAction.kind === 'fix_app') {
+      return t('assistant.pending.summaryFix', { title: pendingAction.appTitle });
+    }
+    return t('assistant.pending.summaryUpdate', { title: pendingAction.appTitle });
   }, [pendingAction]);
 
   return (
@@ -666,7 +691,7 @@ export default function AssistantPage() {
 
         <View style={styles.header}>
           <Text style={[styles.headerTitle, isUniverseTheme ? styles.headerTitleUniverse : undefined]}>
-            Assistant
+            {t('assistant.header.title')}
           </Text>
           <TouchableOpacity
             style={[
@@ -676,13 +701,13 @@ export default function AssistantPage() {
             ]}
             onPress={() => {
               if (!hasApiAccess) {
-                promptApiSetup('Assistant model settings');
+                promptApiSetup(t('assistant.feature.modelSettings'));
                 return;
               }
               setShowModelPicker(true);
             }}
             accessibilityRole="button"
-            accessibilityLabel="Select assistant model"
+            accessibilityLabel={t('assistant.model.selectA11y')}
           >
             <Ionicons
               name="hardware-chip-outline"
@@ -705,19 +730,19 @@ export default function AssistantPage() {
             <View style={[styles.noticeCard, isUniverseTheme ? styles.noticeCardUniverse : undefined]}>
               <Ionicons name="warning-outline" size={18} color="#f59e0b" />
               <Text style={[styles.noticeText, isUniverseTheme ? styles.noticeTextUniverse : undefined]}>
-                Claude API key required for assistant chat and tool calls.
+                {t('assistant.notice.apiRequired')}
               </Text>
               <TouchableOpacity
                 style={[styles.noticeButton, isUniverseTheme ? styles.noticeButtonUniverse : undefined]}
                 onPress={() => router.push('/welcome')}
               >
-                <Text style={styles.noticeButtonText}>Open Setup</Text>
+                <Text style={styles.noticeButtonText}>{t('common.actions.openSetup')}</Text>
               </TouchableOpacity>
             </View>
           ) : null}
 
           <View style={styles.chipsWrap}>
-            {QUICK_QUESTIONS.map((question) => (
+            {quickQuestions.map((question) => (
               <TouchableOpacity
                 key={question}
                 style={[
@@ -774,7 +799,7 @@ export default function AssistantPage() {
                         isUniverseTheme ? styles.bubbleTextAssistantUniverse : undefined,
                       ]}
                     >
-                      Waiting on API call...
+                      {t('assistant.loading.waiting')}
                     </Text>
                   </View>
                 </View>
@@ -787,7 +812,7 @@ export default function AssistantPage() {
               <View style={styles.pendingHeader}>
                 <Ionicons name="alert-circle-outline" size={18} color={isUniverseTheme ? '#9ccfff' : '#0f7cff'} />
                 <Text style={[styles.pendingTitle, isUniverseTheme ? styles.pendingTitleUniverse : undefined]}>
-                  Confirmation Required
+                  {t('assistant.pending.required')}
                 </Text>
               </View>
               <Text style={[styles.pendingSummary, isUniverseTheme ? styles.pendingSummaryUniverse : undefined]}>
@@ -813,7 +838,7 @@ export default function AssistantPage() {
                       isUniverseTheme ? styles.pendingButtonSecondaryTextUniverse : undefined,
                     ]}
                   >
-                    Cancel
+                    {t('common.actions.cancel')}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -821,7 +846,7 @@ export default function AssistantPage() {
                   onPress={() => void confirmPendingAction()}
                   disabled={isSending}
                 >
-                  <Text style={styles.pendingButtonPrimaryText}>Confirm</Text>
+                  <Text style={styles.pendingButtonPrimaryText}>{t('assistant.pending.confirm')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -840,12 +865,12 @@ export default function AssistantPage() {
             style={[styles.input, isUniverseTheme ? styles.inputUniverse : undefined]}
             value={inputValue}
             onChangeText={setInputValue}
-            placeholder="Ask assistant..."
+            placeholder={t('assistant.input.placeholder')}
             placeholderTextColor={isUniverseTheme ? 'rgba(191, 216, 243, 0.66)' : '#808080'}
             editable={!isSending && hasApiAccess}
             onFocus={() => {
               if (!hasApiAccess) {
-                promptApiSetup('Assistant');
+                promptApiSetup(t('assistant.feature.assistant'));
               }
             }}
             multiline
@@ -860,7 +885,7 @@ export default function AssistantPage() {
             ]}
             onPress={() => {
               if (!hasApiAccess) {
-                promptApiSetup('Assistant');
+                promptApiSetup(t('assistant.feature.assistant'));
                 return;
               }
               void sendMessage();
@@ -889,10 +914,10 @@ export default function AssistantPage() {
             <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowModelPicker(false)} />
             <View style={[styles.modalContent, isUniverseTheme ? styles.modalContentUniverse : undefined]}>
               <Text style={[styles.modalTitle, isUniverseTheme ? styles.modalTitleUniverse : undefined]}>
-                Assistant Model
+                {t('assistant.model.title')}
               </Text>
               <Text style={[styles.modalSubtitle, isUniverseTheme ? styles.modalSubtitleUniverse : undefined]}>
-                Separate from Create App model. Cheapest is recommended for chat.
+                {t('assistant.model.subtitle')}
               </Text>
 
               <ScrollView
@@ -932,11 +957,11 @@ export default function AssistantPage() {
                             isUniverseTheme ? styles.modelOptionPricingUniverse : undefined,
                           ]}
                         >
-                          {formatModelPricingShort(modelId) || 'Pricing unavailable'}
+                          {formatModelPricingShort(modelId) || t('assistant.model.pricingUnavailable')}
                         </Text>
                         {isCheapest ? (
                           <Text style={[styles.cheapestTag, isUniverseTheme ? styles.cheapestTagUniverse : undefined]}>
-                            Cheapest
+                            {t('assistant.model.cheapest')}
                           </Text>
                         ) : null}
                       </View>
@@ -958,12 +983,12 @@ export default function AssistantPage() {
                     isUniverseTheme ? styles.modalActionButtonTextUniverse : undefined,
                   ]}
                 >
-                  Use Cheapest
+                  {t('assistant.model.useCheapest')}
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.modalDoneButton} onPress={() => setShowModelPicker(false)}>
-                <Text style={styles.modalDoneButtonText}>Done</Text>
+                <Text style={styles.modalDoneButtonText}>{t('assistant.model.done')}</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -12,10 +12,15 @@ import {
   Linking,
   Platform,
   StatusBar,
+  Animated,
+  Easing,
+  AccessibilityInfo,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { AppColors } from '../src/constants/AppColors';
 import AppThemeBackground from '../src/components/AppThemeBackground';
 import { SecureStorageService } from '../src/services/SecureStorageService';
@@ -41,6 +46,7 @@ export default function WelcomePage() {
   const router = useRouter();
   const appTheme = useUISettingsStore((s) => s.appTheme);
   const isUniverseTheme = appTheme === 'universe';
+  const { width: screenWidth } = useWindowDimensions();
 
   const [currentStep, setCurrentStep] = useState(1);
   const [apiKey, setApiKey] = useState('');
@@ -50,8 +56,50 @@ export default function WelcomePage() {
   const [isSavingTerms, setIsSavingTerms] = useState(false);
   const [termsAcceptedAt, setTermsAcceptedAt] = useState<string | null>(null);
   const [keySetupOutcome, setKeySetupOutcome] = useState<KeySetupOutcome>(null);
+  const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
+
+  const stepTransitionAnim = React.useRef(new Animated.Value(1)).current;
+  const ambientFloatAnim = React.useRef(new Animated.Value(0)).current;
+  const accentPulseAnim = React.useRef(new Animated.Value(0)).current;
 
   const isBusy = isLoading || isSavingTerms;
+
+  const stageAnimatedStyle = {
+    opacity: stepTransitionAnim,
+    transform: [
+      {
+        translateY: stepTransitionAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [18, 0],
+        }),
+      },
+    ],
+  };
+
+  const ambientDrift = ambientFloatAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-12, 12],
+  });
+
+  const ambientDriftInverse = ambientFloatAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [12, -12],
+  });
+
+  const ambientScale = accentPulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.95, 1.08],
+  });
+
+  const ambientOpacity = accentPulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.55],
+  });
+
+  const headerIconScale = accentPulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.06],
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -79,6 +127,100 @@ export default function WelcomePage() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadReduceMotionPreference = async () => {
+      try {
+        const enabled = await AccessibilityInfo.isReduceMotionEnabled();
+        if (isMounted) {
+          setReduceMotionEnabled(Boolean(enabled));
+        }
+      } catch {
+        // no-op
+      }
+    };
+
+    void loadReduceMotionPreference();
+
+    const subscription = AccessibilityInfo.addEventListener?.(
+      'reduceMotionChanged',
+      (enabled: boolean) => {
+        setReduceMotionEnabled(Boolean(enabled));
+      }
+    );
+
+    return () => {
+      isMounted = false;
+      subscription?.remove?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotionEnabled) {
+      stepTransitionAnim.setValue(1);
+      return;
+    }
+
+    stepTransitionAnim.setValue(0);
+    Animated.timing(stepTransitionAnim, {
+      toValue: 1,
+      duration: 320,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [currentStep, reduceMotionEnabled, stepTransitionAnim]);
+
+  useEffect(() => {
+    if (reduceMotionEnabled) {
+      ambientFloatAnim.setValue(0);
+      accentPulseAnim.setValue(0);
+      return;
+    }
+
+    const floatLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(ambientFloatAnim, {
+          toValue: 1,
+          duration: 4000,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+        Animated.timing(ambientFloatAnim, {
+          toValue: 0,
+          duration: 4000,
+          easing: Easing.inOut(Easing.sin),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(accentPulseAnim, {
+          toValue: 1,
+          duration: 1800,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(accentPulseAnim, {
+          toValue: 0,
+          duration: 1800,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    floatLoop.start();
+    pulseLoop.start();
+
+    return () => {
+      floatLoop.stop();
+      pulseLoop.stop();
+    };
+  }, [reduceMotionEnabled, ambientFloatAnim, accentPulseAnim]);
 
   const goToStep = (step: number) => {
     setCurrentStep(Math.max(1, Math.min(TOTAL_STEPS, step)));
@@ -201,7 +343,13 @@ export default function WelcomePage() {
     if (currentStep === 1) {
       return (
         <>
-          <View style={[styles.screenCard, isUniverseTheme ? styles.screenCardUniverse : undefined]}>
+          <View
+            style={[
+              styles.screenCard,
+              styles.singleStepCard,
+              isUniverseTheme ? styles.screenCardUniverse : undefined,
+            ]}
+          >
             <View style={styles.sectionRow}>
               <Text style={[styles.stepLabel, isUniverseTheme ? styles.stepLabelUniverse : undefined]}>1</Text>
               <Text style={[styles.cardTitle, isUniverseTheme ? styles.cardTitleUniverse : undefined]}>
@@ -232,7 +380,13 @@ export default function WelcomePage() {
     if (currentStep === 2) {
       return (
         <>
-          <View style={[styles.screenCard, isUniverseTheme ? styles.screenCardUniverse : undefined]}>
+          <View
+            style={[
+              styles.screenCard,
+              styles.dualStepCard,
+              isUniverseTheme ? styles.screenCardUniverse : undefined,
+            ]}
+          >
             <View style={styles.sectionRow}>
               <Text style={[styles.stepLabel, isUniverseTheme ? styles.stepLabelUniverse : undefined]}>Demo</Text>
               <Text style={[styles.cardTitle, isUniverseTheme ? styles.cardTitleUniverse : undefined]}>
@@ -260,7 +414,13 @@ export default function WelcomePage() {
             </View>
           </View>
 
-          <View style={[styles.screenCard, isUniverseTheme ? styles.screenCardUniverse : undefined]}>
+          <View
+            style={[
+              styles.screenCard,
+              styles.dualStepCard,
+              isUniverseTheme ? styles.screenCardUniverse : undefined,
+            ]}
+          >
             <View style={styles.sectionRow}>
               <Text style={[styles.stepLabel, isUniverseTheme ? styles.stepLabelUniverse : undefined]}>Info</Text>
               <Text style={[styles.cardTitle, isUniverseTheme ? styles.cardTitleUniverse : undefined]}>
@@ -291,7 +451,13 @@ export default function WelcomePage() {
     if (currentStep === 3) {
       return (
         <>
-          <View style={[styles.screenCard, isUniverseTheme ? styles.screenCardUniverse : undefined]}>
+          <View
+            style={[
+              styles.screenCard,
+              styles.singleStepCard,
+              isUniverseTheme ? styles.screenCardUniverse : undefined,
+            ]}
+          >
             <View style={styles.sectionRow}>
               <Text style={[styles.stepLabel, isUniverseTheme ? styles.stepLabelUniverse : undefined]}>3</Text>
               <Text style={[styles.cardTitle, isUniverseTheme ? styles.cardTitleUniverse : undefined]}>
@@ -393,7 +559,13 @@ export default function WelcomePage() {
     if (currentStep === 4) {
       return (
         <>
-          <View style={[styles.keySection, isUniverseTheme ? styles.keySectionUniverse : undefined]}>
+          <View
+            style={[
+              styles.keySection,
+              styles.keyStageCard,
+              isUniverseTheme ? styles.keySectionUniverse : undefined,
+            ]}
+          >
             <View style={styles.sectionRow}>
               <Text style={[styles.stepLabel, isUniverseTheme ? styles.stepLabelUniverse : undefined]}>4</Text>
               <Text style={[styles.keyTitle, isUniverseTheme ? styles.keyTitleUniverse : undefined]}>
@@ -476,7 +648,13 @@ export default function WelcomePage() {
 
     return (
       <>
-        <View style={[styles.screenCard, isUniverseTheme ? styles.screenCardUniverse : undefined]}>
+        <View
+          style={[
+            styles.screenCard,
+            styles.singleStepCard,
+            isUniverseTheme ? styles.screenCardUniverse : undefined,
+          ]}
+        >
           <View style={styles.finalIconWrap}>
             <Ionicons
               name={keySetupOutcome === 'verified' ? 'checkmark-circle' : 'sparkles'}
@@ -524,6 +702,55 @@ export default function WelcomePage() {
         />
       ) : null}
       <AppThemeBackground />
+      <LinearGradient
+        pointerEvents="none"
+        colors={
+          isUniverseTheme
+            ? ['rgba(6, 20, 39, 0.65)', 'rgba(6, 28, 53, 0.42)', 'rgba(7, 20, 38, 0.65)']
+            : ['rgba(255, 237, 213, 0.55)', 'rgba(250, 232, 255, 0.32)', 'rgba(224, 242, 254, 0.52)']
+        }
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={styles.headerGradient}
+      />
+      <View pointerEvents="none" style={styles.effectsLayer}>
+        <Animated.View
+          style={[
+            styles.glowOrb,
+            styles.glowOrbTop,
+            {
+              width: screenWidth * 0.78,
+              height: screenWidth * 0.78,
+              opacity: ambientOpacity,
+              transform: [{ translateY: ambientDrift }, { scale: ambientScale }],
+            },
+          ]}
+        />
+        <Animated.View
+          style={[
+            styles.glowOrb,
+            styles.glowOrbMid,
+            {
+              width: screenWidth * 0.56,
+              height: screenWidth * 0.56,
+              opacity: ambientOpacity,
+              transform: [{ translateY: ambientDriftInverse }],
+            },
+          ]}
+        />
+        <Animated.View
+          style={[
+            styles.glowOrb,
+            styles.glowOrbBottom,
+            {
+              width: screenWidth * 0.64,
+              height: screenWidth * 0.64,
+              opacity: ambientOpacity,
+              transform: [{ translateY: ambientDrift }],
+            },
+          ]}
+        />
+      </View>
 
       <View style={[styles.header, isUniverseTheme ? styles.headerUniverse : undefined]}>
         <TouchableOpacity
@@ -537,9 +764,15 @@ export default function WelcomePage() {
             color={isUniverseTheme ? 'rgba(226, 240, 255, 0.95)' : 'rgba(0, 0, 0, 0.84)'}
           />
         </TouchableOpacity>
-        <View style={[styles.headerIcon, isUniverseTheme ? styles.headerIconUniverse : undefined]}>
+        <Animated.View
+          style={[
+            styles.headerIcon,
+            isUniverseTheme ? styles.headerIconUniverse : undefined,
+            !reduceMotionEnabled ? { transform: [{ scale: headerIconScale }] } : undefined,
+          ]}
+        >
           <Ionicons name="sparkles" size={20} color="#fff" />
-        </View>
+        </Animated.View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.headerTitle, isUniverseTheme ? styles.headerTitleUniverse : undefined]}>
             Setup PinSnacks
@@ -575,7 +808,7 @@ export default function WelcomePage() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {renderScreen()}
+        <Animated.View style={[styles.screenStage, stageAnimatedStyle]}>{renderScreen()}</Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -588,6 +821,36 @@ const styles = StyleSheet.create({
   },
   containerUniverse: {
     backgroundColor: 'transparent',
+  },
+  headerGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 220,
+  },
+  effectsLayer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  glowOrb: {
+    position: 'absolute',
+    borderRadius: 999,
+  },
+  glowOrbTop: {
+    top: -180,
+    left: -80,
+    backgroundColor: 'rgba(251, 146, 60, 0.34)',
+  },
+  glowOrbMid: {
+    top: 210,
+    right: -120,
+    backgroundColor: 'rgba(56, 189, 248, 0.22)',
+  },
+  glowOrbBottom: {
+    bottom: -220,
+    left: -90,
+    backgroundColor: 'rgba(168, 85, 247, 0.16)',
   },
   header: {
     flexDirection: 'row',
@@ -644,11 +907,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 6,
     paddingHorizontal: 14,
-    paddingBottom: 4,
+    paddingBottom: 8,
   },
   progressDot: {
     flex: 1,
-    height: 5,
+    height: 6,
     borderRadius: 999,
     backgroundColor: 'rgba(15, 23, 42, 0.14)',
   },
@@ -666,21 +929,39 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 14,
+    paddingBottom: 30,
+  },
+  screenStage: {
     gap: 12,
-    paddingBottom: 20,
+    minHeight: 560,
   },
   screenCard: {
-    borderRadius: 14,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.12)',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    gap: 10,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 12,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 5,
   },
   screenCardUniverse: {
-    borderColor: 'rgba(123, 169, 220, 0.34)',
-    backgroundColor: 'rgba(8, 26, 48, 0.88)',
+    borderColor: 'rgba(123, 169, 220, 0.4)',
+    backgroundColor: 'rgba(8, 26, 48, 0.9)',
+    shadowOpacity: 0.18,
+  },
+  singleStepCard: {
+    minHeight: 340,
+  },
+  dualStepCard: {
+    minHeight: 248,
+  },
+  keyStageCard: {
+    minHeight: 380,
   },
   sectionRow: {
     flexDirection: 'row',
@@ -733,7 +1014,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.12)',
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    minHeight: 170,
+    minHeight: 156,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
@@ -845,17 +1126,23 @@ const styles = StyleSheet.create({
     color: 'rgba(191, 216, 243, 0.8)',
   },
   keySection: {
-    borderRadius: 14,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.12)',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    gap: 10,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    gap: 12,
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 5,
   },
   keySectionUniverse: {
-    borderColor: 'rgba(123, 169, 220, 0.34)',
-    backgroundColor: 'rgba(8, 26, 48, 0.88)',
+    borderColor: 'rgba(123, 169, 220, 0.4)',
+    backgroundColor: 'rgba(8, 26, 48, 0.9)',
+    shadowOpacity: 0.18,
   },
   keyTitle: {
     fontSize: 16,
@@ -898,7 +1185,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 8,
-    backgroundColor: AppColors.FABMain,
+    backgroundColor: '#ff6a2f',
+    shadowColor: '#ff6a2f',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    elevation: 4,
   },
   submitButton: {
     borderRadius: 12,
@@ -907,7 +1199,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 8,
-    backgroundColor: AppColors.FABMain,
+    backgroundColor: '#ff6a2f',
+    shadowColor: '#ff6a2f',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 14,
+    elevation: 4,
   },
   actionButtonDisabled: {
     opacity: 0.65,

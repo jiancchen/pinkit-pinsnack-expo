@@ -26,7 +26,7 @@ import {
   PRICING_AS_OF_DISPLAY
 } from '../../src/types/ClaudeApi';
 import { createLogger } from '../../src/utils/Logger';
-import { AppTheme, TabBarVariant, useUISettingsStore } from '../../src/stores/UISettingsStore';
+import { AppLanguage, AppTheme, TabBarVariant, useUISettingsStore } from '../../src/stores/UISettingsStore';
 import { useStrings } from '../../src/i18n/strings';
 
 const log = createLogger('Settings');
@@ -48,6 +48,8 @@ const TAB_BAR_TINT_OPTIONS: Array<{ label: string; color: string }> = [
   { label: 'Pink', color: '#EC4899' },
 ];
 
+const LANGUAGE_OPTIONS: AppLanguage[] = ['en-US', 'es-ES', 'fr-FR', 'de-DE'];
+
 export default function SettingsPage() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -59,6 +61,7 @@ export default function SettingsPage() {
   const [sampleAppsCount, setSampleAppsCount] = useState(0);
   const [isManagingSampleApps, setIsManagingSampleApps] = useState(false);
   const [showModelSelector, setShowModelSelector] = useState(false);
+  const [showLanguageSelector, setShowLanguageSelector] = useState(false);
   const [showDebugMenu, setShowDebugMenu] = useState(false);
   const [showManageApps, setShowManageApps] = useState(false);
   const [manageApps, setManageApps] = useState<Array<{ id: string; title: string; status?: string; sizeKB: number }> | null>(null);
@@ -182,12 +185,12 @@ export default function SettingsPage() {
 
   const handleClearAllApps = () => {
     Alert.alert(
-      'Clear all apps',
-      'Delete all saved apps on this device? This cannot be undone.',
+      t('settings.alert.clearAllApps.title'),
+      t('settings.alert.clearAllApps.body'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.actions.cancel'), style: 'cancel' },
         {
-          text: 'Clear',
+          text: t('common.actions.clear'),
           style: 'destructive',
           onPress: async () => {
             try {
@@ -208,10 +211,10 @@ export default function SettingsPage() {
               }
               await loadSampleAppsCount();
               setManageApps(null);
-              Alert.alert('Success', 'All apps cleared.');
+              Alert.alert(t('common.status.success'), t('settings.alert.clearAllApps.success'));
             } catch (error) {
               log.error('Error clearing apps:', error);
-              Alert.alert('Error', 'Failed to clear apps.');
+              Alert.alert(t('common.status.error'), t('settings.alert.clearAllApps.failed'));
             }
           },
         },
@@ -221,20 +224,20 @@ export default function SettingsPage() {
 
   const handleClearPromptHistory = () => {
     Alert.alert(
-      'Clear prompt history',
-      'Delete all saved prompts on this device? This cannot be undone.',
+      t('settings.alert.clearPromptHistory.title'),
+      t('settings.alert.clearPromptHistory.body'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.actions.cancel'), style: 'cancel' },
         {
-          text: 'Clear',
+          text: t('common.actions.clear'),
           style: 'destructive',
           onPress: async () => {
             try {
               await PromptHistoryService.clear();
-              Alert.alert('Success', 'Prompt history cleared.');
+              Alert.alert(t('common.status.success'), t('settings.alert.clearPromptHistory.success'));
             } catch (error) {
               log.error('Error clearing prompt history:', error);
-              Alert.alert('Error', 'Failed to clear prompt history.');
+              Alert.alert(t('common.status.error'), t('settings.alert.clearPromptHistory.failed'));
             }
           },
         },
@@ -244,25 +247,25 @@ export default function SettingsPage() {
 
   const handleRemoveSampleApps = async () => {
     Alert.alert(
-      'Remove Sample Apps',
-      'Are you sure you want to remove all sample apps? They will be restored when you restart the app.',
+      t('settings.alert.removeSampleApps.title'),
+      t('settings.alert.removeSampleApps.body'),
       [
         {
-          text: 'Cancel',
+          text: t('common.actions.cancel'),
           style: 'cancel',
         },
         {
-          text: 'Remove',
+          text: t('common.actions.remove'),
           style: 'destructive',
           onPress: async () => {
             setIsManagingSampleApps(true);
             try {
               await SeedService.removeSampleApps();
               await loadSampleAppsCount();
-              Alert.alert('Success', 'Sample apps have been removed.');
+              Alert.alert(t('common.status.success'), t('settings.alert.removeSampleApps.success'));
             } catch (error) {
               log.error('Error removing sample apps:', error);
-              Alert.alert('Error', 'Failed to remove sample apps.');
+              Alert.alert(t('common.status.error'), t('settings.alert.removeSampleApps.failed'));
             } finally {
               setIsManagingSampleApps(false);
             }
@@ -274,24 +277,24 @@ export default function SettingsPage() {
 
   const handleRestoreSampleApps = async () => {
     Alert.alert(
-      'Restore Sample Apps',
-      'This will restore all sample apps to their original state.',
+      t('settings.alert.restoreSampleApps.title'),
+      t('settings.alert.restoreSampleApps.body'),
       [
         {
-          text: 'Cancel',
+          text: t('common.actions.cancel'),
           style: 'cancel',
         },
         {
-          text: 'Restore',
+          text: t('common.actions.restore'),
           onPress: async () => {
             setIsManagingSampleApps(true);
             try {
               await SeedService.reseedSampleApps();
               await loadSampleAppsCount();
-              Alert.alert('Success', 'Sample apps have been restored.');
+              Alert.alert(t('common.status.success'), t('settings.alert.restoreSampleApps.success'));
             } catch (error) {
               log.error('Error restoring sample apps:', error);
-              Alert.alert('Error', 'Failed to restore sample apps.');
+              Alert.alert(t('common.status.error'), t('settings.alert.restoreSampleApps.failed'));
             } finally {
               setIsManagingSampleApps(false);
             }
@@ -304,13 +307,13 @@ export default function SettingsPage() {
   const handleApiKeySettings = () => {
     if (hasApiKey) {
       Alert.alert(
-        'API Key Settings',
-        'You have a Claude API key configured. What would you like to do?',
+        t('settings.alert.apiKeySettings.title'),
+        t('settings.alert.apiKeySettings.body'),
         [
-          { text: 'Test Connection', onPress: testApiConnection },
-          { text: 'Remove API Key', onPress: removeApiKey, style: 'destructive' },
-          { text: 'Update API Key', onPress: () => router.push('/welcome') },
-          { text: 'Cancel', style: 'cancel' }
+          { text: t('settings.alert.apiKeySettings.testConnection'), onPress: testApiConnection },
+          { text: t('settings.alert.apiKeySettings.remove'), onPress: removeApiKey, style: 'destructive' },
+          { text: t('settings.alert.apiKeySettings.update'), onPress: () => router.push('/welcome') },
+          { text: t('common.actions.cancel'), style: 'cancel' }
         ]
       );
     } else {
@@ -325,12 +328,12 @@ export default function SettingsPage() {
       const result = await claudeService.testConnection();
       
       Alert.alert(
-        result.success ? 'Connection Successful' : 'Connection Failed',
+        result.success ? t('settings.alert.connectionSuccess') : t('settings.alert.connectionFailed'),
         result.message,
-        [{ text: 'OK' }]
+        [{ text: t('common.actions.ok') }]
       );
     } catch (error: any) {
-      Alert.alert('Test Failed', error.message || 'Failed to test API connection');
+      Alert.alert(t('settings.alert.testFailed'), error.message || t('settings.alert.testFailedBody'));
     }
   };
 
@@ -338,9 +341,9 @@ export default function SettingsPage() {
     try {
       await SecureStorageService.removeApiKey();
       setHasApiKey(false);
-      Alert.alert('Success', 'API key has been removed.');
+      Alert.alert(t('common.status.success'), t('settings.alert.apiKeyRemoved'));
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to remove API key.');
+      Alert.alert(t('common.status.error'), t('settings.alert.apiKeyRemoveFailed'));
     }
   };
 
@@ -359,21 +362,21 @@ export default function SettingsPage() {
 
   const promptApiSetup = (featureLabel: string) => {
     Alert.alert(
-      `${featureLabel} requires setup`,
-      'Complete API key setup to unlock this feature.',
+      t('settings.setupRequired.title', { feature: featureLabel }),
+      t('settings.setupRequired.body'),
       [
-        { text: 'Open Setup', onPress: () => router.push('/welcome') },
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.actions.openSetup'), onPress: () => router.push('/welcome') },
+        { text: t('common.actions.cancel'), style: 'cancel' },
       ]
     );
   };
 
   const handlePrivacyPolicy = () => {
-    Alert.alert('Privacy Policy', 'Learn how we protect your data', [{ text: 'OK' }]);
+    Alert.alert(t('settings.legal.privacy.title'), t('settings.alert.privacy.body'), [{ text: t('common.actions.ok') }]);
   };
 
   const handleTermsOfService = () => {
-    Alert.alert('Terms of Service', 'Read our terms and conditions', [{ text: 'OK' }]);
+    Alert.alert(t('settings.legal.terms.title'), t('settings.alert.terms.body'), [{ text: t('common.actions.ok') }]);
   };
 
   const persistClaudeDefaults = async (
@@ -445,10 +448,17 @@ export default function SettingsPage() {
     return modelInfo.name;
   };
 
+  const getLanguageLabel = (language: AppLanguage): string => {
+    if (language === 'es-ES') return t('settings.language.spanish');
+    if (language === 'fr-FR') return t('settings.language.french');
+    if (language === 'de-DE') return t('settings.language.german');
+    return t('settings.language.english');
+  };
+
   const handleModelSelect = async (model: string) => {
     try {
       if (modelSettingsLocked) {
-        promptApiSetup('Model settings');
+        promptApiSetup(t('settings.model.featureLabel'));
         return;
       }
 
@@ -479,7 +489,7 @@ export default function SettingsPage() {
 
   const handleMaxTokensSelect = async (requestedMaxTokens: number) => {
     if (modelSettingsLocked) {
-      promptApiSetup('Model settings');
+      promptApiSetup(t('settings.model.featureLabel'));
       return;
     }
 
@@ -490,7 +500,7 @@ export default function SettingsPage() {
 
   const handleTemperatureSelect = async (nextTemperature: number) => {
     if (modelSettingsLocked) {
-      promptApiSetup('Model settings');
+      promptApiSetup(t('settings.model.featureLabel'));
       return;
     }
 
@@ -524,13 +534,17 @@ export default function SettingsPage() {
         {/* API Configuration Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
-            API Configuration
+            {t('settings.api.section')}
           </Text>
           
           <SettingsCard>
             <SettingsItem
-              title={hasApiKey ? "Claude API Key (Configured)" : "Setup Claude API Key"}
-              description={hasApiKey ? "Test, update, or remove your API key" : "Add your API key to generate apps with AI"}
+              title={hasApiKey ? t('settings.api.key.configuredTitle') : t('settings.api.key.setupTitle')}
+              description={
+                hasApiKey
+                  ? t('settings.api.key.configuredDescription')
+                  : t('settings.api.key.setupDescription')
+              }
               onPress={handleApiKeySettings}
               icon={hasApiKey ? "checkmark-circle" : "key-outline"}
               statusColor={hasApiKey ? "#10B981" : "#F59E0B"}
@@ -539,16 +553,16 @@ export default function SettingsPage() {
             <View style={styles.separator} />
             
             <SettingsItem
-              title="Debug Mode"
-              description="Enable debugging features"
+              title={t('settings.debug.title')}
+              description={t('settings.debug.description')}
               onPress={handleDebugMode}
             />
 
             <View style={styles.separator} />
 
             <SettingsItem
-              title="Runtime Logs"
-              description="View crash/error logs saved on this device"
+              title={t('settings.runtimeLogs.title')}
+              description={t('settings.runtimeLogs.description')}
               onPress={handleRuntimeLogs}
               icon="bug-outline"
             />
@@ -558,7 +572,7 @@ export default function SettingsPage() {
         {/* Claude Model Configuration Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
-            Claude Model Settings
+            {t('settings.model.section')}
           </Text>
           
           <SettingsCard>
@@ -566,7 +580,7 @@ export default function SettingsPage() {
               <View style={[styles.lockedCallout, isUniverseTheme ? styles.lockedCalloutUniverse : undefined]}>
                 <Ionicons name="lock-closed-outline" size={18} color={isUniverseTheme ? 'rgba(208, 231, 255, 0.92)' : '#0f172a'} />
                 <Text style={[styles.lockedCalloutText, isUniverseTheme ? styles.lockedCalloutTextUniverse : undefined]}>
-                  Set up your API key to enable model selection, token limits, and temperature controls.
+                  {t('settings.model.lockedBody')}
                 </Text>
                 <TouchableOpacity
                   style={[styles.lockedCalloutButton, isUniverseTheme ? styles.lockedCalloutButtonUniverse : undefined]}
@@ -578,7 +592,7 @@ export default function SettingsPage() {
                       isUniverseTheme ? styles.lockedCalloutButtonTextUniverse : undefined,
                     ]}
                   >
-                    Open Setup
+                    {t('common.actions.openSetup')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -594,7 +608,7 @@ export default function SettingsPage() {
                 ]}
                 onPress={() => {
                   if (modelSettingsLocked) {
-                    promptApiSetup('Model settings');
+                    promptApiSetup(t('settings.model.featureLabel'));
                     return;
                   }
                   setShowModelSelector(true);
@@ -632,7 +646,7 @@ export default function SettingsPage() {
                       ]}
                       onPress={() => {
                         if (modelSettingsLocked) {
-                          promptApiSetup('Model settings');
+                          promptApiSetup(t('settings.model.featureLabel'));
                           return;
                         }
                         void handleMaxTokensSelect(preset);
@@ -666,7 +680,7 @@ export default function SettingsPage() {
                       ]}
                       onPress={() => {
                         if (modelSettingsLocked) {
-                          promptApiSetup('Model settings');
+                          promptApiSetup(t('settings.model.featureLabel'));
                           return;
                         }
                         void handleTemperatureSelect(preset.value);
@@ -690,19 +704,19 @@ export default function SettingsPage() {
         {/* Appearance Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
-            Appearance
+            {t('settings.appearance.section')}
           </Text>
 
           <SettingsCard>
             <View style={styles.settingGroup}>
-              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>App Theme</Text>
+              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>{t('settings.appearance.theme.label')}</Text>
               <View style={[styles.segmentedControl, themedSegmentedControlStyle]}>
                 <TouchableOpacity
                   style={getSegmentButtonStyle(appTheme === 'yellow')}
                   onPress={() => selectAppTheme('yellow')}
                 >
                   <Text style={getSegmentButtonTextStyle(appTheme === 'yellow')}>
-                    Yellow
+                    {t('settings.appearance.theme.yellow')}
                   </Text>
                 </TouchableOpacity>
 
@@ -711,26 +725,28 @@ export default function SettingsPage() {
                   onPress={() => selectAppTheme('universe')}
                 >
                   <Text style={getSegmentButtonTextStyle(appTheme === 'universe')}>
-                    Universe
+                    {t('settings.appearance.theme.universe')}
                   </Text>
                 </TouchableOpacity>
               </View>
               <Text style={[styles.helperText, themedHelperTextStyle]}>
-                Universe adds a galaxy background with stars across app screens.
+                {t('settings.appearance.theme.helper')}
               </Text>
             </View>
 
             <View style={styles.separator} />
 
             <View style={styles.settingGroup}>
-              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>Tab Bar Style</Text>
+              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>
+                {t('settings.appearance.tabBarStyle.label')}
+              </Text>
               <View style={[styles.segmentedControl, themedSegmentedControlStyle]}>
                 <TouchableOpacity
                   style={getSegmentButtonStyle(tabBarVariant === 'tinted')}
                   onPress={() => selectTabBarVariant('tinted')}
                 >
                   <Text style={getSegmentButtonTextStyle(tabBarVariant === 'tinted')}>
-                    Tinted Glass
+                    {t('settings.appearance.tabBarStyle.tinted')}
                   </Text>
                 </TouchableOpacity>
 
@@ -739,19 +755,19 @@ export default function SettingsPage() {
                   onPress={() => selectTabBarVariant('clear')}
                 >
                   <Text style={getSegmentButtonTextStyle(tabBarVariant === 'clear')}>
-                    Clear Glass
+                    {t('settings.appearance.tabBarStyle.clear')}
                   </Text>
                 </TouchableOpacity>
               </View>
               <Text style={[styles.helperText, themedHelperTextStyle]}>
-                Clear keeps the pill more transparent; tint controls the glow and active highlight.
+                {t('settings.appearance.tabBarStyle.helper')}
               </Text>
             </View>
 
             <View style={styles.separator} />
 
             <View style={styles.settingGroup}>
-              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>Tab Bar Tint</Text>
+              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>{t('settings.appearance.tabBarTint.label')}</Text>
               <View style={styles.colorSwatchRow}>
                 {TAB_BAR_TINT_OPTIONS.map((option) => {
                   const isSelected = tabBarTintColor.toUpperCase() === option.color.toUpperCase();
@@ -772,18 +788,20 @@ export default function SettingsPage() {
                   );
                 })}
               </View>
-              <Text style={[styles.helperText, themedHelperTextStyle]}>Current tint: {tabBarTintColor}</Text>
+              <Text style={[styles.helperText, themedHelperTextStyle]}>
+                {t('settings.appearance.tabBarTint.current', { color: tabBarTintColor })}
+              </Text>
             </View>
 
             <View style={styles.separator} />
 
             <View style={styles.settingGroup}>
-              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>Blur Intensity</Text>
+              <Text style={[styles.settingLabel, themedSettingLabelStyle]}>{t('settings.appearance.blur.label')}</Text>
               <View style={[styles.segmentedControl, themedSegmentedControlStyle]}>
                 {[
-                  { label: 'Low', value: 60 },
-                  { label: 'Med', value: 80 },
-                  { label: 'High', value: 100 }
+                  { label: t('settings.appearance.blur.low'), value: 60 },
+                  { label: t('settings.appearance.blur.med'), value: 80 },
+                  { label: t('settings.appearance.blur.high'), value: 100 }
                 ].map((opt) => {
                   const isSelected = tabBarBlurIntensity === opt.value;
                   return (
@@ -800,7 +818,7 @@ export default function SettingsPage() {
                 })}
               </View>
               <Text style={[styles.helperText, themedHelperTextStyle]}>
-                Higher blur looks more iOS-like (Android uses a best-effort blur fallback).
+                {t('settings.appearance.blur.helper')}
               </Text>
             </View>
           </SettingsCard>
@@ -809,32 +827,28 @@ export default function SettingsPage() {
         {/* Language & Region Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
-            Language & Region Settings
+            {t('settings.language.section')}
           </Text>
           
           <SettingsCard>
             <View style={styles.settingGroup}>
               <Text style={[styles.settingLabel, themedSettingLabelStyle]}>{t('settings.language.title')}</Text>
-              <View style={[styles.segmentedControl, themedSegmentedControlStyle]}>
-                <TouchableOpacity
-                  style={getSegmentButtonStyle(appLanguage === 'en-US')}
-                  onPress={() => setAppLanguage('en-US')}
-                >
-                  <Text style={getSegmentButtonTextStyle(appLanguage === 'en-US')}>
-                    {t('settings.language.english')}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={getSegmentButtonStyle(appLanguage === 'es-ES')}
-                  onPress={() => setAppLanguage('es-ES')}
-                >
-                  <Text style={getSegmentButtonTextStyle(appLanguage === 'es-ES')}>
-                    {t('settings.language.spanish')}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={[styles.dropdown, themedDropdownStyle]}
+                onPress={() => setShowLanguageSelector(true)}
+              >
+                <Text style={[styles.dropdownText, themedDropdownTextStyle]}>
+                  {getLanguageLabel(appLanguage)}
+                </Text>
+                <Ionicons
+                  name="chevron-down"
+                  size={20}
+                  color={isUniverseTheme ? 'rgba(196, 222, 250, 0.78)' : '#666'}
+                />
+              </TouchableOpacity>
               <Text style={[styles.helperText, themedHelperTextStyle]}>
+                {t('settings.language.current')}: {getLanguageLabel(appLanguage)}
+                {'\n'}
                 {t('settings.language.helper')}
               </Text>
             </View>
@@ -844,13 +858,13 @@ export default function SettingsPage() {
         {/* Insights Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
-            Insights
+            {t('settings.insights.section')}
           </Text>
 
           <SettingsCard>
             <SettingsItem
-              title="App Statistics & Token Usage"
-              description="Open charts, usage by app, and aggregate analytics"
+              title={t('settings.insights.stats.title')}
+              description={t('settings.insights.stats.description')}
               onPress={() => router.push('/stats')}
               icon="stats-chart-outline"
             />
@@ -860,13 +874,13 @@ export default function SettingsPage() {
         {/* Storage & Data Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
-            Storage & Data
+            {t('settings.storage.section')}
           </Text>
 
           <SettingsCard>
             <SettingsItem
-              title="Manage Apps"
-              description="Delete apps one by one"
+              title={t('settings.storage.manageApps.title')}
+              description={t('settings.storage.manageApps.description')}
               onPress={() => {
                 setShowManageApps(true);
                 void loadManageApps();
@@ -877,8 +891,8 @@ export default function SettingsPage() {
             <View style={styles.separator} />
 
             <SettingsItem
-              title="Clear All Apps"
-              description="Deletes all saved apps on this device"
+              title={t('settings.storage.clearAllApps.title')}
+              description={t('settings.storage.clearAllApps.description')}
               onPress={handleClearAllApps}
               icon="trash-outline"
               statusColor="#DC3545"
@@ -887,8 +901,8 @@ export default function SettingsPage() {
             <View style={styles.separator} />
 
             <SettingsItem
-              title="Clear Prompt History"
-              description="Deletes saved prompts used to create apps"
+              title={t('settings.storage.clearPromptHistory.title')}
+              description={t('settings.storage.clearPromptHistory.description')}
               onPress={handleClearPromptHistory}
               icon="time-outline"
               statusColor="#DC3545"
@@ -899,14 +913,14 @@ export default function SettingsPage() {
         {/* Sample Apps Management Section */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, isUniverseTheme ? styles.sectionTitleUniverse : undefined]}>
-            Sample Apps Management
+            {t('settings.sample.section')}
           </Text>
           
           <SettingsCard>
             <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
               <View>
                 <Text style={[styles.settingsItemTitle, isUniverseTheme ? styles.settingsItemTitleUniverse : undefined]}>
-                  Sample Apps
+                  {t('settings.sample.title')}
                 </Text>
                 <Text
                   style={[
@@ -914,7 +928,7 @@ export default function SettingsPage() {
                     isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined,
                   ]}
                 >
-                  {sampleAppsCount} sample apps currently available
+                  {t('settings.sample.count', { count: sampleAppsCount })}
                 </Text>
               </View>
             </View>
@@ -927,7 +941,7 @@ export default function SettingsPage() {
               >
                 <Ionicons name="trash-outline" size={16} color="white" style={{ marginRight: 8 }} />
                 <Text style={styles.buttonText}>
-                  {isManagingSampleApps ? 'Removing...' : 'Remove All'}
+                  {isManagingSampleApps ? t('settings.sample.removing') : t('settings.sample.removeAll')}
                 </Text>
               </TouchableOpacity>
               
@@ -938,14 +952,13 @@ export default function SettingsPage() {
               >
                 <Ionicons name="refresh-outline" size={16} color="white" style={{ marginRight: 8 }} />
                 <Text style={styles.buttonText}>
-                  {isManagingSampleApps ? 'Restoring...' : 'Restore All'}
+                  {isManagingSampleApps ? t('settings.sample.restoring') : t('settings.sample.restoreAll')}
                 </Text>
               </TouchableOpacity>
             </View>
             
             <Text style={[styles.helperText, themedHelperTextStyle, { marginTop: 12 }]}>
-              Sample apps are automatically restored when you restart the app. 
-              You can remove them temporarily or restore them to their original state.
+              {t('settings.sample.helper')}
             </Text>
           </SettingsCard>
         </View>
@@ -954,8 +967,8 @@ export default function SettingsPage() {
         <View style={styles.section}>
           <SettingsCard>
             <SettingsItem
-              title="Privacy Policy"
-              description="Learn how we protect your data"
+              title={t('settings.legal.privacy.title')}
+              description={t('settings.legal.privacy.description')}
               onPress={handlePrivacyPolicy}
               icon="document-text-outline"
             />
@@ -965,8 +978,8 @@ export default function SettingsPage() {
         <View style={styles.section}>
           <SettingsCard>
             <SettingsItem
-              title="Terms of Service"
-              description="Read our terms and conditions"
+              title={t('settings.legal.terms.title')}
+              description={t('settings.legal.terms.description')}
               onPress={handleTermsOfService}
               icon="document-text-outline"
             />
@@ -1042,6 +1055,84 @@ export default function SettingsPage() {
             >
               <Text style={[styles.modalCancelButtonText, isUniverseTheme ? styles.modalCancelButtonTextUniverse : undefined]}>
                 Cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Language Selector Modal */}
+      <Modal
+        visible={showLanguageSelector}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowLanguageSelector(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setShowLanguageSelector(false)} />
+
+          <View style={[styles.modalContent, isUniverseTheme ? styles.modalContentUniverse : undefined]}>
+            <Text style={[styles.modalTitle, isUniverseTheme ? styles.modalTitleUniverse : undefined]}>
+              {t('settings.language.select')}
+            </Text>
+
+            <ScrollView
+              style={styles.modelOptionsScroll}
+              contentContainerStyle={styles.modelOptionsScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {LANGUAGE_OPTIONS.map((languageCode) => {
+                const isSelected = appLanguage === languageCode;
+                const label = getLanguageLabel(languageCode);
+
+                return (
+                  <TouchableOpacity
+                    key={languageCode}
+                    style={[
+                      styles.modelOption,
+                      isUniverseTheme ? styles.modelOptionUniverse : undefined,
+                      isSelected ? styles.modelOptionSelected : undefined,
+                      isSelected && isUniverseTheme ? styles.modelOptionSelectedUniverse : undefined,
+                    ]}
+                    onPress={() => {
+                      setAppLanguage(languageCode);
+                      setShowLanguageSelector(false);
+                    }}
+                  >
+                    <View style={styles.modelOptionContent}>
+                      <Text
+                        style={[
+                          styles.modelOptionTitle,
+                          isUniverseTheme ? styles.modelOptionTitleUniverse : undefined,
+                          isSelected ? styles.modelOptionTitleSelected : undefined,
+                          isSelected && isUniverseTheme ? styles.modelOptionTitleSelectedUniverse : undefined,
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.modelOptionPricing,
+                          isUniverseTheme ? styles.modelOptionPricingUniverse : undefined,
+                        ]}
+                      >
+                        {languageCode}
+                      </Text>
+                    </View>
+                    {isSelected ? (
+                      <Ionicons name="checkmark-circle" size={24} color={AppColors.FABMain} />
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.modalCancelButton, isUniverseTheme ? styles.modalCancelButtonUniverse : undefined]}
+              onPress={() => setShowLanguageSelector(false)}
+            >
+              <Text style={[styles.modalCancelButtonText, isUniverseTheme ? styles.modalCancelButtonTextUniverse : undefined]}>
+                {t('create.actions.cancel')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1152,10 +1243,10 @@ export default function SettingsPage() {
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.modalTitle, isUniverseTheme ? styles.modalTitleUniverse : undefined]}>
-                  Manage Apps
+                  {t('settings.manageApps.modal.title')}
                 </Text>
                 <Text style={[styles.modalSubtitle, isUniverseTheme ? styles.modalSubtitleUniverse : undefined]}>
-                  Delete individual apps and free up space.
+                  {t('settings.manageApps.modal.subtitle')}
                 </Text>
               </View>
               <TouchableOpacity
@@ -1179,13 +1270,13 @@ export default function SettingsPage() {
               {isLoadingManageApps ? (
                 <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
                   <Text style={[styles.settingsItemDescription, isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined]}>
-                    Loading apps…
+                    {t('settings.manageApps.loading')}
                   </Text>
                 </View>
               ) : (manageApps ?? []).length === 0 ? (
                 <View style={[styles.settingsItem, isUniverseTheme ? styles.settingsItemUniverse : undefined]}>
                   <Text style={[styles.settingsItemDescription, isUniverseTheme ? styles.settingsItemDescriptionUniverse : undefined]}>
-                    No apps found.
+                    {t('settings.manageApps.empty')}
                   </Text>
                 </View>
               ) : (
@@ -1212,20 +1303,20 @@ export default function SettingsPage() {
                         ]}
                         numberOfLines={1}
                       >
-                        {app.status ? `Status: ${app.status} • ` : ''}
-                        Est. {formatSize(app.sizeKB)}
+                        {app.status ? `${t('settings.manageApps.status', { status: app.status })} • ` : ''}
+                        {t('settings.manageApps.estimated', { size: formatSize(app.sizeKB) })}
                       </Text>
                     </View>
                     <TouchableOpacity
                       style={[styles.button, { backgroundColor: '#dc3545', paddingVertical: 8, paddingHorizontal: 12 }]}
                       onPress={() => {
                         Alert.alert(
-                          'Delete app',
-                          `Delete "${app.title}"? This cannot be undone.`,
+                          t('settings.manageApps.deleteTitle'),
+                          t('settings.manageApps.deleteBody', { title: app.title }),
                           [
-                            { text: 'Cancel', style: 'cancel' },
+                            { text: t('common.actions.cancel'), style: 'cancel' },
                             {
-                              text: 'Delete',
+                              text: t('common.actions.delete'),
                               style: 'destructive',
                               onPress: async () => {
                                 await deleteAppAndAssets(app.id);
@@ -1238,7 +1329,7 @@ export default function SettingsPage() {
                       }}
                     >
                       <Ionicons name="trash-outline" size={16} color="white" style={{ marginRight: 6 }} />
-                      <Text style={styles.buttonText}>Delete</Text>
+                      <Text style={styles.buttonText}>{t('common.actions.delete')}</Text>
                     </TouchableOpacity>
                   </View>
                 ))
@@ -1251,13 +1342,13 @@ export default function SettingsPage() {
                 onPress={handleClearAllApps}
               >
                 <Ionicons name="trash-outline" size={16} color="white" style={{ marginRight: 8 }} />
-                <Text style={styles.buttonText}>Clear All</Text>
+                <Text style={styles.buttonText}>{t('settings.manageApps.clearAll')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.button, { backgroundColor: '#6c757d', flex: 1 }]}
                 onPress={() => setShowManageApps(false)}
               >
-                <Text style={styles.buttonText}>Done</Text>
+                <Text style={styles.buttonText}>{t('common.actions.done')}</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -4,7 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 export type TabBarVariant = 'tinted' | 'clear';
 export type AppTheme = 'yellow' | 'universe';
-export type AppLanguage = 'en-US' | 'es-ES';
+export type AppLanguage = 'en-US' | 'es-ES' | 'fr-FR' | 'de-DE';
 
 export interface TabBarSettings {
   variant: TabBarVariant;
@@ -34,6 +34,13 @@ const DEFAULT_TAB_BAR_SETTINGS: TabBarSettings = {
   blurIntensity: 80,
 };
 const DEFAULT_DEBUG_ALLOW_WITHOUT_API_KEY = false;
+
+function normalizeAppLanguage(language: unknown): AppLanguage {
+  if (language === 'es-ES' || language === 'fr-FR' || language === 'de-DE') {
+    return language;
+  }
+  return 'en-US';
+}
 
 function normalizeHexColor(input: string): string {
   const trimmed = input.trim();
@@ -67,7 +74,7 @@ export const useUISettingsStore = create<UISettingsState>()(
         })),
       setAppLanguage: (language: AppLanguage) =>
         set(() => ({
-          appLanguage: language === 'es-ES' ? 'es-ES' : 'en-US',
+          appLanguage: normalizeAppLanguage(language),
         })),
       setTabBarVariant: (variant: TabBarVariant) =>
         set((state) => ({
@@ -112,7 +119,7 @@ export const useUISettingsStore = create<UISettingsState>()(
 
         const tabBar = persistedState.tabBar ?? {};
         const appTheme = persistedState.appTheme === 'universe' ? 'universe' : 'yellow';
-        const appLanguage = persistedState.appLanguage === 'es-ES' ? 'es-ES' : 'en-US';
+        const appLanguage = normalizeAppLanguage(persistedState.appLanguage);
         const debugAllowWithoutApiKey = Boolean(persistedState.debugAllowWithoutApiKey);
         return {
           appTheme,

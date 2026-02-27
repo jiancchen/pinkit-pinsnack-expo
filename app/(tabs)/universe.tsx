@@ -29,6 +29,7 @@ import { getLiquidGlassTabBarContentPaddingBottom } from '../../src/constants/Li
 import { AppStorageService, StoredApp } from '../../src/services/AppStorageService';
 import { TopicClassificationService } from '../../src/services/TopicClassificationService';
 import { TopicPreferencesService } from '../../src/services/TopicPreferencesService';
+import { useStrings } from '../../src/i18n/strings';
 import { createLogger } from '../../src/utils/Logger';
 
 const log = createLogger('UniverseScreen');
@@ -113,6 +114,7 @@ export default function UniversePage() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { t } = useStrings();
 
   const [apps, setApps] = useState<StoredApp[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
@@ -236,7 +238,7 @@ export default function UniversePage() {
       }
     } catch (error) {
       log.error('Failed to load apps for universe:', error);
-      Alert.alert('Error', 'Failed to load projects.');
+      Alert.alert(t('common.status.error'), t('universe.alert.loadFailed'));
     } finally {
       if (showLoading) {
         setIsLoading(false);
@@ -366,12 +368,16 @@ export default function UniversePage() {
       });
       await loadApps(false);
       Alert.alert(
-        'Planetary Map Updated',
-        `Processed ${result.processed} projects. Updated ${result.updated}, skipped ${result.skipped}.`
+        t('universe.alert.syncUpdatedTitle'),
+        t('universe.alert.syncUpdatedBody', {
+          processed: result.processed,
+          updated: result.updated,
+          skipped: result.skipped,
+        })
       );
     } catch (error) {
       log.error('Failed to sync topics:', error);
-      Alert.alert('Sync failed', 'Unable to reclassify topics right now.');
+      Alert.alert(t('universe.alert.syncFailedTitle'), t('universe.alert.syncFailedBody'));
     } finally {
       setIsSyncing(false);
     }
@@ -418,7 +424,7 @@ export default function UniversePage() {
     try {
       const result = await TopicPreferencesService.addCustomTopic(topicName);
       if (!result.ok) {
-        Alert.alert('Invalid topic', result.reason || 'Could not add this topic.');
+        Alert.alert(t('universe.alert.invalidTopicTitle'), result.reason || t('universe.alert.invalidTopicBody'));
         return;
       }
 
@@ -426,7 +432,7 @@ export default function UniversePage() {
       await handleSyncTopics('custom_topic_added');
     } catch (error) {
       log.error('Failed to add custom topic:', error);
-      Alert.alert('Error', 'Unable to add custom topic.');
+      Alert.alert(t('common.status.error'), t('universe.alert.addTopicFailedBody'));
     } finally {
       setIsUpdatingTopics(false);
     }
@@ -454,9 +460,9 @@ export default function UniversePage() {
       >
         <View style={styles.headerCard}>
           <View style={styles.headerMain}>
-            <Text style={styles.title}>Apps Universe</Text>
+            <Text style={styles.title}>{t('universe.title')}</Text>
             <Text style={styles.subtitle}>
-              {topicGroups.length} topic planets. Tap a topic to lock focus and open moons.
+              {t('universe.subtitle', { count: topicGroups.length })}
             </Text>
           </View>
           <View style={styles.headerActions}>
@@ -478,7 +484,7 @@ export default function UniversePage() {
               ) : (
                 <Ionicons name="sparkles-outline" size={15} color="#fff" />
               )}
-              <Text style={styles.syncButtonText}>{isSyncing ? 'Sorting...' : 'AI Sort'}</Text>
+              <Text style={styles.syncButtonText}>{isSyncing ? t('universe.sync.sorting') : t('universe.sync.aiSort')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -486,7 +492,7 @@ export default function UniversePage() {
         {isLoading ? (
           <View style={[styles.loadingState, { height: mapHeight }]}>
             <ActivityIndicator size="large" color="#fff" />
-            <Text style={styles.loadingText}>Spinning up your planetary system...</Text>
+            <Text style={styles.loadingText}>{t('universe.loading')}</Text>
           </View>
         ) : (
           <>
@@ -610,7 +616,7 @@ export default function UniversePage() {
                         {formatTopicLabel(selectedGroup.topic)}
                       </Text>
                       <Text style={styles.focusedTopicSubtitle}>
-                        {selectedGroup.apps.length} projects in orbit
+                        {t('universe.focus.subtitle', { count: selectedGroup.apps.length })}
                       </Text>
                     </View>
                     <TouchableOpacity style={styles.focusedTopicClose} onPress={closeTopicFocus}>
@@ -630,14 +636,14 @@ export default function UniversePage() {
                               {app.title}
                             </Text>
                             <Text style={styles.moonMeta} numberOfLines={1}>
-                              Uses {app.accessCount || 0} • {app.status}
+                              {t('universe.moon.meta', { count: app.accessCount || 0, status: app.status })}
                             </Text>
                           </View>
                           <Ionicons name="chevron-forward" size={17} color="rgba(255,255,255,0.7)" />
                         </TouchableOpacity>
                       ))
                     ) : (
-                      <Text style={styles.emptyText}>No moons in this orbit yet.</Text>
+                      <Text style={styles.emptyText}>{t('universe.emptyOrbit')}</Text>
                     )}
                   </ScrollView>
                 </View>
@@ -646,8 +652,8 @@ export default function UniversePage() {
 
             <Text style={styles.legendHint}>
               {isTopicFocused
-                ? 'Focus locked. Tap X to zoom back out.'
-                : 'Pinch to zoom, pan to move, tap any planet to lock focus.'}
+                ? t('universe.legend.focused')
+                : t('universe.legend.default')}
             </Text>
 
             <ScrollView
@@ -690,13 +696,13 @@ export default function UniversePage() {
               onPress={isUpdatingTopics ? undefined : closeTopicManager}
             />
             <View style={styles.addPlanetCard}>
-              <Text style={styles.addPlanetTitle}>Add Topic Planet</Text>
-              <Text style={styles.addPlanetSubtitle}>Give your new planet a topic, then AI will re-sort apps.</Text>
+              <Text style={styles.addPlanetTitle}>{t('universe.topicManager.title')}</Text>
+              <Text style={styles.addPlanetSubtitle}>{t('universe.topicManager.subtitle')}</Text>
 
               <TextInput
                 value={newCustomTopic}
                 onChangeText={setNewCustomTopic}
-                placeholder="e.g. startup-research"
+                placeholder={t('universe.topicManager.placeholder')}
                 placeholderTextColor="rgba(225,240,255,0.45)"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -713,7 +719,7 @@ export default function UniversePage() {
                   onPress={closeTopicManager}
                   disabled={isUpdatingTopics}
                 >
-                  <Text style={styles.addPlanetCancelText}>Cancel</Text>
+                  <Text style={styles.addPlanetCancelText}>{t('universe.topicManager.cancel')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -727,7 +733,7 @@ export default function UniversePage() {
                   {isUpdatingTopics ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
-                    <Text style={styles.addPlanetConfirmText}>Add Planet</Text>
+                    <Text style={styles.addPlanetConfirmText}>{t('universe.topicManager.add')}</Text>
                   )}
                 </TouchableOpacity>
               </View>

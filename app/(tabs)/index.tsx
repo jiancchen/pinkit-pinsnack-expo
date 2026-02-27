@@ -63,7 +63,7 @@ export default function MyAppsPage() {
       setPromptHistory(converted);
     } catch (error) {
       log.error('Failed to load apps:', error);
-      Alert.alert('Error', 'Failed to load your apps. Please try again.');
+      Alert.alert(t('common.status.error'), t('home.alert.loadAppsFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -97,7 +97,7 @@ export default function MyAppsPage() {
     const app = promptHistory.find((item: PromptHistory) => item.id === appId);
     if (app) {
       if (app.status === 'generating') {
-        Alert.alert('Still generating', 'This app is still generating. Please wait for it to finish.');
+        Alert.alert(t('home.alert.stillGeneratingTitle'), t('home.generating.wait'));
         return;
       }
       try {
@@ -118,7 +118,7 @@ export default function MyAppsPage() {
   };
 
   const handleShowSnackbar = (message: string) => {
-    Alert.alert('Info', message, [{ text: 'OK' }]);
+    Alert.alert(t('common.status.info'), message, [{ text: t('common.actions.ok') }]);
   };
 
   // Filter items based on search text
@@ -194,7 +194,7 @@ export default function MyAppsPage() {
           ]}
           onPress={() => router.push('/welcome')}
           accessibilityRole="button"
-          accessibilityLabel="Open setup tutorial"
+          accessibilityLabel={t('home.setupBanner.a11y')}
         >
           <Ionicons
             name="key-outline"
@@ -202,7 +202,7 @@ export default function MyAppsPage() {
             color={isUniverseTheme ? 'rgba(222, 239, 255, 0.96)' : '#1f2937'}
           />
           <Text style={[styles.setupBannerText, isUniverseTheme ? styles.setupBannerTextUniverse : undefined]}>
-            API key not configured. Tap to start setup tutorial.
+            {t('home.setupBanner.body')}
           </Text>
           <Ionicons
             name="chevron-forward"
