@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert, Modal, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert, Modal, Pressable, Platform } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -500,11 +500,13 @@ export default function SettingsPage() {
 
   return (
     <SafeAreaView style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]} edges={[]}>
-      <StatusBar
-        translucent
-        backgroundColor="transparent"
-        barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
-      />
+      {Platform.OS === 'android' ? (
+        <StatusBar
+          translucent
+          backgroundColor="transparent"
+          barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
+        />
+      ) : null}
       <AppThemeBackground />
       
       {/* Header */}

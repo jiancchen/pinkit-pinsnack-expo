@@ -5,9 +5,17 @@
   "scripts": {
     "samples:refresh": "node scripts/generate-sample-catalog.mjs",
     "start": "yarn samples:refresh && expo start",
-    "start:dev": "yarn samples:refresh && expo start --dev-client",
+    "start:dev": "APP_VARIANT=dev yarn samples:refresh && expo start --dev-client",
     "android": "yarn samples:refresh && expo run:android",
+    "android:dev": "APP_VARIANT=dev yarn samples:refresh && expo run:android",
     "ios": "yarn samples:refresh && expo run:ios",
+    "ios:dev": "APP_VARIANT=dev yarn samples:refresh && expo run:ios",
+    "build:dev:ios": "APP_VARIANT=dev yarn samples:refresh && expo run:ios",
+    "build:dev:android": "APP_VARIANT=dev yarn samples:refresh && expo run:android",
+    "build:eas:dev:ios": "eas build --profile development --platform ios",
+    "build:eas:dev:android": "eas build --profile development --platform android",
+    "build:prod:ios": "eas build --profile production --platform ios",
+    "build:prod:android": "eas build --profile production --platform android",
     "web": "yarn samples:refresh && expo start --web"
   },
   "dependencies": {

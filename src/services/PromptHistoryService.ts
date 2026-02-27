@@ -21,6 +21,7 @@ function normalizeDescription(description: string): string {
   return description.trim().replace(/\s+/g, ' ');
 }
 
+
 async function readEntries(): Promise<PromptHistoryEntry[]> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);

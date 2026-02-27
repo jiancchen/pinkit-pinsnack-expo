@@ -163,7 +163,7 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <SystemBars style={isUniverseTheme ? 'light' : 'dark'} />
+      {Platform.OS === 'android' ? <SystemBars style={isUniverseTheme ? 'light' : 'dark'} /> : null}
       <GestureHandlerRootView style={{ flex: 1 }}>
         <Stack
           screenOptions={{
@@ -182,11 +182,13 @@ export default function RootLayout() {
           <Stack.Screen name="runtime-logs" options={{ headerShown: false }} />
         </Stack>
         <GenerationLiveActivityController />
-        <StatusBar
-          style={isUniverseTheme ? 'light' : 'dark'}
-          translucent
-          backgroundColor="transparent"
-        />
+        {Platform.OS === 'android' ? (
+          <StatusBar
+            style={isUniverseTheme ? 'light' : 'dark'}
+            translucent
+            backgroundColor="transparent"
+          />
+        ) : null}
       </GestureHandlerRootView>
     </SafeAreaProvider>
   );

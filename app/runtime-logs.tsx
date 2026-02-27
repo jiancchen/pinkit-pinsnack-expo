@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  Platform,
   View,
 } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -153,7 +154,7 @@ export default function RuntimeLogsPage() {
 
   return (
     <SafeAreaView style={styles.container} edges={[]}>
-      <StatusBar translucent backgroundColor="transparent" />
+      {Platform.OS === 'android' ? <StatusBar translucent backgroundColor="transparent" /> : null}
 
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Alert, StatusBar, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Alert, StatusBar, TouchableOpacity, Platform } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -170,11 +170,13 @@ export default function MyAppsPage() {
 
   return (
     <View style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]}>
-      <StatusBar
-        translucent
-        backgroundColor="transparent"
-        barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
-      />
+      {Platform.OS === 'android' ? (
+        <StatusBar
+          translucent
+          backgroundColor="transparent"
+          barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
+        />
+      ) : null}
       <AppThemeBackground />
 
       <View pointerEvents="none" style={[styles.brandWrap, { top: insets.top + 4 }]}>

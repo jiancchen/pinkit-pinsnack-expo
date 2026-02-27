@@ -655,11 +655,13 @@ export default function AssistantPage() {
       keyboardVerticalOffset={0}
     >
       <SafeAreaView style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]} edges={[]}>
-        <StatusBar
-          translucent
-          backgroundColor="transparent"
-          barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
-        />
+        {Platform.OS === 'android' ? (
+          <StatusBar
+            translucent
+            backgroundColor="transparent"
+            barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
+          />
+        ) : null}
         <AppThemeBackground />
 
         <View style={styles.header}>

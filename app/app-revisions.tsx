@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -270,11 +271,13 @@ export default function AppRevisionsPage() {
   if (isLoading) {
     return (
       <SafeAreaView style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]}>
-        <StatusBar
-          translucent
-          backgroundColor="transparent"
-          barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
-        />
+        {Platform.OS === 'android' ? (
+          <StatusBar
+            translucent
+            backgroundColor="transparent"
+            barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
+          />
+        ) : null}
         <AppThemeBackground />
         <View style={[styles.center, isUniverseTheme ? styles.centerUniverse : undefined]}>
           <ActivityIndicator size="large" color={AppColors.FABMain} />
@@ -289,11 +292,13 @@ export default function AppRevisionsPage() {
   if (!app) {
     return (
       <SafeAreaView style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]}>
-        <StatusBar
-          translucent
-          backgroundColor="transparent"
-          barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
-        />
+        {Platform.OS === 'android' ? (
+          <StatusBar
+            translucent
+            backgroundColor="transparent"
+            barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
+          />
+        ) : null}
         <AppThemeBackground />
         <View style={[styles.center, isUniverseTheme ? styles.centerUniverse : undefined]}>
           <Text style={[styles.centerText, isUniverseTheme ? styles.centerTextUniverse : undefined]}>
@@ -312,11 +317,13 @@ export default function AppRevisionsPage() {
       style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]}
       edges={['top', 'bottom']}
     >
-      <StatusBar
-        translucent
-        backgroundColor="transparent"
-        barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
-      />
+      {Platform.OS === 'android' ? (
+        <StatusBar
+          translucent
+          backgroundColor="transparent"
+          barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
+        />
+      ) : null}
       <AppThemeBackground />
 
       <View style={[styles.header, isUniverseTheme ? styles.headerUniverse : undefined]}>

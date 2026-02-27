@@ -19,7 +19,7 @@
       "deploymentTarget": "17.0",
       "statusBarStyle": "light",
       "infoPlist": {
-        "UIViewControllerBasedStatusBarAppearance": true,
+        "UIViewControllerBasedStatusBarAppearance": false,
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [

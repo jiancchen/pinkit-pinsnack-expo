@@ -537,8 +537,8 @@ export default function AppViewPage() {
   const deleteApp = () => {
     if (!app) return;
     
-    setShowMenuModal(false);
-    
+    setShowMenuModal(false);    
+
     Alert.alert(
       'Delete App',
       `Are you sure you want to delete "${app.title}"? This action cannot be undone.`,
@@ -631,11 +631,13 @@ export default function AppViewPage() {
       ]}
     >
       <AppThemeBackground />
-      <StatusBar 
-        barStyle={isFullscreen || isUniverseTheme ? "light-content" : "dark-content"}
-        backgroundColor={isFullscreen ? "#000" : isUniverseTheme ? "transparent" : AppColors.Primary}
-        hidden={isFullscreen}
-      />
+      {Platform.OS === 'android' ? (
+        <StatusBar
+          barStyle={isFullscreen || isUniverseTheme ? 'light-content' : 'dark-content'}
+          backgroundColor={isFullscreen ? '#000' : isUniverseTheme ? 'transparent' : AppColors.Primary}
+          hidden={isFullscreen}
+        />
+      ) : null}
       
       {!isFullscreen && (
         <SafeAreaView

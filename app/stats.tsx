@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   Alert,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -276,11 +277,13 @@ export default function StatsPage() {
 
   return (
     <SafeAreaView style={[styles.container, isUniverseTheme ? styles.containerUniverse : undefined]} edges={[]}>
-      <StatusBar
-        translucent
-        backgroundColor="transparent"
-        barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
-      />
+      {Platform.OS === 'android' ? (
+        <StatusBar
+          translucent
+          backgroundColor="transparent"
+          barStyle={isUniverseTheme ? 'light-content' : 'dark-content'}
+        />
+      ) : null}
       <AppThemeBackground />
 
       <View style={styles.header}>
