@@ -200,6 +200,7 @@ export default function AssistantPage() {
   const debugAllowWithoutApiKey = useUISettingsStore((s) => s.debugAllowWithoutApiKey);
   const isUniverseTheme = appTheme === 'universe';
   const { t } = useStrings();
+  const initialAssistantMessage = t('assistant.message.initial');
 
   const [inputValue, setInputValue] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -211,7 +212,7 @@ export default function AssistantPage() {
     {
       id: makeId('assistant'),
       role: 'assistant',
-      text: t('assistant.message.initial'),
+      text: initialAssistantMessage,
       at: Date.now(),
     },
   ]);
@@ -241,6 +242,15 @@ export default function AssistantPage() {
     ],
     [t]
   );
+
+  React.useEffect(() => {
+    setMessages((prev) => {
+      if (prev.length === 1 && prev[0]?.role === 'assistant') {
+        return [{ ...prev[0], text: initialAssistantMessage }];
+      }
+      return prev;
+    });
+  }, [initialAssistantMessage]);
 
   React.useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
