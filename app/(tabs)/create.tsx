@@ -127,7 +127,7 @@ export default function CreatePage() {
   const isUniverseTheme = appTheme === 'universe';
   const { t } = useStrings();
   const [prompt, setPrompt] = useState('');
-  const [selectedStyleTags, setSelectedStyleTags] = useState<string[]>(['modern']);
+  const [selectedStyleTags, setSelectedStyleTags] = useState<string[]>([]);
   const [newStyleTag, setNewStyleTag] = useState('');
   const [recentStyleTags, setRecentStyleTags] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -178,11 +178,7 @@ export default function CreatePage() {
   };
 
   const removeStyleTag = (tag: string) => {
-    setSelectedStyleTags((prev) => {
-      const next = prev.filter((value) => value !== tag);
-      if (next.length === 0) return ['modern'];
-      return next;
-    });
+    setSelectedStyleTags((prev) => prev.filter((value) => value !== tag));
   };
 
   const handleAddCustomTag = async () => {

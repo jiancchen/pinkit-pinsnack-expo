@@ -13,7 +13,7 @@ const EN_US: StringMap = {
   'home.mostUsed.empty': 'No usage data yet',
   'home.generating.wait': 'Item is still generating, please wait...',
   // Create
-  'create.header': 'Create New App',
+  'create.header': 'Create',
   'create.describe': 'Describe Your App',
   'create.describe.placeholder': 'Describe what kind of app you want to create...',
   'create.designTags': 'Design Tags',
