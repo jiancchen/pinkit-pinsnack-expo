@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
-import LiquidGlassTabBar from '../../src/components/LiquidGlassTabBar';
-import { useStrings } from '../../src/i18n/strings';
+import LiquidGlassTabBar from '../../components/LiquidGlassTabBar';
+import { useStrings } from '../../i18n/strings';
 
 export default function TabLayout() {
   const { t } = useStrings();

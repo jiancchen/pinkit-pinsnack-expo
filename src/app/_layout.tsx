@@ -6,16 +6,15 @@ import { Platform } from 'react-native';
 import * as NavigationBar from 'expo-navigation-bar';
 import { useEffect, useState } from 'react';
 import { SystemBars } from 'react-native-edge-to-edge';
-import { SecureStorageService } from '../src/services/SecureStorageService';
-import { ClaudeApiService } from '../src/services/ClaudeApiService';
-import { GenerationQueueService } from '../src/services/GenerationQueueService';
-import { NotificationService } from '../src/services/NotificationService';
-import { SeedService } from '../src/services/SeedService';
-import { RuntimeLogService } from '../src/services/RuntimeLogService';
-import { AppColors } from '../src/constants/AppColors';
-import { createLogger } from '../src/utils/Logger';
-import GenerationLiveActivityController from '../src/components/GenerationLiveActivityController';
-import { useUISettingsStore } from '../src/stores/UISettingsStore';
+import { SecureStorageService } from '../services/SecureStorageService';
+import { ClaudeApiService } from '../services/ClaudeApiService';
+import { GenerationQueueService } from '../services/GenerationQueueService';
+import { NotificationService } from '../services/NotificationService';
+import { SeedService } from '../services/SeedService';
+import { RuntimeLogService } from '../services/RuntimeLogService';
+import { AppColors } from '../constants/AppColors';
+import { createLogger } from '../utils/Logger';
+import { useUISettingsStore } from '../stores/UISettingsStore';
 
 const log = createLogger('RootLayout');
 
@@ -182,7 +181,6 @@ export default function RootLayout() {
           <Stack.Screen name="stats" options={{ headerShown: false }} />
           <Stack.Screen name="runtime-logs" options={{ headerShown: false }} />
         </Stack>
-        <GenerationLiveActivityController />
         {Platform.OS === 'android' ? (
           <StatusBar
             style={isUniverseTheme ? 'light' : 'dark'}

@@ -18,21 +18,21 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { AppColors } from '../src/constants/AppColors';
-import { AppStorageService, StoredApp } from '../src/services/AppStorageService';
-import { ClaudeApiService } from '../src/services/ClaudeApiService';
-import { PromptGenerator } from '../src/services/PromptGenerator';
-import { SecureStorageService } from '../src/services/SecureStorageService';
-import { createLogger } from '../src/utils/Logger';
+import { AppColors } from '../constants/AppColors';
+import { AppStorageService, StoredApp } from '../services/AppStorageService';
+import { ClaudeApiService } from '../services/ClaudeApiService';
+import { PromptGenerator } from '../services/PromptGenerator';
+import { SecureStorageService } from '../services/SecureStorageService';
+import { createLogger } from '../utils/Logger';
 import {
   CLAUDE_MODEL_PICKER_OPTIONS,
   MODEL_INFO,
   PRICING_AS_OF_DISPLAY,
   formatModelPricingShort,
   resolveSupportedClaudeModel,
-} from '../src/types/ClaudeApi';
-import { useUISettingsStore } from '../src/stores/UISettingsStore';
-import AppThemeBackground from '../src/components/AppThemeBackground';
+} from '../types/ClaudeApi';
+import { useUISettingsStore } from '../stores/UISettingsStore';
+import AppThemeBackground from '../components/AppThemeBackground';
 
 const log = createLogger('AppRecreate');
 

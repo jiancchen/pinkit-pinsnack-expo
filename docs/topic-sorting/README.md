@@ -7,7 +7,7 @@ This document explains how app projects get sorted into topics, when Claude is c
 - `src/services/TopicClassificationService.ts`
 - `src/services/ClaudeApiService.ts`
 - `src/services/TopicPreferencesService.ts`
-- `app/(tabs)/universe.tsx`
+- `src/app/(tabs)/universe.tsx`
 
 ## End-to-End Flow
 

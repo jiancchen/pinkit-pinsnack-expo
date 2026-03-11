@@ -14,7 +14,7 @@
 
 ## Code areas that need refactor for stronger testability
 
-### 1) `app/(tabs)/create.tsx`
+### 1) `src/app/(tabs)/create.tsx`
 - Issue:
   - UI rendering, request validation, prompt construction, queueing, alert side-effects, and modal state are tightly coupled in one large component.
 - Refactor note:
@@ -24,7 +24,7 @@
     - `createValidation.ts`
   - Keep component focused on rendering and event wiring.
 
-### 2) `app/_layout.tsx`
+### 2) `src/app/_layout.tsx`
 - Issue:
   - App bootstrap combines multiple async side effects (notifications, secure storage, queue worker, seed initialization, splash) directly in component lifecycle hooks.
 - Refactor note:

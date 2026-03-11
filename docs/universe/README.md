@@ -4,7 +4,7 @@ Universe is the topic-orbit visualization for projects.
 
 ## Main File
 
-- `app/(tabs)/universe.tsx`
+- `src/app/(tabs)/universe.tsx`
 
 ## Current Behavior
 
@@ -26,7 +26,7 @@ Universe is the topic-orbit visualization for projects.
 
 ## Feature Flags
 
-- `ENABLE_TOPIC_PLANET_BUILDER` in `app/(tabs)/universe.tsx`
+- `ENABLE_TOPIC_PLANET_BUILDER` in `src/app/(tabs)/universe.tsx`
   - currently `false`
   - hides the topic/planet builder UI and guards related handlers
   - useful while isolating crash/debug work on add-topic flow

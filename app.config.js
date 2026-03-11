@@ -37,28 +37,6 @@ module.exports = ({ config }) => {
   const bundleIdentifier = `${baseBundleIdentifier}${variantConfig.bundleSuffix}`;
   const androidPackage = `${baseAndroidPackage}${variantConfig.bundleSuffix}`;
   const scheme = `${baseScheme}${variantConfig.schemeSuffix}`;
-  const liveActivityBundleIdentifier = `${bundleIdentifier}.liveactivity`;
-
-  const existingAppExtensions =
-    config.extra?.eas?.build?.experimental?.ios?.appExtensions || [];
-  const hasLiveActivityExtension = existingAppExtensions.some(
-    (extension) => extension?.targetName === "liveactivity"
-  );
-
-  const appExtensions = hasLiveActivityExtension
-    ? existingAppExtensions.map((extension) =>
-        extension?.targetName === "liveactivity"
-          ? { ...extension, bundleIdentifier: liveActivityBundleIdentifier }
-          : extension
-      )
-    : [
-        ...existingAppExtensions,
-        {
-          targetName: "liveactivity",
-          bundleIdentifier: liveActivityBundleIdentifier,
-          entitlements: {},
-        },
-      ];
 
   return {
     ...config,
@@ -88,16 +66,6 @@ module.exports = ({ config }) => {
       ...config.extra,
       eas: {
         ...config.extra?.eas,
-        build: {
-          ...config.extra?.eas?.build,
-          experimental: {
-            ...config.extra?.eas?.build?.experimental,
-            ios: {
-              ...config.extra?.eas?.build?.experimental?.ios,
-              appExtensions,
-            },
-          },
-        },
       },
     },
   };

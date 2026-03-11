@@ -21,14 +21,14 @@ This app now supports two top-level visual themes:
 
 ## Screens Wired to Theme
 
-- `app/(tabs)/index.tsx`
-- `app/(tabs)/create.tsx`
-- `app/(tabs)/settings.tsx`
+- `src/app/(tabs)/index.tsx`
+- `src/app/(tabs)/create.tsx`
+- `src/app/(tabs)/settings.tsx`
 - `src/components/Scrollable3DStack.tsx` (made transparent in universe mode so stars are visible)
 
 ## Settings UI
 
-- `app/(tabs)/settings.tsx` -> Appearance section
+- `src/app/(tabs)/settings.tsx` -> Appearance section
   - segmented control for `Yellow` / `Universe`
   - updates `appTheme` immediately
   - persists across app restarts

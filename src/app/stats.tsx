@@ -12,17 +12,17 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { AppColors } from '../src/constants/AppColors';
-import { getLiquidGlassTabBarContentPaddingBottom } from '../src/constants/LiquidGlassTabBarLayout';
-import AppThemeBackground from '../src/components/AppThemeBackground';
-import { AppStorageService } from '../src/services/AppStorageService';
-import { PromptHistoryService } from '../src/services/PromptHistoryService';
-import { TokenStats, TokenTrackingService } from '../src/services/TokenTrackingService';
-import { ScreenshotService } from '../src/services/ScreenshotService';
-import { WebViewScreenshotService } from '../src/services/WebViewScreenshotService';
-import { MODEL_INFO } from '../src/types/ClaudeApi';
-import { useUISettingsStore } from '../src/stores/UISettingsStore';
-import { createLogger } from '../src/utils/Logger';
+import { AppColors } from '../constants/AppColors';
+import { getLiquidGlassTabBarContentPaddingBottom } from '../constants/LiquidGlassTabBarLayout';
+import AppThemeBackground from '../components/AppThemeBackground';
+import { AppStorageService } from '../services/AppStorageService';
+import { PromptHistoryService } from '../services/PromptHistoryService';
+import { TokenStats, TokenTrackingService } from '../services/TokenTrackingService';
+import { ScreenshotService } from '../services/ScreenshotService';
+import { WebViewScreenshotService } from '../services/WebViewScreenshotService';
+import { MODEL_INFO } from '../types/ClaudeApi';
+import { useUISettingsStore } from '../stores/UISettingsStore';
+import { createLogger } from '../utils/Logger';
 
 const log = createLogger('Stats');
 

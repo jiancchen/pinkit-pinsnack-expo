@@ -14,14 +14,14 @@ import {
 import { useFocusEffect, useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { AppColors } from '../src/constants/AppColors';
-import { getLiquidGlassTabBarContentPaddingBottom } from '../src/constants/LiquidGlassTabBarLayout';
+import { AppColors } from '../constants/AppColors';
+import { getLiquidGlassTabBarContentPaddingBottom } from '../constants/LiquidGlassTabBarLayout';
 import {
   RuntimeLogEntry,
   RuntimeLogLevel,
   RuntimeLogService,
-} from '../src/services/RuntimeLogService';
-import { createLogger } from '../src/utils/Logger';
+} from '../services/RuntimeLogService';
+import { createLogger } from '../utils/Logger';
 
 const log = createLogger('RuntimeLogs');
 

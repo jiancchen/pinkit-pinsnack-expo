@@ -17,18 +17,17 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { WebView, WebViewMessageEvent } from 'react-native-webview';
 import { Ionicons } from '@expo/vector-icons';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import { AppColors } from '../src/constants/AppColors';
-import { AppStorageService, StoredApp } from '../src/services/AppStorageService';
-import { AsyncStorageService } from '../src/services/AsyncStorageService';
-import { ExportService } from '../src/services/ExportService';
-import { ScreenshotService } from '../src/services/ScreenshotService';
-import { WebViewScreenshotService } from '../src/services/WebViewScreenshotService';
-import { emitScreenshotCaptured, emitScreenshotError, emitScreenshotLoading } from '../src/stores/ScreenshotStore';
-import { handleWebViewLiveActivityMessage, stopWebViewLiveActivitiesForApp } from '../src/services/WebViewLiveActivityBridge';
-import { SecureStorageService } from '../src/services/SecureStorageService';
-import { createLogger } from '../src/utils/Logger';
-import { useUISettingsStore } from '../src/stores/UISettingsStore';
-import AppThemeBackground from '../src/components/AppThemeBackground';
+import { AppColors } from '../constants/AppColors';
+import { AppStorageService, StoredApp } from '../services/AppStorageService';
+import { AsyncStorageService } from '../services/AsyncStorageService';
+import { ExportService } from '../services/ExportService';
+import { ScreenshotService } from '../services/ScreenshotService';
+import { WebViewScreenshotService } from '../services/WebViewScreenshotService';
+import { emitScreenshotCaptured, emitScreenshotError, emitScreenshotLoading } from '../stores/ScreenshotStore';
+import { SecureStorageService } from '../services/SecureStorageService';
+import { createLogger } from '../utils/Logger';
+import { useUISettingsStore } from '../stores/UISettingsStore';
+import AppThemeBackground from '../components/AppThemeBackground';
 
 const log = createLogger('AppView');
 
@@ -92,7 +91,6 @@ export default function AppViewPage() {
       });
       return () => {
         isActive = false;
-        void stopWebViewLiveActivitiesForApp(id);
       };
     }, [appId])
   );
@@ -549,7 +547,6 @@ export default function AppViewPage() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await stopWebViewLiveActivitiesForApp(app.id);
               await AppStorageService.deleteApp(app.id);
               Alert.alert('Success', 'App deleted successfully', [
                 { text: 'OK', onPress: safeGoBack }
@@ -771,21 +768,6 @@ export default function AppViewPage() {
                 log.verbose('WebView message:', message);
                 
                 switch (messageType) {
-                  case 'live_activity_start_timer':
-                  case 'live_activity_start_counter':
-                  case 'live_activity_update_counter':
-                  case 'live_activity_stop':
-                  case 'live_activity_is_active': {
-                    if (!app) return;
-                    void handleWebViewLiveActivityMessage({
-                      appId: app.id,
-                      rawMessage: message,
-                      sendToWebView: (payload) =>
-                        webViewRef.current?.postMessage(JSON.stringify(payload)),
-                    });
-                    break;
-                  }
-
                   case 'storage_set': {
                     const key = message.key;
                     const value = message.value;

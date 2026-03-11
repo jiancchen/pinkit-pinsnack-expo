@@ -25,12 +25,12 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { getLiquidGlassTabBarContentPaddingBottom } from '../../src/constants/LiquidGlassTabBarLayout';
-import { AppStorageService, StoredApp } from '../../src/services/AppStorageService';
-import { TopicClassificationService } from '../../src/services/TopicClassificationService';
-import { TopicPreferencesService } from '../../src/services/TopicPreferencesService';
-import { useStrings } from '../../src/i18n/strings';
-import { createLogger } from '../../src/utils/Logger';
+import { getLiquidGlassTabBarContentPaddingBottom } from '../../constants/LiquidGlassTabBarLayout';
+import { AppStorageService, StoredApp } from '../../services/AppStorageService';
+import { TopicClassificationService } from '../../services/TopicClassificationService';
+import { TopicPreferencesService } from '../../services/TopicPreferencesService';
+import { useStrings } from '../../i18n/strings';
+import { createLogger } from '../../utils/Logger';
 
 const log = createLogger('UniverseScreen');
 

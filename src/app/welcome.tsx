@@ -21,13 +21,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { AppColors } from '../src/constants/AppColors';
-import AppThemeBackground from '../src/components/AppThemeBackground';
-import { SecureStorageService } from '../src/services/SecureStorageService';
-import { ClaudeApiService } from '../src/services/ClaudeApiService';
-import { GenerationQueueService } from '../src/services/GenerationQueueService';
-import { useUISettingsStore } from '../src/stores/UISettingsStore';
-import { createLogger } from '../src/utils/Logger';
+import { AppColors } from '../constants/AppColors';
+import AppThemeBackground from '../components/AppThemeBackground';
+import { SecureStorageService } from '../services/SecureStorageService';
+import { ClaudeApiService } from '../services/ClaudeApiService';
+import { GenerationQueueService } from '../services/GenerationQueueService';
+import { useUISettingsStore } from '../stores/UISettingsStore';
+import { createLogger } from '../utils/Logger';
 
 const log = createLogger('Welcome');
 

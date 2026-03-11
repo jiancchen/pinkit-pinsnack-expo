@@ -4,15 +4,15 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppColors } from '../../src/constants/AppColors';
-import { getLiquidGlassTabBarContentPaddingBottom } from '../../src/constants/LiquidGlassTabBarLayout';
-import AppThemeBackground from '../../src/components/AppThemeBackground';
-import { PromptGenerator, AppStyle, AppCategory, AppGenerationRequest } from '../../src/services/PromptGenerator';
-import { GenerationQueueService } from '../../src/services/GenerationQueueService';
-import { SecureStorageService } from '../../src/services/SecureStorageService';
-import { PromptHistoryService, type PromptHistoryEntry } from '../../src/services/PromptHistoryService';
-import { useUISettingsStore } from '../../src/stores/UISettingsStore';
-import { useStrings } from '../../src/i18n/strings';
+import { AppColors } from '../../constants/AppColors';
+import { getLiquidGlassTabBarContentPaddingBottom } from '../../constants/LiquidGlassTabBarLayout';
+import AppThemeBackground from '../../components/AppThemeBackground';
+import { PromptGenerator, AppStyle, AppCategory, AppGenerationRequest } from '../../services/PromptGenerator';
+import { GenerationQueueService } from '../../services/GenerationQueueService';
+import { SecureStorageService } from '../../services/SecureStorageService';
+import { PromptHistoryService, type PromptHistoryEntry } from '../../services/PromptHistoryService';
+import { useUISettingsStore } from '../../stores/UISettingsStore';
+import { useStrings } from '../../i18n/strings';
 import {
   CLAUDE_MODEL_PICKER_OPTIONS,
   DEFAULT_CONFIG,
@@ -24,8 +24,8 @@ import {
   estimateTokensFromText,
   formatModelPricingShort,
   getModelMaxOutputTokens,
-} from '../../src/types/ClaudeApi';
-import { createLogger } from '../../src/utils/Logger';
+} from '../../types/ClaudeApi';
+import { createLogger } from '../../utils/Logger';
 
 const log = createLogger('CreateApp');
 const RECENT_STYLE_TAGS_STORAGE_KEY = 'create_recent_style_tags_v1';

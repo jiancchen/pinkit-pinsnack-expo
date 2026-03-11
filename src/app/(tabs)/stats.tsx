@@ -19,17 +19,17 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AppColors } from '../../src/constants/AppColors';
+import { AppColors } from '../../constants/AppColors';
 import {
   getLiquidGlassTabBarContentPaddingBottom,
   getLiquidGlassTabBarOverlapHeight,
-} from '../../src/constants/LiquidGlassTabBarLayout';
-import AppThemeBackground from '../../src/components/AppThemeBackground';
-import { AssistantToolsService } from '../../src/services/AssistantToolsService';
-import { ClaudeApiService } from '../../src/services/ClaudeApiService';
-import { GenerationQueueService } from '../../src/services/GenerationQueueService';
-import { PromptGenerator, type AppGenerationRequest } from '../../src/services/PromptGenerator';
-import { SecureStorageService } from '../../src/services/SecureStorageService';
+} from '../../constants/LiquidGlassTabBarLayout';
+import AppThemeBackground from '../../components/AppThemeBackground';
+import { AssistantToolsService } from '../../services/AssistantToolsService';
+import { ClaudeApiService } from '../../services/ClaudeApiService';
+import { GenerationQueueService } from '../../services/GenerationQueueService';
+import { PromptGenerator, type AppGenerationRequest } from '../../services/PromptGenerator';
+import { SecureStorageService } from '../../services/SecureStorageService';
 import {
   CLAUDE_MODEL_PICKER_OPTIONS,
   MODEL_INFO,
@@ -39,10 +39,10 @@ import {
   estimateTokensFromText,
   formatModelPricingShort,
   resolveSupportedClaudeModel,
-} from '../../src/types/ClaudeApi';
-import { useUISettingsStore } from '../../src/stores/UISettingsStore';
-import { useStrings } from '../../src/i18n/strings';
-import { createLogger } from '../../src/utils/Logger';
+} from '../../types/ClaudeApi';
+import { useUISettingsStore } from '../../stores/UISettingsStore';
+import { useStrings } from '../../i18n/strings';
+import { createLogger } from '../../utils/Logger';
 
 const log = createLogger('Assistant');
 const ASSISTANT_MODEL_STORAGE_KEY = 'assistant_model_v1';

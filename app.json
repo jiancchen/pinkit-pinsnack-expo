@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "scheme": "pinsnacks",
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -16,10 +15,9 @@
     "ios": {
       "bundleIdentifier": "com.zigzura.pinsnacks",
       "supportsTablet": true,
-      "deploymentTarget": "17.0",
-      "statusBarStyle": "light",
       "infoPlist": {
         "UIViewControllerBasedStatusBarAppearance": false,
+        "UIStatusBarStyle": "UIStatusBarStyleLightContent",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -27,8 +25,6 @@
             ]
           }
         ],
-        "NSSupportsLiveActivities": true,
-        "NSSupportsLiveActivitiesFrequentUpdates": false,
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -38,24 +34,18 @@
         "backgroundColor": "#ffffff"
       },
       "userInterfaceStyle": "automatic",
-      "edgeToEdgeEnabled": true,
-      "navigationBar": {
-        "backgroundColor": "transparent",
-        "visible": false
-      },
-      "statusBar": {
-        "backgroundColor": "transparent",
-        "translucent": true,
-        "hidden": false
-      },
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE",
         "INTERNET",
         "ACCESS_NETWORK_STATE"
       ],
-      "usesCleartextTraffic": false,
       "package": "com.zigzura.pinsnacks"
+    },
+    "androidStatusBar": {
+      "backgroundColor": "#00000000",
+      "translucent": true,
+      "hidden": false
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -74,12 +64,6 @@
         }
       ],
       [
-        "voltra",
-        {
-          "targetName": "liveactivity"
-        }
-      ],
-      [
         "react-native-edge-to-edge",
         {
           "android": {
@@ -90,11 +74,15 @@
       ],
       "expo-mail-composer",
       "expo-notifications",
+      "expo-sharing",
       [
         "expo-build-properties",
         {
           "ios": {
             "deploymentTarget": "17.0"
+          },
+          "android": {
+            "usesCleartextTraffic": false
           }
         }
       ]
@@ -106,19 +94,6 @@
       "expo-navigation-bar": {},
       "router": {},
       "eas": {
-        "build": {
-          "experimental": {
-            "ios": {
-              "appExtensions": [
-                {
-                  "targetName": "liveactivity",
-                  "bundleIdentifier": "com.zigzura.pinsnacks.liveactivity",
-                  "entitlements": {}
-                }
-              ]
-            }
-          }
-        },
         "projectId": "0828f68d-04b9-4dd1-b3f2-b1ba7b6a9c32"
       }
     },

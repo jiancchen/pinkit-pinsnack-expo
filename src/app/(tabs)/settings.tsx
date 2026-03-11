@@ -3,17 +3,17 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert,
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { AppColors } from '../../src/constants/AppColors';
-import { getLiquidGlassTabBarContentPaddingBottom } from '../../src/constants/LiquidGlassTabBarLayout';
-import AppThemeBackground from '../../src/components/AppThemeBackground';
-import { SecureStorageService } from '../../src/services/SecureStorageService';
-import { ClaudeApiService } from '../../src/services/ClaudeApiService';
-import { SeedService } from '../../src/services/SeedService';
-import { AppStorageService } from '../../src/services/AppStorageService';
-import { PromptHistoryService } from '../../src/services/PromptHistoryService';
-import { ScreenshotService } from '../../src/services/ScreenshotService';
-import { WebViewScreenshotService } from '../../src/services/WebViewScreenshotService';
-import { useScreenshotStore } from '../../src/stores/ScreenshotStore';
+import { AppColors } from '../../constants/AppColors';
+import { getLiquidGlassTabBarContentPaddingBottom } from '../../constants/LiquidGlassTabBarLayout';
+import AppThemeBackground from '../../components/AppThemeBackground';
+import { SecureStorageService } from '../../services/SecureStorageService';
+import { ClaudeApiService } from '../../services/ClaudeApiService';
+import { SeedService } from '../../services/SeedService';
+import { AppStorageService } from '../../services/AppStorageService';
+import { PromptHistoryService } from '../../services/PromptHistoryService';
+import { ScreenshotService } from '../../services/ScreenshotService';
+import { WebViewScreenshotService } from '../../services/WebViewScreenshotService';
+import { useScreenshotStore } from '../../stores/ScreenshotStore';
 import {
   CLAUDE_MODELS,
   CLAUDE_MODEL_PICKER_OPTIONS,
@@ -24,10 +24,10 @@ import {
   getModelMaxOutputTokens,
   MODEL_INFO,
   PRICING_AS_OF_DISPLAY
-} from '../../src/types/ClaudeApi';
-import { createLogger } from '../../src/utils/Logger';
-import { AppLanguage, AppTheme, TabBarVariant, useUISettingsStore } from '../../src/stores/UISettingsStore';
-import { useStrings } from '../../src/i18n/strings';
+} from '../../types/ClaudeApi';
+import { createLogger } from '../../utils/Logger';
+import { AppLanguage, AppTheme, TabBarVariant, useUISettingsStore } from '../../stores/UISettingsStore';
+import { useStrings } from '../../i18n/strings';
 
 const log = createLogger('Settings');
 

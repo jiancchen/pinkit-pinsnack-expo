@@ -13,12 +13,12 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { AppColors } from '../src/constants/AppColors';
-import { AppStorageService, StoredApp } from '../src/services/AppStorageService';
-import { useUISettingsStore } from '../src/stores/UISettingsStore';
-import AppThemeBackground from '../src/components/AppThemeBackground';
-import { MODEL_INFO, resolveSupportedClaudeModel } from '../src/types/ClaudeApi';
-import { createLogger } from '../src/utils/Logger';
+import { AppColors } from '../constants/AppColors';
+import { AppStorageService, StoredApp } from '../services/AppStorageService';
+import { useUISettingsStore } from '../stores/UISettingsStore';
+import AppThemeBackground from '../components/AppThemeBackground';
+import { MODEL_INFO, resolveSupportedClaudeModel } from '../types/ClaudeApi';
+import { createLogger } from '../utils/Logger';
 
 const log = createLogger('AppRevisions');
 
