@@ -34,6 +34,13 @@ const log = createLogger('Welcome');
 const TOTAL_STEPS = 5;
 const TERMS_ACCEPTANCE_STORAGE_KEY = '@pinsnacks/terms_acceptance';
 const TERMS_OF_USE_VERSION = '2026-02-26';
+const STEP_ICONS: Array<keyof typeof Ionicons.glyphMap> = [
+  'sparkles',
+  'play',
+  'document-text',
+  'key',
+  'rocket',
+];
 
 type KeySetupOutcome = 'verified' | 'skipped' | null;
 
@@ -371,7 +378,7 @@ export default function WelcomePage() {
             disabled={isBusy}
           >
             <Text style={styles.primaryButtonText}>Continue</Text>
-            <Ionicons name="arrow-forward" size={18} color="#fff" />
+            <Ionicons name="arrow-forward" size={18} color="#0b1320" />
           </TouchableOpacity>
         </>
       );
@@ -442,7 +449,7 @@ export default function WelcomePage() {
             disabled={isBusy}
           >
             <Text style={styles.primaryButtonText}>Continue</Text>
-            <Ionicons name="arrow-forward" size={18} color="#fff" />
+            <Ionicons name="arrow-forward" size={18} color="#0b1320" />
           </TouchableOpacity>
         </>
       );
@@ -544,11 +551,11 @@ export default function WelcomePage() {
             disabled={!canContinueFromTerms}
           >
             {isSavingTerms ? (
-              <ActivityIndicator color="#fff" size="small" />
+              <ActivityIndicator color="#0b1320" size="small" />
             ) : (
               <>
                 <Text style={styles.primaryButtonText}>Accept & Continue</Text>
-                <Ionicons name="arrow-forward" size={18} color="#fff" />
+                <Ionicons name="arrow-forward" size={18} color="#0b1320" />
               </>
             )}
           </TouchableOpacity>
@@ -608,10 +615,10 @@ export default function WelcomePage() {
               disabled={isLoading}
             >
               {isLoading ? (
-                <ActivityIndicator color="#fff" size="small" />
+                <ActivityIndicator color="#0b1320" size="small" />
               ) : (
                 <>
-                  <Ionicons name="key-outline" size={18} color="#fff" />
+                  <Ionicons name="key-outline" size={18} color="#0b1320" />
                   <Text style={styles.submitButtonText}>Save & Verify Key</Text>
                 </>
               )}
@@ -686,7 +693,7 @@ export default function WelcomePage() {
 
         <TouchableOpacity style={styles.primaryButton} onPress={() => router.replace('/(tabs)')}>
           <Text style={styles.primaryButtonText}>Start Using PinSnacks</Text>
-          <Ionicons name="arrow-forward" size={18} color="#fff" />
+          <Ionicons name="arrow-forward" size={18} color="#0b1320" />
         </TouchableOpacity>
       </>
     );
@@ -784,7 +791,7 @@ export default function WelcomePage() {
       </View>
 
       <View style={styles.progressWrap}>
-        {Array.from({ length: TOTAL_STEPS }).map((_, index) => {
+        {STEP_ICONS.map((iconName, index) => {
           const stepNumber = index + 1;
           const isActive = stepNumber === currentStep;
           const isComplete = stepNumber < currentStep;
@@ -792,12 +799,26 @@ export default function WelcomePage() {
             <View
               key={stepNumber}
               style={[
-                styles.progressDot,
-                isUniverseTheme ? styles.progressDotUniverse : undefined,
-                isComplete ? styles.progressDotComplete : undefined,
-                isActive ? styles.progressDotActive : undefined,
+                styles.progressPill,
+                isUniverseTheme ? styles.progressPillUniverse : undefined,
+                isComplete ? styles.progressPillComplete : undefined,
+                isActive ? styles.progressPillActive : undefined,
               ]}
-            />
+            >
+              <Ionicons
+                name={iconName}
+                size={14}
+                color={
+                  isActive || isComplete
+                    ? isUniverseTheme
+                      ? '#0f172a'
+                      : '#111827'
+                    : isUniverseTheme
+                      ? 'rgba(204, 228, 251, 0.78)'
+                      : 'rgba(17, 24, 39, 0.66)'
+                }
+              />
+            </View>
           );
         })}
       </View>
@@ -827,7 +848,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 220,
+    height: 250,
   },
   effectsLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -859,69 +880,100 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 10,
     gap: 10,
+    borderBottomWidth: 3,
+    borderBottomColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(255, 225, 0, 0.92)',
   },
   headerUniverse: {
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(123, 169, 220, 0.35)',
-    backgroundColor: 'rgba(8, 24, 44, 0.42)',
+    borderBottomColor: 'rgba(126, 180, 237, 0.56)',
+    backgroundColor: 'rgba(7, 24, 45, 0.76)',
   },
   backButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderWidth: 3,
+    borderColor: '#000',
+    shadowColor: '#000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 0.45,
+    shadowRadius: 0,
+    elevation: 3,
   },
   backButtonDisabled: {
     opacity: 0.5,
   },
   headerIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: AppColors.FABMain,
+    backgroundColor: '#111827',
+    borderWidth: 3,
+    borderColor: '#000',
+    shadowColor: '#000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 0.45,
+    shadowRadius: 0,
+    elevation: 3,
   },
   headerIconUniverse: {
     backgroundColor: '#0f7cff',
+    borderColor: 'rgba(172, 214, 255, 0.9)',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '900',
-    color: 'rgba(0, 0, 0, 0.86)',
+    color: '#0b1320',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   headerTitleUniverse: {
     color: 'rgba(232, 245, 255, 0.96)',
   },
   headerSubtitle: {
-    fontSize: 12,
-    color: 'rgba(0, 0, 0, 0.62)',
+    fontSize: 11,
+    color: 'rgba(0, 0, 0, 0.7)',
     marginTop: 2,
+    fontWeight: '700',
+    textTransform: 'uppercase',
   },
   headerSubtitleUniverse: {
     color: 'rgba(191, 216, 243, 0.86)',
   },
   progressWrap: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 10,
     paddingHorizontal: 14,
-    paddingBottom: 8,
+    paddingVertical: 10,
   },
-  progressDot: {
-    flex: 1,
-    height: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(15, 23, 42, 0.14)',
+  progressPill: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 3,
+    borderColor: '#111827',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 0,
+    elevation: 3,
   },
-  progressDotUniverse: {
-    backgroundColor: 'rgba(123, 169, 220, 0.2)',
+  progressPillUniverse: {
+    borderColor: 'rgba(167, 211, 255, 0.82)',
+    backgroundColor: 'rgba(12, 41, 73, 0.95)',
   },
-  progressDotComplete: {
-    backgroundColor: 'rgba(15, 118, 110, 0.65)',
+  progressPillComplete: {
+    backgroundColor: '#ffd400',
   },
-  progressDotActive: {
+  progressPillActive: {
     backgroundColor: AppColors.FABDeepOrange,
   },
   scrollView: {
@@ -929,30 +981,30 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 14,
-    paddingBottom: 30,
+    paddingBottom: 34,
   },
   screenStage: {
-    gap: 12,
+    gap: 14,
     minHeight: 560,
   },
   screenCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    borderRadius: 10,
+    borderWidth: 3,
+    borderColor: '#111827',
+    backgroundColor: '#fff4bf',
+    paddingHorizontal: 15,
+    paddingVertical: 15,
     gap: 12,
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 6, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 0,
+    elevation: 6,
   },
   screenCardUniverse: {
-    borderColor: 'rgba(123, 169, 220, 0.4)',
-    backgroundColor: 'rgba(8, 26, 48, 0.9)',
-    shadowOpacity: 0.18,
+    borderColor: 'rgba(140, 198, 255, 0.72)',
+    backgroundColor: 'rgba(7, 24, 45, 0.92)',
+    shadowOpacity: 0.24,
   },
   singleStepCard: {
     minHeight: 340,
@@ -966,36 +1018,42 @@ const styles = StyleSheet.create({
   sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   stepLabel: {
     alignSelf: 'flex-start',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '900',
-    color: '#0f172a',
-    backgroundColor: 'rgba(15, 23, 42, 0.12)',
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    color: '#fff',
+    backgroundColor: '#111827',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 2,
+    borderColor: '#000',
   },
   stepLabelUniverse: {
-    color: 'rgba(232, 245, 255, 0.95)',
-    backgroundColor: 'rgba(49, 102, 159, 0.65)',
+    color: '#061a2d',
+    backgroundColor: '#9dd1ff',
+    borderColor: 'rgba(183, 224, 255, 0.95)',
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: 24,
     fontWeight: '900',
-    color: 'rgba(0, 0, 0, 0.84)',
+    color: '#0b1320',
     flex: 1,
+    textTransform: 'uppercase',
+    fontStyle: 'italic',
+    lineHeight: 28,
   },
   cardTitleUniverse: {
     color: 'rgba(232, 245, 255, 0.95)',
   },
   stepText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    color: 'rgba(0, 0, 0, 0.8)',
-    lineHeight: 20,
+    color: 'rgba(0, 0, 0, 0.86)',
+    lineHeight: 22,
   },
   stepTextUniverse: {
     color: 'rgba(219, 236, 255, 0.94)',
@@ -1003,17 +1061,17 @@ const styles = StyleSheet.create({
   supportText: {
     fontSize: 12,
     lineHeight: 18,
-    fontWeight: '600',
-    color: 'rgba(0, 0, 0, 0.68)',
+    fontWeight: '700',
+    color: 'rgba(0, 0, 0, 0.74)',
   },
   supportTextUniverse: {
     color: 'rgba(191, 216, 243, 0.88)',
   },
   demoPlaceholder: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.12)',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 8,
+    borderWidth: 3,
+    borderColor: '#111827',
+    backgroundColor: '#f8f8f8',
     minHeight: 156,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1073,10 +1131,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(251, 146, 60, 0.35)',
-    backgroundColor: 'rgba(251, 146, 60, 0.08)',
+    borderRadius: 8,
+    borderWidth: 3,
+    borderColor: '#111827',
+    backgroundColor: '#fff7d6',
     paddingHorizontal: 10,
     paddingVertical: 9,
   },
@@ -1096,10 +1154,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 8,
+    borderWidth: 3,
+    borderColor: '#111827',
+    backgroundColor: '#f3f4f6',
     paddingHorizontal: 10,
     paddingVertical: 10,
   },
@@ -1126,18 +1184,18 @@ const styles = StyleSheet.create({
     color: 'rgba(191, 216, 243, 0.8)',
   },
   keySection: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    borderRadius: 10,
+    borderWidth: 3,
+    borderColor: '#111827',
+    backgroundColor: '#fff4bf',
+    paddingHorizontal: 15,
+    paddingVertical: 14,
     gap: 12,
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.08,
-    shadowRadius: 18,
-    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 6, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 0,
+    elevation: 6,
   },
   keySectionUniverse: {
     borderColor: 'rgba(123, 169, 220, 0.4)',
@@ -1145,9 +1203,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.18,
   },
   keyTitle: {
-    fontSize: 16,
+    fontSize: 24,
     fontWeight: '900',
-    color: 'rgba(0, 0, 0, 0.84)',
+    color: '#0b1320',
+    textTransform: 'uppercase',
+    fontStyle: 'italic',
+    lineHeight: 28,
   },
   keyTitleUniverse: {
     color: 'rgba(232, 245, 255, 0.95)',
@@ -1155,10 +1216,10 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(128, 128, 128, 0.36)',
-    borderRadius: 12,
-    backgroundColor: '#fff',
+    borderWidth: 3,
+    borderColor: '#111827',
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
   },
   inputContainerUniverse: {
     borderColor: 'rgba(123, 169, 220, 0.44)',
@@ -1167,8 +1228,9 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     paddingHorizontal: 12,
-    paddingVertical: 11,
-    fontSize: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    fontWeight: '700',
     color: 'rgba(0, 0, 0, 0.84)',
   },
   inputUniverse: {
@@ -1179,54 +1241,60 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   primaryButton: {
-    borderRadius: 12,
+    borderRadius: 8,
+    borderWidth: 3,
+    borderColor: '#111827',
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: '#ffd400',
+    shadowColor: '#000',
+    shadowOffset: { width: 5, height: 5 },
+    shadowOpacity: 0.35,
+    shadowRadius: 0,
+    elevation: 5,
+  },
+  submitButton: {
+    borderRadius: 8,
+    borderWidth: 3,
+    borderColor: '#111827',
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 8,
-    backgroundColor: '#ff6a2f',
-    shadowColor: '#ff6a2f',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 14,
-    elevation: 4,
-  },
-  submitButton: {
-    borderRadius: 12,
-    paddingVertical: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
-    backgroundColor: '#ff6a2f',
-    shadowColor: '#ff6a2f',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 14,
-    elevation: 4,
+    backgroundColor: '#ffd400',
+    shadowColor: '#000',
+    shadowOffset: { width: 5, height: 5 },
+    shadowOpacity: 0.35,
+    shadowRadius: 0,
+    elevation: 5,
   },
   actionButtonDisabled: {
     opacity: 0.65,
   },
   primaryButtonText: {
-    color: '#fff',
-    fontSize: 14,
+    color: '#0b1320',
+    fontSize: 18,
     fontWeight: '900',
+    textTransform: 'uppercase',
   },
   submitButtonText: {
-    color: '#fff',
-    fontSize: 14,
+    color: '#0b1320',
+    fontSize: 16,
     fontWeight: '900',
+    textTransform: 'uppercase',
   },
   secondaryButton: {
-    borderRadius: 12,
-    paddingVertical: 11,
+    borderRadius: 8,
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.14)',
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderWidth: 3,
+    borderColor: '#111827',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
   },
   secondaryButtonText: {
     fontSize: 14,
@@ -1253,21 +1321,24 @@ const styles = StyleSheet.create({
     color: 'rgba(205, 226, 248, 0.9)',
   },
   finalIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
+    width: 68,
+    height: 68,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.75)',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderWidth: 3,
+    borderColor: '#111827',
   },
   finalTitle: {
-    fontSize: 20,
+    fontSize: 34,
     fontWeight: '900',
-    color: 'rgba(0, 0, 0, 0.88)',
+    color: '#0b1320',
     textAlign: 'center',
+    textTransform: 'uppercase',
+    fontStyle: 'italic',
+    lineHeight: 38,
   },
   finalTitleUniverse: {
     color: 'rgba(232, 245, 255, 0.96)',
@@ -1286,10 +1357,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.08)',
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    borderRadius: 8,
+    borderWidth: 3,
+    borderColor: '#111827',
+    backgroundColor: '#111827',
     paddingHorizontal: 10,
     paddingVertical: 10,
   },
@@ -1301,8 +1372,8 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     lineHeight: 17,
-    color: 'rgba(0, 0, 0, 0.7)',
-    fontWeight: '700',
+    color: '#f8fafc',
+    fontWeight: '800',
   },
   infoCalloutTextUniverse: {
     color: 'rgba(205, 226, 248, 0.9)',

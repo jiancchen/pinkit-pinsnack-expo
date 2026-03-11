@@ -1,8 +1,8 @@
-import { Stack } from 'expo-router';
+import { SplashScreen, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { Platform, View, ActivityIndicator } from 'react-native';
+import { Platform } from 'react-native';
 import * as NavigationBar from 'expo-navigation-bar';
 import { useEffect, useState } from 'react';
 import { SystemBars } from 'react-native-edge-to-edge';
@@ -18,6 +18,10 @@ import GenerationLiveActivityController from '../src/components/GenerationLiveAc
 import { useUISettingsStore } from '../src/stores/UISettingsStore';
 
 const log = createLogger('RootLayout');
+
+void SplashScreen.preventAutoHideAsync().catch(() => {
+  // Ignore if splash module is unavailable in the current environment.
+});
 
 type GlobalErrorHandler = (error: unknown, isFatal?: boolean) => void;
 
@@ -130,6 +134,12 @@ export default function RootLayout() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!isLoading) {
+      void SplashScreen.hideAsync();
+    }
+  }, [isLoading]);
+
   const checkApiKeyStatus = async () => {
     try {
       const hasKey = await SecureStorageService.hasApiKey();
@@ -149,16 +159,7 @@ export default function RootLayout() {
   };
 
   if (isLoading) {
-    return (
-      <View style={{ 
-        flex: 1, 
-        backgroundColor: AppColors.Primary, 
-        justifyContent: 'center', 
-        alignItems: 'center' 
-      }}>
-        <ActivityIndicator size="large" color={AppColors.FABDeepOrange} />
-      </View>
-    );
+    return null;
   }
 
   return (

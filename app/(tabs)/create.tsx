@@ -465,29 +465,6 @@ export default function CreatePage() {
           <View style={styleSheet.headerRightActions}>
             <TouchableOpacity
               style={[
-                styleSheet.headerIconButton,
-                isUniverseTheme ? styleSheet.headerIconButtonUniverse : undefined,
-                !hasApiAccess ? styleSheet.headerIconButtonDisabled : undefined,
-              ]}
-              onPress={() => {
-                if (!hasApiAccess) {
-                  promptApiSetup(t('create.feature.modelSettings'));
-                  return;
-                }
-                setShowAdvanced(true);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="Open advanced settings"
-            >
-              <Ionicons
-                name="options-outline"
-                size={22}
-                color={isUniverseTheme ? 'rgba(226, 240, 255, 0.92)' : 'rgba(0, 0, 0, 0.8)'}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
                 styleSheet.headerCreateButton,
                 isUniverseTheme ? styleSheet.headerCreateButtonUniverse : undefined,
                 (!prompt.trim() || isLoading || !hasApiAccess || isCheckingApiKey)
@@ -585,6 +562,32 @@ export default function CreatePage() {
               </View>
             ) : null}
           </View>
+
+          <TouchableOpacity
+            style={[
+              styleSheet.customizeModelButton,
+              isUniverseTheme ? styleSheet.customizeModelButtonUniverse : undefined,
+              !hasApiAccess ? styleSheet.customizeModelButtonDisabled : undefined,
+            ]}
+            onPress={() => {
+              if (!hasApiAccess) {
+                promptApiSetup(t('create.feature.modelSettings'));
+                return;
+              }
+              setShowAdvanced(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Customize model"
+          >
+            <Text
+              style={[
+                styleSheet.customizeModelButtonText,
+                isUniverseTheme ? styleSheet.customizeModelButtonTextUniverse : undefined,
+              ]}
+            >
+              Customize model
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Style Tag Section */}
@@ -800,7 +803,12 @@ export default function CreatePage() {
                             </Text>
                           </View>
                           {isSelected && (
-                            <Ionicons name="checkmark-circle" size={22} color={AppColors.FABMain} />
+                            <Ionicons
+                              name="checkmark-circle"
+                              size={22}
+                              color={AppColors.FABMain}
+                              style={styleSheet.modelOptionCheckIcon}
+                            />
                           )}
                         </TouchableOpacity>
                       );
@@ -1477,6 +1485,31 @@ const styleSheet = StyleSheet.create({
   inlineEstimateTextUniverse: {
     color: 'rgba(205, 226, 248, 0.9)',
   },
+  customizeModelButton: {
+    marginTop: 12,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.12)',
+  },
+  customizeModelButtonUniverse: {
+    backgroundColor: 'rgba(7, 28, 52, 0.9)',
+    borderColor: 'rgba(125, 171, 222, 0.42)',
+  },
+  customizeModelButtonDisabled: {
+    opacity: 0.72,
+  },
+  customizeModelButtonText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: 'rgba(0, 0, 0, 0.82)',
+  },
+  customizeModelButtonTextUniverse: {
+    color: 'rgba(225, 239, 255, 0.95)',
+  },
   addTagButton: {
     borderRadius: 10,
     paddingHorizontal: 12,
@@ -1980,9 +2013,7 @@ const styleSheet = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 1,
     borderColor: 'rgba(0, 0, 0, 0.06)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
   modelOptionUniverse: {
     backgroundColor: 'rgba(9, 28, 52, 0.9)',
@@ -2001,7 +2032,10 @@ const styleSheet = StyleSheet.create({
   },
   modelOptionContent: {
     flex: 1,
-    paddingRight: 12,
+    width: '100%',
+  },
+  modelOptionCheckIcon: {
+    marginTop: 10,
   },
   modelOptionTitle: {
     fontSize: 14,

@@ -16,7 +16,11 @@
     "build:eas:dev:android": "eas build --profile development --platform android",
     "build:prod:ios": "eas build --profile production --platform ios",
     "build:prod:android": "eas build --profile production --platform android",
-    "web": "yarn samples:refresh && expo start --web"
+    "web": "yarn samples:refresh && expo start --web",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:unit": "jest tests/unit",
+    "test:functional": "jest tests/functional"
   },
   "dependencies": {
     "@babel/core": "^7.28.4",
